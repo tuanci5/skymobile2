@@ -471,14 +471,16 @@ const Sidebar = ({
                   }
                   setIsOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-200 ${item.indent ? 'ml-6' : ''} ${item.small ? 'text-sm' : ''} ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left ${item.indent ? 'pl-9' : ''} ${item.small ? 'text-[13px]' : 'text-sm'} ${
                   (activeTab === item.id || (['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(item.id) && activeDept === item.id))
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
                     : 'text-slate-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                {item.icon}
-                <span className="font-medium">{item.label}</span>
+                {React.cloneElement(item.icon as React.ReactElement, { 
+                  className: item.small ? 'w-4 h-4 shrink-0' : 'w-5 h-5 shrink-0' 
+                })}
+                <span className="font-medium truncate">{item.label}</span>
               </button>
             ))}
           </nav>
