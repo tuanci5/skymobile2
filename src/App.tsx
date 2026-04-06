@@ -737,7 +737,28 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRo
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('model');
   const [activeRole, setActiveRole] = useState<string>('head');
-  const [activeDept, setActiveDept] = useState<string | null>(null);
+  const [activeTeam, setActiveTeam] = useState<string | null>(null);
+
+  const teamDetails: Record<string, { title: string; objective: string; tasks: string[]; kpis: string[] }> = {
+    'marketing': {
+      title: 'Tổ Marketing',
+      objective: 'Tổ chức và triển khai hoạt động marketing nhằm thu hút đúng khách hàng mục tiêu.',
+      tasks: ['Xây dựng kế hoạch marketing', 'Triển khai quảng cáo', 'Sản xuất nội dung', 'Quản lý social media'],
+      kpis: ['Số lượng lead', 'Chi phí/lead', 'Tỷ lệ chuyển đổi']
+    },
+    'sales': {
+      title: 'Tổ Sale / Tư vấn',
+      objective: 'Quản lý đội ngũ tư vấn, đảm bảo tiếp nhận khách nhanh và chốt đơn.',
+      tasks: ['Phân chia lead', 'Giám sát phản hồi', 'Chuẩn hóa kịch bản tư vấn', 'Theo dõi tỷ lệ chốt'],
+      kpis: ['Tỷ lệ phản hồi', 'Tỷ lệ chốt đơn', 'Doanh thu đội']
+    },
+    'cskh': {
+      title: 'Tổ Chăm sóc khách hàng',
+      objective: 'Tổ chức hoạt động chăm sóc sau bán đảm bảo khách hài lòng và gia hạn.',
+      tasks: ['Quy trình CSKH', 'Theo dõi hỗ trợ', 'Nhắc gia hạn', 'Xử lý khiếu nại'],
+      kpis: ['Tỷ lệ gia hạn', 'Tỷ lệ xử lý sự cố', 'Mức độ hài lòng']
+    }
+  };
 
   const currentRole = ROLES.find(r => r.id === activeRole) || ROLES[0];
 
@@ -777,24 +798,63 @@ export default function App() {
     if (activeDept === 'sales-mkt') {
       return (
         <>
-          <button onClick={() => setActiveDept(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:underline">
+          <button onClick={() => { setActiveDept(null); setActiveTeam(null); }} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:underline">
             &larr; Quay lại sơ đồ công ty
           </button>
           <Header />
-          <div className="mb-8 flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Users className="w-6 h-6 text-blue-600" />
-              Cơ cấu tổ chức đề xuất
-            </h2>
-            <p className="text-sm text-slate-500 hidden sm:block">Nhấp vào từng vị trí để xem chi tiết</p>
+          <div className="mb-12">
+            <div className="flex flex-col items-center">
+              <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-lg text-center mb-8 max-w-md">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <ShieldCheck className="w-5 h-5" />
+                  <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Quản trị Doanh thu & Vòng đời</span>
+                </div>
+                <h3 className="text-xl font-bold">Trưởng phòng Kinh doanh – Marketing – CSKH</h3>
+              </div>
+              
+              <div className="w-full h-px bg-slate-300 mb-8" />
+              
+              {!activeTeam ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                  {[
+                    { id: 'marketing', icon: Megaphone, color: 'indigo', title: 'Tổ Marketing' },
+                    { id: 'sales', icon: MessageSquare, color: 'emerald', title: 'Tổ Sale / Tư vấn' },
+                    { id: 'cskh', icon: HeartHandshake, color: 'rose', title: 'Tổ Chăm sóc khách hàng' }
+                  ].map(team => (
+                    <button key={team.id} onClick={() => setActiveTeam(team.id)} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-left">
+                      <div className={`p-2 bg-${team.color}-100 text-${team.color}-600 rounded-lg w-fit mb-4`}>
+                        <team.icon className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-bold text-lg mb-2">{team.title}</h4>
+                      <p className="text-slate-600 text-sm">Nhấp để xem chi tiết nhiệm vụ và KPI.</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm w-full">
+                  <button onClick={() => setActiveTeam(null)} className="mb-4 text-blue-600 font-bold flex items-center gap-2 hover:underline">
+                    &larr; Quay lại danh sách tổ
+                  </button>
+                  <h3 className="text-2xl font-bold mb-4">{teamDetails[activeTeam].title}</h3>
+                  <p className="text-slate-600 mb-6">{teamDetails[activeTeam].objective}</p>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div>
+                      <h5 className="font-bold text-slate-900 mb-3">Nhiệm vụ chính:</h5>
+                      <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
+                        {teamDetails[activeTeam].tasks.map((task, i) => <li key={i}>{task}</li>)}
+                      </ul>
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-slate-900 mb-3">Chỉ số đánh giá (KPI):</h5>
+                      <ul className="list-disc list-inside text-sm text-slate-600 space-y-1">
+                        {teamDetails[activeTeam].kpis.map((kpi, i) => <li key={i}>{kpi}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <OrgChart activeRole={activeRole} setActiveRole={setActiveRole} />
-          <AnimatePresence mode="wait">
-            <RoleDetailPanel role={currentRole} />
-          </AnimatePresence>
-          <WhySection />
-          <ProcessSection />
-          <ValueSection />
         </>
       );
     }
