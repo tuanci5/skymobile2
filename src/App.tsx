@@ -368,22 +368,38 @@ const Sidebar = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const menuItems = [
-    { id: 'model', label: 'Mô hình Vận hành', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'sales-mkt', label: 'P. KD - MKT', icon: <MessageSquare className="w-4 h-4" />, indent: true, small: true },
-    { id: 'comms-dept', label: 'P. Truyền thông', icon: <Megaphone className="w-4 h-4" />, indent: true, small: true },
-    { id: 'hr-dept', label: 'P. HCNS', icon: <Briefcase className="w-4 h-4" />, indent: true, small: true },
-    { id: 'finance-dept', label: 'P. Kế toán', icon: <DollarSign className="w-4 h-4" />, indent: true, small: true },
-    { id: 'technical', label: 'P. Kỹ thuật', icon: <Cpu className="w-4 h-4" />, indent: true, small: true },
+  const baseMenuItems = [
+    { id: 'model', label: 'Mô hình Vận hành', icon: <Users className="w-5 h-5" /> },
     { id: 'hr', label: 'Nhân sự & JD', icon: <UserCog className="w-5 h-5" /> },
     { id: 'salary', label: 'Lương & KPI', icon: <Wallet className="w-5 h-5" /> },
-    { id: 'cost', label: 'Cơ cấu chi phí', icon: <PieChart className="w-5 h-5" /> },
+    { id: 'cost', label: 'Cơ cấu chi phí', icon: <PieChart className="w-5 h-5" />, adminOnly: true },
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
   ];
 
-  // Filter menu items if not admin (though user said Quản trị can see everything, 
-  // we can add logic here if other roles are added later)
-  const filteredMenuItems = menuItems;
+  // Dynamic department links based on role
+  const deptLinks = DEPARTMENTS.map(dept => ({
+    id: dept.id,
+    label: `P. ${dept.title.replace('Phòng ', '')}`,
+    icon: dept.icon,
+    indent: true,
+    small: true,
+  })).filter(link => {
+    if (user.role === 'Quản trị') return true;
+    if (user.role === 'Trưởng nhóm Marketing' && link.id === 'sales-mkt') return true;
+    if (user.role === 'Trưởng nhóm Sale' && link.id === 'sales-mkt') return true;
+    if (user.role === 'Trưởng nhóm CSKH' && link.id === 'sales-mkt') return true;
+    return false;
+  });
+
+  // Combine menus: Model (Main) -> Dept Links -> Other Tabs
+  const filteredMenuItems: any[] = [];
+  baseMenuItems.forEach(item => {
+    if (item.adminOnly && user.role !== 'Quản trị') return;
+    filteredMenuItems.push(item);
+    if (item.id === 'model') {
+      filteredMenuItems.push(...deptLinks);
+    }
+  });
 
   return (
     <>
@@ -482,7 +498,7 @@ const Sidebar = ({
   );
 };
 
-const HRTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void }) => {
+const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean }) => {
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-10">
@@ -492,24 +508,26 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRole: 
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* JD List */}
-        <div className="lg:col-span-1 space-y-2">
-          {Object.entries(JD_DATA).map(([id, jd]) => (
-            <button
-              key={id}
-              onClick={() => setSelectedRole(id)}
-              className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
-                selectedRole === id
-                  ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                  : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <div className="text-sm">{jd.title}</div>
-            </button>
-          ))}
-        </div>
+        {!restricted && (
+          <div className="lg:col-span-1 space-y-2">
+            {Object.entries(JD_DATA).map(([id, jd]) => (
+              <button
+                key={id}
+                onClick={() => setSelectedRole(id)}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
+                  selectedRole === id
+                    ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
+                    : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="text-sm">{jd.title}</div>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* JD Detail */}
-        <div className="lg:col-span-3">
+        <div className={restricted ? "lg:col-span-4" : "lg:col-span-3"}>
           <AnimatePresence mode="wait">
             <motion.div
               key={selectedRole}
@@ -638,7 +656,7 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRole: 
   );
 };
 
-const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void }) => {
+const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean }) => {
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-10">
@@ -647,25 +665,27 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab }: { selectedRo
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Salary List */}
-        <div className="lg:col-span-1 space-y-2">
-          {Object.entries(JD_DATA).map(([id, jd]) => (
-            <button
-              key={id}
-              onClick={() => setSelectedRole(id)}
-              className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
-                selectedRole === id
-                  ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                  : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <div className="text-sm">{jd.title}</div>
-            </button>
-          ))}
-        </div>
+        {/* Role Selector */}
+        {!restricted && (
+          <div className="lg:col-span-1 space-y-2">
+            {Object.entries(JD_DATA).map(([id, jd]) => (
+              <button
+                key={id}
+                onClick={() => setSelectedRole(id)}
+                className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
+                  selectedRole === id
+                    ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
+                    : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {jd.title}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* Salary Detail */}
-        <div className="lg:col-span-3">
+        {/* Salary Details */}
+        <div className={restricted ? "lg:col-span-4" : "lg:col-span-3"}>
           <AnimatePresence mode="wait">
             <motion.div
               key={selectedRole}
@@ -1030,16 +1050,41 @@ const TrainingTab = () => {
   );
 };
 
+const ROLE_MAPPING: Record<string, string> = {
+  'Quản trị': 'admin',
+  'Trưởng nhóm Marketing': 'mkt_lead',
+  'Trưởng nhóm Sale': 'sale_lead',
+  'Trưởng nhóm CSKH': 'cskh_lead',
+  'Nhân viên Quảng cáo': 'mkt_ads',
+  'Nhân viên Content': 'mkt_content',
+  'Nhân viên Media': 'mkt_media',
+  'Nhân viên Sale': 'sale_staff',
+  'Nhân viên CSKH': 'cskh_staff',
+  'Telesale': 'telesale',
+  'Nhân viên Kỹ thuật': 'ops',
+  'Quản lý': 'head'
+};
+
 function AppContent() {
   const [user, setUser] = useState<any>(() => {
     const savedUser = localStorage.getItem('sky_mobile_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
+  const internalRoleId = user?.role ? (ROLE_MAPPING[user.role] || 'guest') : null;
+  const isAdmin = internalRoleId === 'admin';
+
   const [activeTab, setActiveTab] = useState<TabType>('model');
-  const [activeRole, setActiveRole] = useState<string>('head');
+  const [activeRole, setActiveRole] = useState<string>(internalRoleId || 'head');
   const [activeDept, setActiveDept] = useState<string | null>(null);
   const [activeTeam, setActiveTeam] = useState<'marketing' | 'sale' | 'cskh' | null>(null);
+
+  // Sync activeRole with user's role when login happens
+  React.useEffect(() => {
+    if (user && !isAdmin) {
+      setActiveRole(internalRoleId || 'head');
+    }
+  }, [user, internalRoleId, isAdmin]);
 
   const handleLoginSuccess = (userData: any) => {
     localStorage.setItem('sky_mobile_user', JSON.stringify(userData));
@@ -1055,7 +1100,8 @@ function AppContent() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const canAccessSensitive = user.role === 'Quản trị';
+  const canAccessSensitive = isAdmin;
+  const restrictedView = !isAdmin;
 
   type TeamDetail = {
     title: string;
@@ -1779,9 +1825,23 @@ function AppContent() {
               transition={{ duration: 0.3 }}
             >
               {activeTab === 'model' && <ModelTab />}
-              {activeTab === 'hr' && <HRTab selectedRole={activeRole} setSelectedRole={setActiveRole} setActiveTab={setActiveTab} />}
-              {activeTab === 'salary' && (canAccessSensitive ? <SalaryTab selectedRole={activeRole} setSelectedRole={setActiveRole} setActiveTab={setActiveTab} /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
-              {activeTab === 'cost' && (canAccessSensitive ? <CostTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
+              {activeTab === 'hr' && (
+                <HRTab 
+                  selectedRole={restrictedView ? internalRoleId : activeRole} 
+                  setSelectedRole={restrictedView ? () => {} : setActiveRole} 
+                  setActiveTab={setActiveTab} 
+                  restricted={restrictedView}
+                />
+              )}
+              {activeTab === 'salary' && (
+                <SalaryTab 
+                  selectedRole={restrictedView ? internalRoleId : activeRole} 
+                  setSelectedRole={restrictedView ? () => {} : setActiveRole} 
+                  setActiveTab={setActiveTab} 
+                  restricted={restrictedView}
+                />
+              )}
+              {activeTab === 'cost' && (isAdmin ? <CostTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
               {activeTab === 'training' && <TrainingTab />}
             </motion.div>
           </AnimatePresence>
