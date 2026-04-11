@@ -1220,6 +1220,15 @@ const MASTER_PLAN_DATA = {
   finalProfitMargin: ['-31.6%', '-12.1%', '4.0%', '9.6%', '15.1%', '17.7%', '19.1%', '19.5%', '18.3%', '17.3%', '16.6%', '16.4%'],
 };
 
+const BRAND_INVESTMENT_DATA = {
+  items: [
+    { label: '1. Triển khai Website (Domain, Hosting, Dev)', values: [50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], color: 'text-indigo-600' },
+    { label: '2. Triển khai Mobile App (iOS/Android)', values: [150, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], color: 'text-indigo-600' },
+    { label: '3. Đầu tư Cơ sở vật chất (VP, Thiết bị)', values: [300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], color: 'text-indigo-600' },
+    { label: '4. Nhân sự Brand (Content, MKT - 20Tr/tháng)', values: [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20], color: 'text-amber-600' },
+  ]
+};
+
 function fmt(n: number) {
   if (n === 0) return '0';
   if (n < 0) return `(${Math.abs(n).toLocaleString('vi-VN')})`;
@@ -1229,17 +1238,290 @@ function fmtPos(n: number) {
   return n.toLocaleString('vi-VN');
 }
 
-const BusinessPlanTab = () => {
-  const d = MASTER_PLAN_DATA;
-  const months = d.months;
+// Helper handles dynamic financial calculations for any given data set
+const calculateFinancials = (d: any) => {
+  const opProfitArray = d.months.map((_, i: number) => d.grossRevenueByCohort[i] - d.netCostsToProvider[i] - d.operatingExpenses.total[i]);
+  
+  let cumOpProfit = 0;
+  const kpiBonusArray = opProfitArray.map((p, i) => {
+    cumOpProfit += p;
+    return cumOpProfit > 0 ? Math.round(d.grossRevenueByCohort[i] * 0.05) : 0;
+  });
 
+  const pbtArray = opProfitArray.map((p, i) => p - kpiBonusArray[i]);
+
+  let cumPBT = 0;
+  let cumTaxPaid = 0;
+  const taxArray = pbtArray.map((pbt) => {
+    cumPBT += pbt;
+    if (cumPBT > 0) {
+      const totalTaxDue = Math.round(cumPBT * 0.2);
+      const taxThisMonth = Math.max(0, totalTaxDue - cumTaxPaid);
+      cumTaxPaid += taxThisMonth;
+      return taxThisMonth;
+    }
+    return 0;
+  });
+
+  const patArray = pbtArray.map((pbt, i) => pbt - taxArray[i]);
+
+  const patMarginArray = patArray.map((pat, i) => {
+    const rev = d.grossRevenueByCohort[i];
+    return rev > 0 ? ((pat / rev) * 100).toFixed(1) + '%' : '0%';
+  });
+
+  return { opProfitArray, kpiBonusArray, pbtArray, taxArray, patArray, patMarginArray };
+};
+
+const FinancialMasterTable = ({ title, data: d, results, badge, badgeColor }: { title: string, data: any, results: any, badge?: string, badgeColor?: string }) => {
+  const months = d.months;
   const sectionHeaderClass = 'bg-slate-800 text-white text-xs font-bold uppercase tracking-wider';
-  const subHeaderClass = 'bg-slate-100 text-slate-700 text-xs font-semibold';
   const cellClass = 'text-center text-sm font-medium tabular-nums whitespace-nowrap';
   const totalCellClass = 'text-center text-sm font-bold tabular-nums whitespace-nowrap bg-slate-50';
+  const { opProfitArray, kpiBonusArray, pbtArray, taxArray, patArray, patMarginArray } = results;
 
   return (
-    <div className="max-w-full mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+      <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <BarChart3 className="w-6 h-6 text-blue-400" />
+          <h3 className="text-xl font-bold text-white">{title}</h3>
+        </div>
+        {badge && (
+          <span className={`px-4 py-1.5 rounded-full text-xs font-bold text-white uppercase tracking-widest shadow-lg ${badgeColor || 'bg-blue-600'}`}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[900px]">
+          <thead>
+            <tr>
+              <th className="text-left px-4 py-3 text-xs font-bold text-slate-600 bg-slate-50 border-b border-r border-slate-200 w-64 sticky left-0 z-10">Chỉ số quản trị (Triệu VNĐ)</th>
+              {months.map((m: string) => (
+                <th key={m} className="px-3 py-3 text-center text-xs font-bold text-blue-700 bg-blue-50 border-b border-slate-200 min-w-[72px]">{m}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* I. Vận hành */}
+            <tr>
+              <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
+                I. Chỉ số vận hành
+              </td>
+            </tr>
+            {[
+              { label: '1. Quy mô nhân sự (Số Team)', data: d.operations.teams, suffix: ' team' },
+              { label: '2. Số đơn mới chốt', data: d.operations.newOrders },
+              { label: '3. Khách rụng (Hết hạn 6 tháng)', data: d.operations.churnOrders, negative: true },
+              { label: '4. Tổng khách cũ đang đóng cước', data: d.operations.totalActive, bold: true },
+            ].map((row, i) => (
+              <tr key={i} className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${row.bold ? 'bg-blue-50/40' : ''}`}>
+                <td className={`px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px] ${row.bold ? 'font-semibold bg-blue-50/40' : ''}`}>{row.label}</td>
+                {row.data.map((v: number, mi: number) => (
+                  <td key={mi} className={`${cellClass} py-2.5 px-2 ${v < 0 ? 'text-red-500' : row.bold ? 'text-blue-700 font-semibold' : 'text-slate-700'}`}>
+                    {v < 0 ? `(${Math.abs(v).toLocaleString()})` : v === 0 ? '—' : fmtPos(v)}{row.suffix || ''}
+                  </td>
+                ))}
+              </tr>
+            ))}
+
+            {/* II. Doanh thu */}
+            <tr>
+              <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
+                II. Tổng doanh thu thu từ khách hàng (Thu tiền) [A]
+              </td>
+            </tr>
+            <tr className="border-b border-slate-100 bg-indigo-50/30 hover:bg-indigo-50/50 transition-colors">
+              <td className="px-4 py-2.5 text-indigo-800 font-semibold border-r border-slate-100 sticky left-0 bg-indigo-50/30 text-[13px]">Tổng tiền thực thu</td>
+              {d.grossRevenueByCohort.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 text-indigo-700 font-semibold`}>{fmtPos(v)}</td>
+              ))}
+            </tr>
+
+            {/* III. Chi phí nét */}
+            <tr>
+              <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
+                III. Chi phí nét trả nhà mạng (Gốc/COGS) [B]
+              </td>
+            </tr>
+            <tr className="border-b border-slate-100 bg-red-50/20 hover:bg-red-50/40 transition-colors">
+              <td className="px-4 py-2.5 text-red-800 font-semibold border-r border-slate-100 sticky left-0 bg-red-50/20 text-[13px]">Tổng phí trả nhà mạng</td>
+              {d.netCostsToProvider.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 text-red-600`}>{v === 0 ? '—' : fmtPos(v)}</td>
+              ))}
+            </tr>
+
+            {/* IV. Chi phí vận hành */}
+            <tr>
+              <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
+                IV. Chi phí vận hành & Marketing (Cash Out) [C]
+              </td>
+            </tr>
+            {[
+              { label: '1. Ngân sách MKT (Tiền chạy QC)', data: d.operatingExpenses.marketing },
+              { label: '2. Lương các Team (58tr/Team)', data: d.operatingExpenses.salary },
+              { label: '3. Chi phí Cố định (VP, Kế toán…)', data: d.operatingExpenses.fixed },
+              { label: '4. Phí cấp lại SIM (Xoay vòng phôi)', data: d.operatingExpenses.simRefill },
+            ].map((row, i) => (
+              <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                <td className="px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px]">{row.label}</td>
+                {row.data.map((v: number, mi: number) => (
+                  <td key={mi} className={`${cellClass} py-2.5 px-2 text-red-600`}>{v === 0 ? '—' : fmtPos(v)}</td>
+                ))}
+              </tr>
+            ))}
+            <tr className="border-b-2 border-red-200 bg-red-50/40">
+              <td className="px-4 py-3 text-red-800 font-bold border-r border-slate-100 sticky left-0 bg-red-50/40 text-[13px]">Tổng chi vận hành [C]</td>
+              {d.operatingExpenses.total.map((v: number, mi: number) => (
+                <td key={mi} className={`${totalCellClass} py-3 px-2 text-red-700 bg-red-50/40`}>{fmtPos(v)}</td>
+              ))}
+            </tr>
+
+            {/* V. Hiệu quả */}
+            <tr>
+              <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass} bg-emerald-800`}>
+                V. Hiệu quả quản trị dòng tiền cuối cùng
+              </td>
+            </tr>
+            <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px]">1. Lợi nhuận vận hành (A - B - C)</td>
+              {opProfitArray.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 ${v < 0 ? 'text-red-500' : 'text-emerald-700'}`}>{fmt(v)}</td>
+              ))}
+            </tr>
+            <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px]">2. Thưởng KPI (5% Doanh thu | Khi lãi lũy kế)</td>
+              {kpiBonusArray.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 text-rose-600`}>{v === 0 ? '—' : `(${fmtPos(v)})`}</td>
+              ))}
+            </tr>
+            <tr className="border-b border-slate-100 bg-blue-50/30 hover:bg-blue-50/50 transition-colors">
+              <td className="px-4 py-2.5 text-blue-800 font-semibold border-r border-slate-100 sticky left-0 bg-blue-50/30 text-[13px]">3. Lợi nhuận trước thuế TNDN (Lũy kế bù lỗ)</td>
+              {pbtArray.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 ${v < 0 ? 'text-red-500' : 'text-blue-700'}`}>{fmt(v)}</td>
+              ))}
+            </tr>
+            <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px]">4. Thuế TNDN (20% trên lãi lũy kế)</td>
+              {taxArray.map((v: number, mi: number) => (
+                <td key={mi} className={`${cellClass} py-2.5 px-2 text-rose-600`}>{v === 0 ? '—' : `(${fmtPos(v)})`}</td>
+              ))}
+            </tr>
+            <tr className="border-b border-emerald-200 bg-emerald-900 shadow-inner">
+              <td className="px-4 py-4 text-white font-bold border-r border-emerald-700 sticky left-0 bg-emerald-900 text-[14px]">LỢI NHUẬN RÒNG SAU THUẾ TNDN</td>
+              {patArray.map((v: number, mi: number) => (
+                <td key={mi} className="text-center py-4 px-2 text-emerald-400 font-black text-base tabular-nums whitespace-nowrap">
+                  {fmt(v)}
+                </td>
+              ))}
+            </tr>
+            <tr className="bg-emerald-800/90 h-12">
+              <td className="px-4 py-2 text-emerald-100 font-semibold border-r border-emerald-700 sticky left-0 bg-emerald-800/90 text-[13px]">Biên lợi nhuận ròng / Doanh thu</td>
+              {patMarginArray.map((v: string, mi: number) => (
+                <td key={mi} className="text-center py-2 px-2 text-amber-300 font-bold text-sm whitespace-nowrap">{v}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const InvestmentTable = ({ data }: { data: typeof BRAND_INVESTMENT_DATA }) => {
+  const months = MASTER_PLAN_DATA.months;
+  
+  const calculateTotal = (values: number[]) => values.reduce((sum, v) => sum + v, 0);
+  const grandTotal = data.items.reduce((sum, item) => sum + calculateTotal(item.values), 0);
+
+  return (
+    <div className="bg-white rounded-3xl border border-indigo-100 shadow-xl overflow-hidden">
+      <div className="p-6 border-b border-indigo-50 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="w-6 h-6 text-indigo-300" />
+          <div>
+            <h3 className="text-xl font-bold text-white">Ngân Sách Đầu Tư Thương Hiệu & Cơ Sở Vật Chất</h3>
+            <p className="text-indigo-200 text-xs mt-0.5">Khoản chi đầu tư (CAPEX) — Theo dõi độc lập với kịch bản vận hành</p>
+          </div>
+        </div>
+        <div className="bg-white/10 px-4 py-2 rounded-2xl flex items-center gap-3 border border-white/10 backdrop-blur-sm">
+          <span className="text-indigo-200 text-xs font-bold uppercase tracking-wider">Tổng mức đầu tư dự kiến:</span>
+          <span className="text-xl font-black text-white">{grandTotal.toLocaleString('vi-VN')} Tr</span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[900px]">
+          <thead>
+            <tr className="bg-indigo-50/50">
+              <th className="text-left px-5 py-4 text-xs font-bold text-indigo-900 border-b border-r border-indigo-100 w-80 sticky left-0 z-10 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.05)]">Hạng mục đầu tư</th>
+              {months.map((m) => (
+                <th key={m} className="px-3 py-4 text-center text-xs font-bold text-indigo-700 border-b border-indigo-100 min-w-[72px]">{m}</th>
+              ))}
+              <th className="px-4 py-4 text-center text-xs font-bold text-white bg-indigo-600 border-b border-indigo-700 min-w-[100px] sticky right-0 z-10">TỔNG CỘNG</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item, idx) => (
+              <tr key={idx} className="border-b border-indigo-50 hover:bg-slate-50 transition-colors">
+                <td className="px-5 py-4 text-slate-800 font-semibold border-r border-indigo-50 sticky left-0 bg-white z-10 shadow-[1px_0_3px_rgba(0,0,0,0.02)]">{item.label}</td>
+                {item.values.map((v, mi) => (
+                  <td key={mi} className={`text-center py-4 px-2 tabular-nums text-sm font-medium ${item.color}`}>
+                    {v === 0 ? <span className="text-slate-200">—</span> : v.toLocaleString('vi-VN')}
+                  </td>
+                ))}
+                <td className="text-center py-4 px-2 font-bold bg-indigo-50/50 border-l border-indigo-100 sticky right-0 z-10 backdrop-blur-sm">
+                  {calculateTotal(item.values).toLocaleString('vi-VN')}
+                </td>
+              </tr>
+            ))}
+            <tr className="bg-indigo-900 text-white font-bold">
+              <td className="px-5 py-4 border-r border-indigo-700 sticky left-0 bg-indigo-900">TỔNG CHI THEO THÁNG</td>
+              {months.map((_, mi) => {
+                const monthSum = data.items.reduce((sum, item) => sum + item.values[mi], 0);
+                return (
+                  <td key={mi} className="text-center py-4 px-2 tabular-nums">
+                    {monthSum === 0 ? '—' : monthSum.toLocaleString('vi-VN')}
+                  </td>
+                );
+              })}
+              <td className="text-center py-4 px-2 font-black text-amber-300 sticky right-0 bg-indigo-950">
+                {grandTotal.toLocaleString('vi-VN')}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const BusinessPlanTab = () => {
+  // Define Scenario 1: Marketing cost is 20% of monthly revenue
+  const d1 = JSON.parse(JSON.stringify(MASTER_PLAN_DATA));
+  d1.operatingExpenses.marketing = d1.grossRevenueByCohort.map((v: number) => Math.round(v * 0.2));
+  d1.operatingExpenses.total = d1.months.map((_: any, i: number) => 
+    d1.operatingExpenses.marketing[i] + 
+    d1.operatingExpenses.salary[i] + 
+    d1.operatingExpenses.fixed[i] + 
+    d1.operatingExpenses.simRefill[i]
+  );
+  const results1 = calculateFinancials(d1);
+
+  // Define Scenario 2: Marketing cost is reduced to flat 10% of monthly revenue
+  const SCENARIO_2_DATA = JSON.parse(JSON.stringify(MASTER_PLAN_DATA));
+  SCENARIO_2_DATA.operatingExpenses.marketing = SCENARIO_2_DATA.grossRevenueByCohort.map((v: number) => Math.round(v * 0.1));
+  SCENARIO_2_DATA.operatingExpenses.total = SCENARIO_2_DATA.months.map((_: any, i: number) => 
+    SCENARIO_2_DATA.operatingExpenses.marketing[i] + 
+    SCENARIO_2_DATA.operatingExpenses.salary[i] + 
+    SCENARIO_2_DATA.operatingExpenses.fixed[i] + 
+    SCENARIO_2_DATA.operatingExpenses.simRefill[i]
+  );
+  
+  const results2 = calculateFinancials(SCENARIO_2_DATA);
+
+  return (
+    <div className="max-w-full mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       {/* Header */}
       <div className="text-center flex flex-col items-center mb-4">
         <div className="p-4 bg-emerald-100 text-emerald-600 rounded-full mb-6 shadow-sm">
@@ -1247,139 +1529,58 @@ const BusinessPlanTab = () => {
         </div>
         <h2 className="text-4xl font-bold text-slate-900 mb-4">Kế hoạch Kinh doanh</h2>
         <p className="text-slate-600 max-w-3xl text-lg">
-          Bảng Dự Toán Tài Chính Toàn Diện <span className="font-bold text-slate-800">12 Tháng (Master Plan)</span> — theo chuẩn báo cáo quản trị dòng tiền.
+          Bảng Dự Toán Tài Chính Toàn Diện <span className="font-bold text-slate-800">12 Tháng (Master Plan)</span> — so sánh các phương án vận hành và đầu tư.
         </p>
-        <div className="flex flex-wrap gap-4 justify-center mt-6 text-sm text-slate-600">
-          <span className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-full">💱 1 JPY = 165 VNĐ</span>
-          <span className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">📦 70% Dock – 30% SIM</span>
-          <span className="px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-full">🔄 Vòng đời KH: 6 tháng</span>
-          <span className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-full">💰 Đơn vị: Triệu VNĐ</span>
-        </div>
       </div>
 
-      {/* Master Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-slate-800 flex items-center gap-3">
-          <BarChart3 className="w-6 h-6 text-blue-400" />
-          <h3 className="text-xl font-bold text-white">Bảng Dự Toán Dòng Tiền Nét & Vận Hành 12 Tháng</h3>
+      {/* Part 0: Brand Investment Table (CAPEX) */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-8 bg-indigo-600 rounded-full" />
+          <h4 className="text-2xl font-bold text-slate-800">Phần 1: Ngân sách đầu tư thương hiệu & Cơ sở vật chất</h4>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse min-w-[900px]">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-bold text-slate-600 bg-slate-50 border-b border-r border-slate-200 w-64 sticky left-0 z-10">Chỉ số quản trị (Triệu VNĐ)</th>
-                {months.map(m => (
-                  <th key={m} className="px-3 py-3 text-center text-xs font-bold text-blue-700 bg-blue-50 border-b border-slate-200 min-w-[72px]">{m}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* I. Vận hành */}
-              <tr>
-                <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
-                  I. Chỉ số vận hành
-                </td>
-              </tr>
-              {[
-                { label: '1. Quy mô nhân sự (Số Team)', data: d.operations.teams, suffix: ' team' },
-                { label: '2. Số đơn mới chốt', data: d.operations.newOrders },
-                { label: '3. Khách rụng (Hết hạn 6 tháng)', data: d.operations.churnOrders, negative: true },
-                { label: '4. Tổng khách cũ đang đóng cước', data: d.operations.totalActive, bold: true },
-              ].map((row, i) => (
-                <tr key={i} className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${row.bold ? 'bg-blue-50/40' : ''}`}>
-                  <td className={`px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px] ${row.bold ? 'font-semibold bg-blue-50/40' : ''}`}>{row.label}</td>
-                  {row.data.map((v, mi) => (
-                    <td key={mi} className={`${cellClass} py-2.5 px-2 ${v < 0 ? 'text-red-500' : row.bold ? 'text-blue-700 font-semibold' : 'text-slate-700'}`}>
-                      {v < 0 ? `(${Math.abs(v).toLocaleString()})` : v === 0 ? '—' : fmtPos(v)}{row.suffix || ''}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-
-              {/* II. Doanh thu */}
-              <tr>
-                <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
-                  II. Tổng doanh thu thu từ khách hàng (Thu tiền) [A]
-                </td>
-              </tr>
-              <tr className="border-b border-slate-100 bg-indigo-50/30 hover:bg-indigo-50/50 transition-colors">
-                <td className="px-4 py-2.5 text-indigo-800 font-semibold border-r border-slate-100 sticky left-0 bg-indigo-50/30 text-[13px]">Tổng tiền thực thu</td>
-                {d.grossRevenueByCohort.map((v, mi) => (
-                  <td key={mi} className={`${cellClass} py-2.5 px-2 text-indigo-700 font-semibold`}>{fmtPos(v)}</td>
-                ))}
-              </tr>
-
-              {/* III. Chi phí nét */}
-              <tr>
-                <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
-                  III. Chi phí nét trả nhà mạng (Gốc/COGS) [B]
-                </td>
-              </tr>
-              <tr className="border-b border-slate-100 bg-red-50/20 hover:bg-red-50/40 transition-colors">
-                <td className="px-4 py-2.5 text-red-800 font-semibold border-r border-slate-100 sticky left-0 bg-red-50/20 text-[13px]">Tổng phí trả nhà mạng</td>
-                {d.netCostsToProvider.map((v, mi) => (
-                  <td key={mi} className={`${cellClass} py-2.5 px-2 text-red-600`}>{v === 0 ? '—' : fmtPos(v)}</td>
-                ))}
-              </tr>
-
-              {/* IV. Chi phí vận hành */}
-              <tr>
-                <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass}`}>
-                  IV. Chi phí vận hành & Marketing (Cash Out) [C]
-                </td>
-              </tr>
-              {[
-                { label: '1. Ngân sách MKT (Tiền chạy QC)', data: d.operatingExpenses.marketing },
-                { label: '2. Lương các Team (58tr/Team)', data: d.operatingExpenses.salary },
-                { label: '3. Chi phí Cố định (VP, Kế toán…)', data: d.operatingExpenses.fixed },
-                { label: '4. Phí cấp lại SIM (Xoay vòng phôi)', data: d.operatingExpenses.simRefill },
-              ].map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-2.5 text-slate-700 border-r border-slate-100 sticky left-0 bg-white text-[13px]">{row.label}</td>
-                  {row.data.map((v, mi) => (
-                    <td key={mi} className={`${cellClass} py-2.5 px-2 text-red-600`}>{v === 0 ? '—' : fmtPos(v)}</td>
-                  ))}
-                </tr>
-              ))}
-              <tr className="border-b-2 border-red-200 bg-red-50/40">
-                <td className="px-4 py-3 text-red-800 font-bold border-r border-slate-100 sticky left-0 bg-red-50/40 text-[13px]">Tổng chi vận hành [C]</td>
-                {d.operatingExpenses.total.map((v, mi) => (
-                  <td key={mi} className={`${totalCellClass} py-3 px-2 text-red-700 bg-red-50/40`}>{fmtPos(v)}</td>
-                ))}
-              </tr>
-
-              {/* V. Hiệu quả */}
-              <tr>
-                <td colSpan={13} className={`px-4 py-2 ${sectionHeaderClass} bg-emerald-800`}>
-                  V. Hiệu quả quản trị dòng tiền cuối cùng
-                </td>
-              </tr>
-              <tr className="border-b border-emerald-200 bg-emerald-900 shadow-inner">
-                <td className="px-4 py-4 text-white font-bold border-r border-emerald-700 sticky left-0 bg-emerald-900 text-[14px]">LỢI NHUẬN RÒNG (A – B – C)</td>
-                {d.finalNetProfit.map((v, mi) => (
-                  <td key={mi} className="text-center py-4 px-2 text-emerald-400 font-black text-base tabular-nums whitespace-nowrap">
-                    {fmt(v)}
-                  </td>
-                ))}
-              </tr>
-              <tr className="bg-emerald-800/90 h-12">
-                <td className="px-4 py-2 text-emerald-100 font-semibold border-r border-emerald-700 sticky left-0 bg-emerald-800/90 text-[13px]">Biên lợi nhuận / Doanh thu</td>
-                {d.finalProfitMargin.map((v, mi) => (
-                  <td key={mi} className="text-center py-2 px-2 text-amber-300 font-bold text-sm whitespace-nowrap">{v}</td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <InvestmentTable data={BRAND_INVESTMENT_DATA} />
       </div>
 
-      {/* KPI Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+      {/* Comparison Divider */}
+      <div className="py-8 flex items-center gap-4">
+        <div className="flex-1 h-px bg-slate-200" />
+        <div className="px-6 py-2 bg-slate-100 rounded-full text-slate-500 text-sm font-bold uppercase tracking-widest">Phần 2: Kịch bản kinh doanh vận hành (OPEX)</div>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      {/* Table 1: Original */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-8 bg-blue-600 rounded-full" />
+          <h4 className="text-2xl font-bold text-slate-800">Phương án 1: Kế hoạch kinh doanh dựa trên phương án chi phí Marketing chiếm 20% doanh thu</h4>
+        </div>
+        <FinancialMasterTable title="Bảng Dự Toán Phương Án 1" data={d1} results={results1} badge="MKT 20%" badgeColor="bg-blue-600" />
+      </div>
+
+      {/* Comparison Divider */}
+      <div className="py-8 flex items-center gap-4">
+        <div className="flex-1 h-px bg-slate-200" />
+        <div className="px-6 py-2 bg-slate-100 rounded-full text-slate-500 text-sm font-bold uppercase tracking-widest">Phân tích đối chiếu kịch bản</div>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      {/* Table 2: Scenario 2 */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-8 bg-emerald-600 rounded-full" />
+          <h4 className="text-2xl font-bold text-slate-800">Phương án 2: Tối ưu Marketing (10% Doanh thu)</h4>
+        </div>
+        <FinancialMasterTable title="Bảng Dự Toán Phương Án 2" data={SCENARIO_2_DATA} results={results2} badge="TỐI ƯU MKT" badgeColor="bg-emerald-600" />
+      </div>
+
+      {/* Summary comparison cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
-          { label: 'Tổng khách (ổn định)', value: '5.000', sub: 'Từ tháng 11 trở đi', color: 'bg-blue-600', icon: <Users className="w-6 h-6" /> },
-          { label: 'Lợi nhuận ròng / tháng', value: '~1,08 tỷ', sub: 'Tháng ổn định (T7–T12)', color: 'bg-emerald-600', icon: <TrendingUp className="w-6 h-6" /> },
-          { label: 'Ngân sách Marketing', value: '~1,0 tỷ', sub: 'Phủ sóng toàn thị trường', color: 'bg-indigo-600', icon: <Megaphone className="w-6 h-6" /> },
-          { label: 'Tỷ suất LN ổn định', value: '49%+', sub: 'Sau khi đã trừ hết chi phí', color: 'bg-amber-600', icon: <BarChart3 className="w-6 h-6" /> },
+          { label: 'LN Sau Thuế (PA 1)', value: `~${results1.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 20%)', color: 'bg-blue-600', icon: <TrendingUp className="w-6 h-6" /> },
+          { label: 'LN Sau Thuế (PA 2)', value: `~${results2.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 10%)', color: 'bg-emerald-600', icon: <TrendingUp className="w-6 h-6" /> },
+          { label: 'Chênh lệch lợi nhuận', value: `+${(results2.patArray[11] - results1.patArray[11]).toLocaleString('vi-VN')} Tr`, sub: 'Mỗi tháng khi tối ưu MKT', color: 'bg-amber-600', icon: <TrendingUp className="w-6 h-6" /> },
+          { label: 'Biên LN PA2 ổn định', value: results2.patMarginArray[11], sub: 'Hiệu suất vận hành tối đa', color: 'bg-indigo-600', icon: <BarChart3 className="w-6 h-6" /> },
         ].map((card, i) => (
           <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className={`p-3 rounded-xl w-fit mb-4 text-white ${card.color}`}>{card.icon}</div>
@@ -1408,18 +1609,18 @@ const BusinessPlanTab = () => {
             },
             {
               num: '02',
-              title: 'Điểm hòa vốn và Bùng nổ từ Tháng 3',
+              title: 'Điểm hòa vốn và Bùng nổ từ Tháng 4',
               color: 'from-emerald-600 to-teal-700',
-              highlight: 'Bầu trời lợi nhuận > 1 Tỷ',
-              body: 'Từ tháng thứ 3, nhờ các khách hàng cũ bắt đầu đóng phí dịch vụ ổn định kết hợp với hoa hồng nhà mạng (6.000 JPY), hệ thống bắt đầu có lãi và tăng trưởng phi mã, đạt mức ~1 tỷ VNĐ mỗi tháng.',
+              highlight: 'Bầu trời lợi nhuận sau bù lỗ',
+              body: 'Từ tháng thứ 4, sau khi đã bù xong các khoản lỗ vận hành ban đầu, hệ thống bắt đầu trích thưởng KPI 5% và thực hiện nghĩa vụ thuế 20%, dòng tiền thực nhận vẫn cực kỳ mạnh mẽ.',
               tag: 'Thu hoạch quả ngọt',
             },
             {
               num: '03',
-              title: 'Cơ chế "Payback" nhanh và biên LN dày',
+              title: 'Cơ chế "Payback" nhanh và biên LN thực',
               color: 'from-amber-500 to-orange-600',
-              highlight: 'Biên lợi nhuận ròng > 49%',
-              body: 'Nhờ tối ưu hóa phí đầu vào và tập trung vào các dòng sản phẩm có biên lợi nhuận cao như Pocket Dock, tỷ suất lợi nhuận ròng toàn hệ thống luôn duy trì mức trên 49%, đảm bảo tính bền vững lâu dài.',
+              highlight: `Biên LN ròng thực ~${results2.patMarginArray[11]}`,
+              body: 'Nhờ tối ưu hóa phí đầu vào và tập trung vào các dòng sản phẩm có biên lợi nhuận cao, tỷ suất lợi nhuận sau cùng (đã trừ mọi chi phí vận hành, KPI và Thuế) duy trì mức cực kỳ ấn tượng.',
               tag: 'Mô hình tối ưu',
             },
           ].map((item, i) => (
