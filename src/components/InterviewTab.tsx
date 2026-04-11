@@ -102,58 +102,69 @@ const CandidateCard = ({
       whileHover={{ y: -3, transition: { duration: 0.2 } }}
       className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 overflow-hidden group relative"
     >
-      {/* Evaluated ribbon */}
-      {hasEvalData && (
-        <div className="absolute top-3 right-3 z-10">
-          <div className="flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3" /> Đã đánh giá · {evalData.totalScore}/60
-          </div>
-        </div>
-      )}
 
       <div className="p-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shrink-0 shadow-sm">
               <User className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h4 className="font-bold text-slate-900 leading-tight">{candidate.name}</h4>
-              <p className="text-xs text-slate-500 mt-0.5">{candidate.source || '—'}</p>
+              <h4 className="text-sm font-bold text-slate-900 leading-tight">{candidate.name}</h4>
+              <p className="text-[10px] text-slate-500 mt-0.5">{candidate.source || '—'}</p>
             </div>
           </div>
           
-          <div className="relative group/status flex items-center">
-            <select
-              value={candidate.status}
-              onChange={(e) => onStatusChange(candidate, e.target.value)}
-              className={`appearance-none flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold shrink-0 cursor-pointer hover:shadow-sm focus:ring-2 focus:ring-blue-400/20 transition-all outline-none pr-1 ${statusCfg.badge}`}
-            >
-              {ALL_STATUSES.filter(s => s !== 'Tất cả').map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+          <div className="flex flex-col items-end gap-2">
+            <div className="relative group/status flex items-center">
+              <select
+                value={candidate.status}
+                onChange={(e) => onStatusChange(candidate, e.target.value)}
+                className={`appearance-none flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold shrink-0 cursor-pointer hover:shadow-sm focus:ring-2 focus:ring-blue-400/20 transition-all outline-none pr-1 ${statusCfg.badge}`}
+              >
+                {ALL_STATUSES.filter(s => s !== 'Tất cả').map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            {/* Evaluated ribbon - Moved below status select */}
+            {hasEvalData && (
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200 shadow-sm animate-in fade-in slide-in-from-top-1 whitespace-nowrap">
+                <CheckCircle2 className="w-3 h-3" /> Đã đánh giá · {evalData.totalScore}/60
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="space-y-2 text-sm">
+        <div className="space-y-2.5 text-[12px] border-t border-slate-50 pt-3">
           <div className="flex items-center gap-2 text-slate-600">
             <Briefcase className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="font-medium">{candidate.position}</span>
+            <span className="text-slate-400 w-24">Vị trí ứng tuyển:</span>
+            <span className="font-semibold text-slate-700">{candidate.position}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
             <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-            <span>{candidate.interviewDate}</span>
+            <span className="text-slate-400 w-24">Thời gian PV:</span>
+            <span className="text-slate-700">{candidate.interviewDate}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
             <User className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-xs">PV: {candidate.interviewer}</span>
+            <span className="text-slate-400 w-24">Người PV:</span>
+            <span className="text-slate-700">{candidate.interviewer}</span>
           </div>
           {candidate.phone && (
-            <div className="flex items-center gap-2 text-slate-500 text-xs">
-              <span className="text-slate-400">📞</span>
-              <span>{candidate.phone}</span>
+            <div className="flex items-center gap-2 text-slate-600">
+              <div className="w-4 h-4 flex items-center justify-center text-slate-400">
+                <span className="text-[14px]">📞</span>
+              </div>
+              <span className="text-slate-400 w-24">Liên hệ:</span>
+              <span className="font-medium text-blue-600">
+                {(() => {
+                  const p = String(candidate.phone).trim();
+                  return p.startsWith('0') ? p : '0' + p;
+                })()}
+              </span>
             </div>
           )}
         </div>
@@ -633,7 +644,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Tìm theo tên, vị trí, người phỏng vấn..."
+              <input type="text" placeholder="Tìm theo tên, vị trí, người PV..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm" />
             </div>
