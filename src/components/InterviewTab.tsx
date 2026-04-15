@@ -46,13 +46,12 @@ const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter:
     const received = candidates.filter(c => c.status === 'Đã nhận việc').length;
     const resigned = candidates.filter(c => c.status === 'Đã nghỉ việc').length;
     const failed = candidates.filter(c => c.status === 'Không đạt').length;
-    const genericDone = candidates.filter(c => c.status === 'Đã phỏng vấn').length;
 
     return {
       total: candidates.length,
       waiting,
-      // Đã PV = Tổng tất cả các trường hợp không phải đang chờ
-      done: genericDone + considering + passed + failed,
+      // Đã PV = Tất cả các trạng thái trừ "Chờ phỏng vấn"
+      done: candidates.length - waiting,
       considering,
       passed,
       received,
@@ -109,12 +108,7 @@ const CandidateCard: React.FC<{
   const canEvaluate = isAdmin || isHR || isManager;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      whileHover={{ y: -3, transition: { duration: 0.2 } }}
+    <div
       className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 overflow-hidden group relative"
     >
 
@@ -250,7 +244,7 @@ const CandidateCard: React.FC<{
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -584,7 +578,11 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   }, [dateFiltered, candidates, localAdded, search]);
 
   const finalFiltered = useMemo(() => {
-    const filtered = searchFiltered.filter(c => statusFilter === 'Tất cả' || c.status === statusFilter);
+    const filtered = searchFiltered.filter(c => {
+      if (statusFilter === 'Tất cả') return true;
+      if (statusFilter === 'Đã phỏng vấn') return c.status !== 'Chờ phỏng vấn';
+      return c.status === statusFilter;
+    });
     
     // Sắp xếp theo vị trí từ cao xuống thấp (giả định dựa trên thứ tự trong JD hoặc độ dài tên vị trí)
     // Ở đây ta sẽ sắp xếp theo thứ tự bảng chữ cái giảm dần của position để minh họa "cao xuống thấp" 
@@ -733,28 +731,23 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
             </div>
           </div>
 
-          <AnimatePresence>
-            {datePreset === 'Tùy chỉnh' && (
-              <motion.div 
-                 initial={{ height: 0, opacity: 0 }}
-                 animate={{ height: 'auto', opacity: 1 }}
-                 exit={{ height: 0, opacity: 0 }}
-                 className="flex flex-col sm:flex-row gap-4 items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
-              >
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className="text-sm text-slate-600 font-bold min-w-[65px]">Từ ngày:</span>
-                    <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                       className="flex-1 px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:outline-none bg-slate-50"/>
-                </div>
-                <div className="hidden sm:block text-slate-300">-</div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className="text-sm text-slate-600 font-bold min-w-[65px]">Đến ngày:</span>
-                    <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                       className="flex-1 px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:outline-none bg-slate-50"/>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {datePreset === 'Tùy chỉnh' && (
+            <div 
+               className="flex flex-col sm:flex-row gap-4 items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+            >
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-sm text-slate-600 font-bold min-w-[65px]">Từ ngày:</span>
+                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                     className="flex-1 px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:outline-none bg-slate-50"/>
+              </div>
+              <div className="hidden sm:block text-slate-300">-</div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-sm text-slate-600 font-bold min-w-[65px]">Đến ngày:</span>
+                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                     className="flex-1 px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:outline-none bg-slate-50"/>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Card grid */}
@@ -770,23 +763,21 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
             <p className="text-sm mt-1">Thử thay đổi bộ lọc hoặc từ khoá tìm kiếm</p>
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {finalFiltered.map(c => (
-                <CandidateCard
-                  key={c.id}
-                  candidate={c}
-                  onEvaluate={openEval}
-                  onViewReport={openReport}
-                  evalData={evaluations[c.id]}
-                  onStatusChange={updateCandidateStatus}
-                  onDelete={handleDeleteCandidate}
-                  user={user}
-                  onEditCV={openCVEdit}
-                />
-              ))}
-            </motion.div>
-          </AnimatePresence>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {finalFiltered.map(c => (
+              <CandidateCard
+                key={c.id}
+                candidate={c}
+                onEvaluate={openEval}
+                onViewReport={openReport}
+                evalData={evaluations[c.id]}
+                onStatusChange={updateCandidateStatus}
+                onDelete={handleDeleteCandidate}
+                user={user}
+                onEditCV={openCVEdit}
+              />
+            ))}
+          </div>
         )}
 
         {!loading && !sheetCsvUrl && (
