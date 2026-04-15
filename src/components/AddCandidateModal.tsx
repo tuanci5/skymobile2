@@ -1,14 +1,40 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, FileText, Phone, Briefcase, Calendar, Link as LinkIcon, Usb } from 'lucide-react';
+import { X, UserPlus, FileText, Phone, Briefcase, Calendar, Link as LinkIcon, Usb, Clock } from 'lucide-react';
 import { Candidate } from './CandidateEvalModal';
-
+import { crmJD } from '../data/positions/crm/jd';
+import { cskhLeadJD } from '../data/positions/cskh_lead/jd';
+import { cskhStaffJD } from '../data/positions/cskh_staff/jd';
+import { headJD } from '../data/positions/head/jd';
+import { mktAdsJD } from '../data/positions/mkt_ads/jd';
+import { mktContentJD } from '../data/positions/mkt_content/jd';
+import { mktLeadJD } from '../data/positions/mkt_lead/jd';
+import { mktMediaJD } from '../data/positions/mkt_media/jd';
+import { opsJD } from '../data/positions/ops/jd';
+import { saleLeadJD } from '../data/positions/sale_lead/jd';
+import { saleStaffJD } from '../data/positions/sale_staff/jd';
+import { telesaleJD } from '../data/positions/telesale/jd';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSubmitSuccess: (candidate: Candidate) => void;
   appsScriptUrl?: string; // Tích hợp gửi data về Google Sheet
 }
+
+const POSITION_OPTIONS = [
+  headJD.title,
+  cskhLeadJD.title,
+  mktLeadJD.title,
+  saleLeadJD.title,
+  crmJD.title,
+  cskhStaffJD.title,
+  mktAdsJD.title,
+  mktContentJD.title,
+  mktMediaJD.title,
+  opsJD.title,
+  saleStaffJD.title,
+  telesaleJD.title,
+];
 
 export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSuccess, appsScriptUrl }) => {
   const [loading, setLoading] = useState(false);
@@ -19,6 +45,7 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
     source: '',
     cvLink: '',
     interviewDate: '',
+    interviewTime: '',
     interviewer: '',
   });
 
@@ -39,6 +66,7 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
         source: formData.source,
         cvLink: formData.cvLink,
         interviewDate: formData.interviewDate,
+        interviewTime: formData.interviewTime,
         interviewer: formData.interviewer,
         status: 'Chờ phỏng vấn',
       };
@@ -60,7 +88,7 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
       await new Promise(r => setTimeout(r, 600));
 
       onSubmitSuccess(newCandidate);
-      setFormData({ name: '', phone: '', position: '', source: '', cvLink: '', interviewDate: '', interviewer: '' });
+      setFormData({ name: '', phone: '', position: '', source: '', cvLink: '', interviewDate: '', interviewTime: '', interviewer: '' });
       onClose();
     } catch (error) {
       console.error(error);
@@ -98,7 +126,7 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                 <p className="text-blue-200 text-sm">Nhập thông tin hồ sơ ứng viên</p>
               </div>
             </div>
-            <button onClick={onClose} disabled={loading} className="p-2 hover:bg-white/10 rounded-xl transition-colors disabled:opacity-50">
+            <button onClick={onClose} disabled={loading} title="Đóng" className="p-2 hover:bg-white/10 rounded-xl transition-colors disabled:opacity-50">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -134,6 +162,7 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                   </label>
                   <select
                     name="source" value={formData.source} onChange={handleChange}
+                    title="Chọn nguồn ứng viên"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
                   >
                     <option value="">-- Chọn nguồn --</option>
@@ -153,11 +182,16 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                   <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                     <Briefcase className="w-4 h-4 text-slate-400" /> Vị trí ứng tuyển <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <select
                     required name="position" value={formData.position} onChange={handleChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="VD: Nhân viên Marketing, Kế toán..."
-                  />
+                    title="Chọn vị trí ứng tuyển"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                  >
+                    <option value="" disabled>-- Chọn vị trí --</option>
+                    {POSITION_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
@@ -169,26 +203,37 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                     placeholder="https://..."
                   />
                 </div>
-                <div className="flex gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="flex-1">
                     <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" /> Ngày PV
                     </label>
                     <input
                       required type="date" name="interviewDate" value={formData.interviewDate} onChange={handleChange}
+                      title="Ngày phỏng vấn"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div className="flex-1">
                     <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                      <FileText className="w-4 h-4 text-slate-400" /> Người PV
+                      <Clock className="w-4 h-4 text-slate-400" /> Giờ PV
                     </label>
                     <input
-                      required name="interviewer" value={formData.interviewer} onChange={handleChange}
+                      type="time" name="interviewTime" value={formData.interviewTime} onChange={handleChange}
+                      title="Giờ phỏng vấn"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Tên ND"
                     />
                   </div>
+                </div>
+                <div className="mt-5">
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-slate-400" /> Người PV
+                  </label>
+                  <input
+                    required name="interviewer" value={formData.interviewer} onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Tên ND"
+                  />
                 </div>
               </div>
             </div>

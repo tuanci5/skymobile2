@@ -1,16 +1,28 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, CheckCircle, AlertCircle, Clock, FileText, User, Briefcase, Send, Loader2, ExternalLink } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface EvaluationData {
+  scores: Record<string, number>;
+  notes: Record<string, string>;
+  strengths: string;
+  weaknesses: string;
+  decision: string;
+  salaryNote: string;
+  totalScore: number;
+  submittedAt: string;
+}
 
 export interface Candidate {
   id: string;
   name: string;
   position: string;
   interviewDate: string;
+  interviewTime?: string;
   interviewer: string;
-  status: 'Chờ phỏng vấn' | 'Đã phỏng vấn' | 'Cân nhắc (Vòng 2)' | 'Đạt' | 'Không đạt';
+  status: 'Chờ phỏng vấn' | 'Đang phỏng vấn' | 'Đã phỏng vấn' | 'Cân nhắc (Vòng 2)' | 'Đạt' | 'Không đạt' | 'Đã nhận việc' | 'Đã nghỉ việc';
   cvLink?: string;
   phone?: string;
   source?: string;
@@ -62,9 +74,9 @@ const DECISION_OPTIONS = [
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const ScoreButton = ({
+const ScoreButton: React.FC<{ value: number; selected: boolean; onChange: () => void }> = ({
   value, selected, onChange,
-}: { value: number; selected: boolean; onChange: () => void }) => {
+}) => {
   const info = SCORE_LABELS[value];
   return (
     <button
@@ -90,6 +102,7 @@ const ScoreButton = ({
 interface Props {
   candidate: Candidate | null;
   onClose: () => void;
+  initialEvalData?: EvaluationData;
   onSubmitSuccess?: (candidateId: string, evalData: {
     scores: Record<string, number>;
     notes: Record<string, string>;
@@ -107,6 +120,7 @@ interface Props {
 export const CandidateEvalModal: React.FC<Props> = ({
   candidate,
   onClose,
+  initialEvalData,
   onSubmitSuccess,
   appsScriptUrl,
 }) => {
@@ -117,13 +131,67 @@ export const CandidateEvalModal: React.FC<Props> = ({
   const [weaknesses, setWeaknesses] = useState('');
   const [decision,   setDecision]   = useState('');
   const [salaryNote, setSalaryNote] = useState('');
-
+  const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted,  setSubmitted]  = useState(false);
-  const [error,      setError]      = useState('');
+
+  // ── Load initial evaluation data on mount ──────────────────────────────────
+  useEffect(() => {
+    if (initialEvalData) {
+      setScores(initialEvalData.scores || {});
+      setNotes(initialEvalData.notes || {});
+      setStrengths(initialEvalData.strengths || '');
+      setWeaknesses(initialEvalData.weaknesses || '');
+      setDecision(initialEvalData.decision || '');
+      setSalaryNote(initialEvalData.salaryNote || '');
+    }
+  }, [initialEvalData]);
+
+  // ── Load draft from localStorage when candidate changes ──────────────────────
+  useEffect(() => {
+    if (candidate && !initialEvalData) {
+      const draft = localStorage.getItem(`draft_eval_${candidate.id}`);
+      if (draft) {
+        try {
+          const parsed = JSON.parse(draft);
+          setScores(parsed.scores || {});
+          setNotes(parsed.notes || {});
+          setStrengths(parsed.strengths || '');
+          setWeaknesses(parsed.weaknesses || '');
+          setDecision(parsed.decision || '');
+          setSalaryNote(parsed.salaryNote || '');
+        } catch (e) {
+          console.error('Failed to parse draft:', e);
+        }
+      }
+    }
+  }, [candidate?.id, initialEvalData]);
+
+  // ── Auto-save to localStorage every 60 seconds ───────────────────────────────
+  useEffect(() => {
+    if (!candidate) return;
+
+    const interval = setInterval(() => {
+      const draft = {
+        scores,
+        notes,
+        strengths,
+        weaknesses,
+        decision,
+        salaryNote,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(`draft_eval_${candidate.id}`, JSON.stringify(draft));
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
+  }, [scores, notes, strengths, weaknesses, decision, salaryNote, candidate]);
 
   // ── Computed ────────────────────────────────────────────────────────────────
-  const totalScore  = useMemo(() => Object.values(scores).reduce((a, b) => a + b, 0), [scores]);
+  const totalScore  = useMemo(
+    () => (Object.values(scores) as number[]).reduce((a, b) => a + b, 0),
+    [scores],
+  );
   const maxScore    = CRITERIA.length * 5; // 60
   const scoredCount = Object.keys(scores).length;
   const pct         = Math.round((totalScore / maxScore) * 100);

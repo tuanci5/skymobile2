@@ -4,11 +4,12 @@ import {
   Users, RefreshCcw, Search, Filter, ExternalLink,
   Calendar, User, Briefcase, Clock, ChevronRight,
   AlertCircle, Loader2, CheckCircle2, XCircle, Eye,
-  ClipboardList, BarChart2, UserPlus, Trash2,
+  ClipboardList, BarChart2, UserPlus, Trash2, FileText, Edit,
 } from 'lucide-react';
 import { CandidateEvalModal, Candidate } from './CandidateEvalModal';
 import { EvalReportModal, EvaluationData } from './EvalReportModal';
 import { AddCandidateModal } from './AddCandidateModal';
+import { CVEditModal, CVData } from './CVEditModal';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const MOCK_CANDIDATES: Candidate[] = [
@@ -25,20 +26,25 @@ const MOCK_CANDIDATES: Candidate[] = [
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string; icon: React.ReactNode }> = {
   'Chờ phỏng vấn': { label: 'Chờ phỏng vấn',  dot: 'bg-amber-400',              badge: 'bg-amber-50 text-amber-700 border-amber-200',    icon: <Clock      className="w-3 h-3" /> },
+  'Đang phỏng vấn': { label: 'Đang phỏng vấn', dot: 'bg-blue-400',               badge: 'bg-blue-50 text-blue-700 border-blue-200',       icon: <Clock      className="w-3 h-3" /> },
   'Đã phỏng vấn':  { label: 'Đã phỏng vấn',   dot: 'bg-violet-400',             badge: 'bg-violet-50 text-violet-700 border-violet-200', icon: <ClipboardList className="w-3 h-3" /> },
   'Cân nhắc (Vòng 2)': { label: 'Cân nhắc (Vòng 2)', dot: 'bg-orange-400', badge: 'bg-orange-50 text-orange-700 border-orange-200', icon: <Filter className="w-3 h-3" /> },
   'Đạt':           { label: 'Đạt',             dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
   'Không đạt':     { label: 'Không đạt',       dot: 'bg-red-400',                badge: 'bg-red-50 text-red-700 border-red-200',         icon: <XCircle    className="w-3 h-3" /> },
+  'Đã nhận việc':   { label: 'Đã nhận việc',    dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
+  'Đã nghỉ việc':   { label: 'Đã nghỉ việc',    dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
 };
 
-const ALL_STATUSES = ['Tất cả', 'Chờ phỏng vấn', 'Đã phỏng vấn', 'Cân nhắc (Vòng 2)', 'Đạt', 'Không đạt'] as const;
+const ALL_STATUSES = ['Tất cả', 'Chờ phỏng vấn', 'Đang phỏng vấn', 'Đã phỏng vấn', 'Cân nhắc (Vòng 2)', 'Đạt', 'Không đạt', 'Đã nhận việc', 'Đã nghỉ việc'] as const;
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
-const StatsBar = ({ candidates }: { candidates: Candidate[] }) => {
+const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter: (status: string) => void }) => {
   const stats = useMemo(() => {
     const waiting = candidates.filter(c => c.status === 'Chờ phỏng vấn').length;
     const considering = candidates.filter(c => c.status === 'Cân nhắc (Vòng 2)').length;
-    const passed = candidates.filter(c => c.status === 'Đạt').length;
+    const passed = candidates.filter(c => c.status === 'Đạt' || c.status === 'Đã nhận việc' || c.status === 'Đã nghỉ việc').length;
+    const received = candidates.filter(c => c.status === 'Đã nhận việc').length;
+    const resigned = candidates.filter(c => c.status === 'Đã nghỉ việc').length;
     const failed = candidates.filter(c => c.status === 'Không đạt').length;
     const genericDone = candidates.filter(c => c.status === 'Đã phỏng vấn').length;
 
@@ -49,21 +55,29 @@ const StatsBar = ({ candidates }: { candidates: Candidate[] }) => {
       done: genericDone + considering + passed + failed,
       considering,
       passed,
+      received,
+      resigned,
       failed,
     };
   }, [candidates]);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
       {[
-        { label: 'Tổng',      value: stats.total,      color: 'text-slate-700',   bg: 'bg-slate-100' },
-        { label: 'Chờ PV',    value: stats.waiting,    color: 'text-amber-700',   bg: 'bg-amber-50' },
-        { label: 'Đã PV',     value: stats.done,       color: 'text-violet-700',  bg: 'bg-violet-50' },
-        { label: 'Cân nhắc',  value: stats.considering,color: 'text-orange-700',  bg: 'bg-orange-50' },
-        { label: 'Đạt',       value: stats.passed,     color: 'text-emerald-700', bg: 'bg-emerald-50' },
-        { label: 'Không đạt', value: stats.failed,     color: 'text-red-700',     bg: 'bg-red-50' },
+        { label: 'Tổng',          value: stats.total,      color: 'text-slate-700',   bg: 'bg-slate-100', filter: 'Tất cả' },
+        { label: 'Chờ PV',        value: stats.waiting,    color: 'text-amber-700',   bg: 'bg-amber-50', filter: 'Chờ phỏng vấn' },
+        { label: 'Đã PV',         value: stats.done,       color: 'text-violet-700',  bg: 'bg-violet-50', filter: 'Đã phỏng vấn' },
+        { label: 'Cân nhắc',      value: stats.considering,color: 'text-orange-700',  bg: 'bg-orange-50', filter: 'Cân nhắc (Vòng 2)' },
+        { label: 'Đạt',           value: stats.passed,     color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đạt' },
+        { label: 'Không đạt',     value: stats.failed,     color: 'text-red-700',     bg: 'bg-red-50', filter: 'Không đạt' },
+        { label: 'Đã nhận việc',  value: stats.received,   color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đã nhận việc' },
+        { label: 'Đã nghỉ việc',  value: stats.resigned,   color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đã nghỉ việc' },
       ].map(s => (
-        <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
+        <div 
+          key={s.label} 
+          onClick={() => onFilter(s.filter)}
+          className={`${s.bg} rounded-2xl p-4 text-center cursor-pointer hover:scale-105 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md`}
+        >
           <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
           <p className={`text-xs font-semibold ${s.color} opacity-70 mt-0.5`}>{s.label}</p>
         </div>
@@ -73,16 +87,17 @@ const StatsBar = ({ candidates }: { candidates: Candidate[] }) => {
 };
 
 // ─── Candidate Card ───────────────────────────────────────────────────────────
-const CandidateCard = ({
-  candidate, onEvaluate, onViewReport, evalData, onStatusChange, onDelete, user,
-}: {
+const CandidateCard: React.FC<{
   candidate: Candidate;
   onEvaluate: (c: Candidate) => void;
   onViewReport: (c: Candidate) => void;
   evalData?: EvaluationData;
-  onStatusChange: (candidate: Candidate, newStatus: string) => void;
-  onDelete: (id: string) => void;
+  onStatusChange: (candidate: Candidate, newStatus: string) => Promise<void> | void;
+  onDelete: (id: string) => Promise<void> | void;
   user: any;
+  onEditCV: (c: Candidate) => void;
+}> = ({
+  candidate, onEvaluate, onViewReport, evalData, onStatusChange, onDelete, user, onEditCV,
 }) => {
   const statusCfg   = STATUS_CONFIG[candidate.status];
   const hasEvalData = !!evalData;
@@ -146,7 +161,15 @@ const CandidateCard = ({
           <div className="flex items-center gap-2 text-slate-600">
             <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
             <span className="text-slate-400 w-24">Thời gian PV:</span>
-            <span className="text-slate-700">{candidate.interviewDate}</span>
+            <span className="text-slate-700 whitespace-nowrap">
+              {new Date(candidate.interviewDate).toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }).replace(',', '')}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
             <User className="w-4 h-4 text-slate-400 shrink-0" />
@@ -177,6 +200,14 @@ const CandidateCard = ({
               title="Xóa ứng viên"
             >
               <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {canModify && (
+            <button onClick={(e) => { e.stopPropagation(); onEditCV(candidate); }}
+              className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors shrink-0"
+              title="Sửa thông tin CV">
+              <Edit className="w-4 h-4" />
             </button>
           )}
 
@@ -231,7 +262,7 @@ interface Props {
   user: any;
 }
 
-type ModalMode = 'eval' | 'report' | 'add' | null;
+type ModalMode = 'eval' | 'report' | 'add' | 'cv' | null;
 
 export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resultSheetCsvUrl, user }) => {
   const [candidates,       setCandidates]       = useState<Candidate[]>([]);
@@ -251,7 +282,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   const [fetchError,       setFetchError]       = useState('');
   const [search,           setSearch]           = useState('');
   const [statusFilter,     setStatusFilter]     = useState<string>('Tất cả');
-  const [datePreset,       setDatePreset]       = useState<string>('Tất cả thời gian');
+  const [datePreset,       setDatePreset]       = useState<string>('7 ngày gần nhất');
   const [fromDate,         setFromDate]         = useState<string>('');
   const [toDate,           setToDate]           = useState<string>('');
 
@@ -279,6 +310,14 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
         }
       });
       return cleaned;
+    } catch { return {}; }
+  });
+
+  const [cvData, setCvData] = useState<Record<string, CVData>>(() => {
+    try {
+      const saved = localStorage.getItem('sky_mobile_cv_data');
+      if (!saved) return {};
+      return JSON.parse(saved);
     } catch { return {}; }
   });
 
@@ -470,6 +509,14 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       end.setHours(23, 59, 59, 999);
       return [today, end];
     }
+    if (preset === '7 ngày gần nhất') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+      return [start, end];
+    }
     if (preset === 'Tuần này') {
       const start = new Date(today);
       const day = start.getDay();
@@ -536,12 +583,18 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     });
   }, [dateFiltered, candidates, localAdded, search]);
 
-  const finalFiltered = useMemo(() =>
-    searchFiltered.filter(c => statusFilter === 'Tất cả' || c.status === statusFilter),
-  [searchFiltered, statusFilter]);
+  const finalFiltered = useMemo(() => {
+    const filtered = searchFiltered.filter(c => statusFilter === 'Tất cả' || c.status === statusFilter);
+    
+    // Sắp xếp theo vị trí từ cao xuống thấp (giả định dựa trên thứ tự trong JD hoặc độ dài tên vị trí)
+    // Ở đây ta sẽ sắp xếp theo thứ tự bảng chữ cái giảm dần của position để minh họa "cao xuống thấp" 
+    // hoặc nếu có một danh sách ưu tiên vị trí thì sẽ dùng danh sách đó.
+    return [...filtered].sort((a, b) => b.position.localeCompare(a.position));
+  }, [searchFiltered, statusFilter]);
 
   const openEval   = (c: Candidate) => { setSelectedCandidate(c); setModalMode('eval'); };
   const openReport = (c: Candidate) => { setSelectedCandidate(c); setModalMode('report'); };
+  const openCV     = (c: Candidate) => { setSelectedCandidate(c); setModalMode('cv'); };
   const closeModal = ()             => { setSelectedCandidate(null); setModalMode(null); };
 
   const handleDeleteCandidate = async (id: string) => {
@@ -601,6 +654,20 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     localStorage.setItem('sky_mobile_local_added_uv', JSON.stringify(updatedLocal));
   };
 
+  const openCVEdit = (candidate: Candidate) => {
+    setSelectedCandidate(candidate);
+    setModalMode('cv');
+  };
+
+  const handleSubmitCVSuccess = (candidateId: string, cvData: CVData) => {
+    setCvData(prev => {
+      const updated = { ...prev, [candidateId]: cvData };
+      try { localStorage.setItem('sky_mobile_cv_data', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    closeModal();
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <>
@@ -637,7 +704,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
           </div>
         )}
 
-        {!loading && <StatsBar candidates={searchFiltered} />}
+        {!loading && <StatsBar candidates={searchFiltered} onFilter={setStatusFilter} />}
 
         {/* Filters */}
         <div className="flex flex-col gap-3">
@@ -653,7 +720,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <select value={datePreset} onChange={e => setDatePreset(e.target.value)}
                 className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer">
-                {['Tất cả thời gian', 'Hôm nay', 'Tuần này', 'Tháng này', 'Tùy chỉnh'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['7 ngày gần nhất', 'Tất cả thời gian', 'Hôm nay', 'Tuần này', 'Tháng này', 'Tùy chỉnh'].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
@@ -715,6 +782,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
                   onStatusChange={updateCandidateStatus}
                   onDelete={handleDeleteCandidate}
                   user={user}
+                  onEditCV={openCVEdit}
                 />
               ))}
             </motion.div>
@@ -738,6 +806,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
         <CandidateEvalModal
           candidate={selectedCandidate}
           onClose={closeModal}
+          initialEvalData={evaluations[selectedCandidate.id]}
           onSubmitSuccess={handleSubmitSuccess}
           appsScriptUrl={appsScriptUrl}
         />
@@ -750,6 +819,17 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
           evaluation={evaluations[selectedCandidate.id] ?? null}
           onClose={closeModal}
           onEdit={() => setModalMode('eval')}
+        />
+      )}
+
+      {/* CV Edit Modal */}
+      {selectedCandidate && modalMode === 'cv' && (
+        <CVEditModal
+          candidate={selectedCandidate}
+          onClose={closeModal}
+          initialCVData={cvData[selectedCandidate.id]}
+          onSubmitSuccess={handleSubmitCVSuccess}
+          appsScriptUrl={appsScriptUrl}
         />
       )}
 

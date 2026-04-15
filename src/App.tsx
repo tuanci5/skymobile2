@@ -1984,7 +1984,7 @@ function AppContent() {
                     <div className="w-1 bg-slate-300 h-6 lg:hidden"></div>
 
                     <button
-                      onClick={() => setActiveDept(dept.id)}
+                      onClick={() => goToDept(dept.id)}
                       className="w-full h-full bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-left relative overflow-hidden flex flex-col group/btn"
                     >
                       <div className="absolute top-0 right-0 p-4 opacity-0 group-hover/btn:opacity-100 transition-opacity">
@@ -2024,7 +2024,7 @@ function AppContent() {
     if (activeDept === 'sales-mkt') {
       return (
         <>
-          <button onClick={() => { setActiveDept(null); setActiveTeam(null); }} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:underline">
+          <button onClick={() => { goToDept(null); goToTeam(null); }} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:underline">
             &larr; Quay lại sơ đồ công ty
           </button>
           <Header />
@@ -2049,7 +2049,7 @@ function AppContent() {
                         const icon = teamId === 'marketing' ? Megaphone : teamId === 'sale' ? MessageSquare : HeartHandshake;
                         const color = teamId === 'marketing' ? 'bg-indigo-100 text-indigo-600' : teamId === 'sale' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600';
                         return (
-                          <button key={teamId} onClick={() => setActiveTeam(teamId)} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 group transition-all duration-300 text-left relative overflow-hidden">
+                          <button key={teamId} onClick={() => goToTeam(teamId)} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 group transition-all duration-300 text-left relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
                               <span className="text-blue-600 font-bold">&rarr;</span>
                             </div>
@@ -2282,7 +2282,7 @@ function AppContent() {
               ) : (
                 <div className="space-y-8 w-full animate-in fade-in slide-in-from-right-4 duration-500">
                   <div className="bg-gradient-to-br from-white to-slate-50 p-8 rounded-3xl border border-slate-200 shadow-xl border-t-4 border-t-blue-500">
-                    <button onClick={() => setActiveTeam(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl w-fit">
+                    <button onClick={() => goToTeam(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl w-fit">
                       &larr; Quay lại danh sách tổ
                     </button>
                     <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
@@ -2401,7 +2401,7 @@ function AppContent() {
       const deptData = OTHER_DEPTS_DATA[activeDept];
       return (
         <div className="animate-in fade-in slide-in-from-right-4 duration-500 pb-12 w-full">
-          <button onClick={() => setActiveDept(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors w-fit">
+          <button onClick={() => goToDept(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors w-fit">
             &larr; Quay lại sơ đồ công ty
           </button>
 

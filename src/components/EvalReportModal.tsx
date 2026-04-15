@@ -88,7 +88,7 @@ const COLOR_MAP: Record<string, { bar: string; bg: string; text: string; border:
 
 // ─── Score dot ────────────────────────────────────────────────────────────────
 
-const ScoreDot = ({ value, active }: { value: number; active: boolean }) => {
+const ScoreDot: React.FC<{ value: number; active: boolean }> = ({ value, active }) => {
   const colors = ['', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-blue-500', 'bg-emerald-500'];
   return (
     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
@@ -113,11 +113,11 @@ const getOverallRating = (pct: number) => {
 
 // ─── Group score bar ──────────────────────────────────────────────────────────
 
-const GroupScoreBar = ({
-  group, scores,
-}: {
+const GroupScoreBar: React.FC<{
   group: typeof CRITERIA_GROUPS[0];
   scores: Record<string, number>;
+}> = ({
+  group, scores,
 }) => {
   const c = COLOR_MAP[group.color];
   const groupTotal = group.criteria.reduce((s, cr) => s + (scores[cr.id] ?? 0), 0);
@@ -345,7 +345,7 @@ export const EvalReportModal: React.FC<Props> = ({ candidate, evaluation, onClos
             </div>
 
             {/* Notes per criteria (only those filled) */}
-            {Object.entries(notes).some(([, v]) => v.trim()) && (
+            {Object.entries(notes).some(([, v]: [string, string]) => v.trim()) && (
               <div>
                 <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2 mb-3">
                   <MessageSquare className="w-5 h-5 text-slate-500" />
