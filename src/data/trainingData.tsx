@@ -1,5 +1,5 @@
 import React from 'react';
-import { Target, Monitor, Users, Settings, UserPlus, HeartHandshake, Globe2, Layers, Smartphone, Lightbulb, Wifi, Briefcase, Network, ShieldCheck, FileText, Lock, Clock, CalendarCheck } from 'lucide-react';
+import { Target, Monitor, Users, Settings, UserPlus, HeartHandshake, Globe2, Layers, Smartphone, Lightbulb, Wifi, Briefcase, Network, ShieldCheck, FileText, Lock, Clock, CalendarCheck, AlertTriangle, Scale } from 'lucide-react';
 
 export const TRAINING_GROUPS = [
   {
@@ -224,23 +224,91 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
   'Nội quy, quy trình báo cáo & bảo mật': {
     title: 'Nội quy, quy trình báo cáo & bảo mật',
     content: (
-      <div className="space-y-6">
-        <div className="space-y-4">
-          <div className="flex gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-            <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center shrink-0">🕒</div>
-            <div>
-              <h6 className="font-bold text-slate-900 text-sm">Giờ giấc & Báo cáo</h6>
-              <p className="text-slate-600 text-xs mt-1">Báo cáo chỉ số KPI ngày trước 18h hàng ngày trên nhóm Slack chính thức. Dù phát triển đa ngành, tính kỷ luật vẫn là yếu tố tiên quyết.</p>
+      <div className="space-y-10">
+        <section>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl"><Clock className="w-6 h-6" /></div>
+            <h4 className="text-xl font-bold text-slate-900">1. Ý thức kỷ luật & Báo cáo</h4>
+          </div>
+          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+            <ul className="space-y-4">
+              <li className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">1</div>
+                <div>
+                  <span className="font-bold text-slate-800">Báo cáo KPI định kỳ:</span>
+                  <p className="text-slate-600 text-sm mt-1">Gửi báo cáo chỉ số mỗi ngày trước 18h00 trên nhóm Slack của bộ phận. Nội dung báo cáo phải trung thực, chính xác.</p>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">2</div>
+                <div>
+                  <span className="font-bold text-slate-800">Tác phong làm việc:</span>
+                  <p className="text-slate-600 text-sm mt-1">Dù làm việc tại văn phòng hay từ xa, tính kỷ luật và sự cam kết về thời gian là yếu tố tiên quyết để đảm bảo sự phát triển của công ty đa ngành.</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl"><ShieldCheck className="w-6 h-6" /></div>
+            <h4 className="text-xl font-bold text-slate-900">2. Bảo mật thông tin (Tuyệt mật)</h4>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-4 text-rose-600">
+                <Lock className="w-5 h-5" />
+                <h5 className="font-bold">Tài sản cần bảo vệ</h5>
+              </div>
+              <ul className="space-y-3 text-sm text-slate-600">
+                <li className="flex items-start gap-2">• <strong className="text-slate-800">Thông tin khách hàng:</strong> Tên, SĐT, địa chỉ, ảnh giấy tờ tùy thân (thẻ ngoại kiều) - Đây là tài sản nhạy cảm nhất.</li>
+                <li className="flex items-start gap-2">• <strong className="text-slate-800">Bí mật kinh doanh:</strong> Kịch bản chốt đơn, danh sách giá nhập, biên lợi nhuận, chiến lược Marketing.</li>
+                <li className="flex items-start gap-2">• <strong className="text-slate-800">Dữ liệu hệ thống:</strong> Tài khoản quản trị, mã nguồn, mật khẩu công cụ công ty.</li>
+              </ul>
+            </div>
+
+            <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100">
+              <div className="flex items-center gap-2 mb-4 text-rose-700">
+                <AlertTriangle className="w-5 h-5" />
+                <h5 className="font-bold">Quy tắc "4 KHÔNG"</h5>
+              </div>
+              <ul className="space-y-3 text-sm text-rose-800 font-medium">
+                <li className="flex items-center gap-2">1. KHÔNG chụp màn hình thông tin nhạy cảm gửi ra bên ngoài.</li>
+                <li className="flex items-center gap-2">2. KHÔNG lưu trữ dữ liệu công ty trên các thiết bị cá nhân.</li>
+                <li className="flex items-center gap-2">3. KHÔNG chia sẻ dữ liệu khách hàng chéo giữa các bộ phận.</li>
+                <li className="flex items-center gap-2">4. KHÔNG sử dụng máy tính công cộng để login hệ thống.</li>
+              </ul>
             </div>
           </div>
-          <div className="flex gap-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
-            <div className="w-10 h-10 rounded-full bg-rose-200 flex items-center justify-center shrink-0">🔒</div>
-            <div>
-              <h6 className="font-bold text-slate-900 text-sm">Bảo mật thông tin</h6>
-              <p className="text-slate-600 text-xs mt-1">Cấm tuyệt đối tiết lộ thông tin khách hàng, kịch bản tư vấn và danh sách giá nhập. Thông tin khách hàng chính là tài sản quý giá nhất để khai thác đa dịch vụ.</p>
+
+          <div className="p-6 bg-slate-900 text-white rounded-3xl relative overflow-hidden">
+            <div className="absolute right-0 bottom-0 opacity-10 translate-x-1/4 translate-y-1/4">
+              <Scale className="w-48 h-48" />
+            </div>
+            <div className="relative z-10">
+              <h5 className="text-lg font-bold mb-4 flex items-center gap-2 text-rose-400">
+                <Scale className="w-5 h-5" />
+                Trách nhiệm & Cam kết pháp lý
+              </h5>
+              <div className="space-y-4 text-slate-300 text-sm">
+                <p>Mỗi nhân viên khi gia nhập **Sky Mobile Japan** đều đã ký vào biên bản cam kết bảo mật thông tin (NDA). Bất kể hành vi vi phạm nào dù là vô tình hay hữu ý đều sẽ bị xử lý nghiêm khắc:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 italic">
+                    "Đình chỉ công tác ngay lập tức và sa thải không bồi thường nếu phát hiện hành vi tuồn dữ liệu ra ngoài."
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 italic">
+                    "Truy cứu trách nhiệm hình sự và dân sự (bồi thường thiệt hại) theo luật pháp Nhật Bản & Việt Nam."
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-4 leading-relaxed italic">
+                  * Hệ thống CRM và Slack có cơ chế giám sát tự động việc xuất dữ liệu và tần suất xem thông tin nhạy cảm. Hãy tự bảo vệ mình bằng cách tuân thủ tuyệt đối quy định của công ty.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     )
   }
