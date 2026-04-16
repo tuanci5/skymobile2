@@ -48,7 +48,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { JobDescription, Role, ProcessStep } from './types';
 import { JD_DATA, ROLES } from './data/hrData';
 import { PROCESS_STEPS, DEPARTMENTS } from './data/modelData';
-import { TRAINING_GROUPS, CULTURE_PILLARS, CORE_VALUES } from './data/trainingData';
+import { TRAINING_GROUPS, CULTURE_PILLARS, CORE_VALUES, ONBOARDING_CONTENT } from './data/trainingData';
 import { ACTION_PLAN_4_MONTHS } from './data/actionPlanData';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import LoginPage from './components/LoginPage';
@@ -125,8 +125,8 @@ const OrgChart = ({ activeRole, setActiveRole }: { activeRole: string, setActive
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setActiveRole(role.id)}
                 className={`w-full p-5 rounded-2xl border-2 transition-all duration-300 text-left group ${activeRole === role.id
-                    ? `border-transparent text-white shadow-lg ${role.color}`
-                    : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-300'
+                  ? `border-transparent text-white shadow-lg ${role.color}`
+                  : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-300'
                   }`}
               >
                 <div className="flex items-center gap-3 mb-2">
@@ -517,8 +517,8 @@ const Sidebar = ({
                   key={item.id}
                   onClick={() => handleNavigate(item)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left ${item.indent ? 'pl-9' : ''} ${item.small ? 'text-[13px]' : 'text-sm'} ${isActive
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
                     }`}
                 >
                   {React.cloneElement(item.icon as React.ReactElement, {
@@ -592,8 +592,8 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
                     key={id}
                     onClick={() => setSelectedRole(id)}
                     className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
-                        ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                        : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                      ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
+                      : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
                       }`}
                   >
                     <div className="text-sm">{jd.title}</div>
@@ -762,8 +762,8 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: 
                 key={id}
                 onClick={() => setSelectedRole(id)}
                 className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
-                    ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                    : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                  ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
+                  : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
                   }`}
               >
                 {jd.title}
@@ -884,75 +884,74 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: 
         </div>
       </div>
 
-      {JD_DATA[selectedRole] && (
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-slate-900 rounded-3xl p-8 text-white">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <PieChart className="w-6 h-6 text-blue-400" />
-              Công thức tính thu nhập
-            </h3>
-            <div className="space-y-6">
-              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                <p className="text-blue-400 font-mono text-sm mb-2">THU NHẬP TỔNG =</p>
-                <p className="text-lg font-bold">{JD_DATA[selectedRole].salaryDetail?.formula || JD_DATA[selectedRole].salaryCalculation}</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {JD_DATA[selectedRole].salaryDetail?.commissions?.map((comm, i) => (
-                  <div key={i} className="flex justify-between items-center p-4 border-b border-white/10">
-                    <span className="text-slate-400">{comm.label}</span>
-                    <span className="font-bold text-blue-400">{comm.value}</span>
-                  </div>
-                ))}
-                {JD_DATA[selectedRole].salaryDetail?.bonuses?.map((bonus, i) => (
-                  <div key={i} className="flex justify-between items-center p-4 border-b border-white/10 last:border-0">
-                    <span className="text-slate-400">{bonus.label}</span>
-                    <span className="font-bold text-emerald-400">{bonus.value}</span>
-                  </div>
-                )) || (
-                  <>
-                    <div className="flex justify-between items-center p-4 border-b border-white/10">
-                      <span className="text-slate-400">Đạt 80% KPI</span>
-                      <span className="font-bold">Nhận 100% Lương cứng</span>
-                    </div>
-                    <div className="flex justify-between items-center p-4 border-b border-white/10">
-                      <span className="text-slate-400">Đạt 100% KPI</span>
-                      <span className="font-bold text-emerald-400">+ Thưởng 2M - 5M</span>
-                    </div>
-                  </>
-                )}
-              </div>
+      <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-slate-900 rounded-3xl p-8 text-white">
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <PieChart className="w-6 h-6 text-blue-400" />
+            Công thức tính thu nhập
+          </h3>
+          <div className="space-y-6">
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <p className="text-blue-400 font-mono text-sm mb-2">THU NHẬP TỔNG =</p>
+              <p className="text-lg font-bold">Lương cứng + (Doanh số mới × %HH) + (Doanh số gia hạn × %Thưởng) + Thưởng KPI</p>
             </div>
-          </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl p-8">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-              <BarChart3 className="w-6 h-6 text-blue-600" />
-              Trọng số KPI theo bộ phận
-            </h3>
-            <div className="space-y-6">
-              {(JD_DATA[selectedRole].kpiWeights || [
-                { label: 'Marketing (Lead & Cost)', weight: 40, color: 'bg-blue-600' },
-                { label: 'Sale (Doanh thu mới)', weight: 40, color: 'bg-emerald-600' },
-                { label: 'CSKH (Tỷ lệ gia hạn)', weight: 20, color: 'bg-rose-600' }
-              ]).map((kpi, i) => (
-                <div key={i}>
-                  <div className="flex justify-between mb-2">
-                    <span className="font-medium text-slate-700">{kpi.label}</span>
-                    <span className={`font-bold ${kpi.color.replace('bg-', 'text-')}`}>{kpi.weight}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className={`h-full ${kpi.color}`} style={{ width: `${kpi.weight}%` }} />
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-slate-400 mt-4 italic">
-                * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
-              </p>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="flex justify-between items-center p-4 border-b border-white/10">
+                <span className="text-slate-400">Đạt 80% KPI</span>
+                <span className="font-bold">Nhận 100% Lương cứng</span>
+              </div>
+              <div className="flex justify-between items-center p-4 border-b border-white/10">
+                <span className="text-slate-400">Đạt 100% KPI</span>
+                <span className="font-bold text-emerald-400">+ Thưởng 2M - 5M</span>
+              </div>
+              <div className="flex justify-between items-center p-4">
+                <span className="text-slate-400">Vượt 120% KPI</span>
+                <span className="font-bold text-amber-400">Thưởng nóng + Vinh danh</span>
+              </div>
             </div>
           </div>
         </div>
-      )}
+
+        <div className="bg-white border border-slate-200 rounded-3xl p-8">
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+            <BarChart3 className="w-6 h-6 text-blue-600" />
+            Trọng số KPI theo bộ phận
+          </h3>
+          <div className="space-y-6">
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="font-medium text-slate-700">Marketing (Lead & Cost)</span>
+                <span className="text-blue-600 font-bold">40%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 w-[40%]" />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="font-medium text-slate-700">Sale (Doanh thu mới)</span>
+                <span className="text-emerald-600 font-bold">40%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-600 w-[40%]" />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="font-medium text-slate-700">CSKH (Tỷ lệ gia hạn)</span>
+                <span className="text-rose-600 font-bold">20%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-rose-600 w-[20%]" />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-4 italic">
+              * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1112,9 +1111,65 @@ const CostTab = () => {
   );
 };
 
+const TrainingDetailModal = ({ course, onClose }: { course: string, onClose: () => void }) => {
+  const data = ONBOARDING_CONTENT[course];
+  if (!data) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-indigo-50/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">{data.title}</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-600">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        <div className="p-8 overflow-y-auto custom-scrollbar">
+          {data.content}
+        </div>
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+          >
+            Đã hiểu nội dung
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const TrainingTab = () => {
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+
   return (
     <div className="max-w-6xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+      <AnimatePresence>
+        {selectedCourse && (
+          <TrainingDetailModal
+            course={selectedCourse}
+            onClose={() => setSelectedCourse(null)}
+          />
+        )}
+      </AnimatePresence>
       <div className="mb-10 text-center flex flex-col items-center">
         <div className="p-4 bg-indigo-100 text-indigo-600 rounded-full mb-6 shadow-sm">
           <GraduationCap className="w-10 h-10" />
@@ -1146,12 +1201,26 @@ const TrainingTab = () => {
               <h4 className="text-xl font-bold text-slate-900 mb-2">{group.title}</h4>
               <p className="text-slate-500 text-sm mb-6 pb-4 border-b border-slate-100 min-h-[40px]">{group.desc}</p>
               <ul className="space-y-3 flex-1">
-                {group.courses.map((course, idx) => (
-                  <li key={idx} className="flex items-start gap-3 text-slate-700 text-sm font-medium">
-                    <div className="mt-2 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                    <span className="leading-snug">{course}</span>
-                  </li>
-                ))}
+                {group.courses.map((course, idx) => {
+                  const hasContent = !!ONBOARDING_CONTENT[course];
+                  return (
+                    <li
+                      key={idx}
+                      onClick={() => hasContent && setSelectedCourse(course)}
+                      className={`flex items-start gap-3 text-sm font-medium transition-all ${
+                        hasContent 
+                          ? 'text-indigo-600 cursor-pointer hover:translate-x-1 hover:text-indigo-800' 
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      <div className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${hasContent ? 'bg-indigo-400 animate-pulse' : 'bg-blue-400'}`} />
+                      <span className="leading-snug underline-offset-4 hover:underline decoration-indigo-300">
+                        {course}
+                        {hasContent && <span className="ml-2 text-[10px] bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-500 font-bold uppercase tracking-wider">Xem ngay</span>}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
@@ -1217,12 +1286,11 @@ const ActionPlanView = () => {
           >
             {/* Month Header Card */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300">
-              <div className={`p-6 text-white relative overflow-hidden ${
-                idx === 0 ? 'bg-gradient-to-br from-blue-600 to-indigo-700' :
-                idx === 1 ? 'bg-gradient-to-br from-emerald-600 to-teal-700' :
-                idx === 2 ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                'bg-gradient-to-br from-indigo-700 to-purple-800'
-              }`}>
+              <div className={`p-6 text-white relative overflow-hidden ${idx === 0 ? 'bg-gradient-to-br from-blue-600 to-indigo-700' :
+                  idx === 1 ? 'bg-gradient-to-br from-emerald-600 to-teal-700' :
+                    idx === 2 ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                      'bg-gradient-to-br from-indigo-700 to-purple-800'
+                }`}>
                 <div className="absolute right-[-10px] top-[-10px] opacity-10">
                   {idx === 0 ? <Clock className="w-24 h-24" /> : <Rocket className="w-24 h-24" />}
                 </div>
@@ -1303,19 +1371,19 @@ const ActionPlanView = () => {
 const MASTER_PLAN_DATA = {
   months: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
   operations: {
-    teams:        [1, 2, 4, 6, 8, 10, 10, 10, 10, 10, 10, 10],
-    newOrders:    [200, 360, 640, 840, 960, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
-    churnOrders:  [0, 0, 0, 0, 0, 0, -200, -360, -640, -840, -960, -1000],
-    totalActive:  [0, 200, 560, 1200, 2040, 3000, 3800, 4440, 4800, 4960, 5000, 5000],
+    teams: [1, 2, 4, 6, 8, 10, 10, 10, 10, 10, 10, 10],
+    newOrders: [200, 360, 640, 840, 960, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+    churnOrders: [0, 0, 0, 0, 0, 0, -200, -360, -640, -840, -960, -1000],
+    totalActive: [0, 200, 560, 1200, 2040, 3000, 3800, 4440, 4800, 4960, 5000, 5000],
   },
   grossRevenueByCohort: [310, 707, 1549, 2449, 3457, 4376, 5058, 5565, 5834, 5954, 5984, 5984],
   netCostsToProvider: [81, 249, 549, 961, 1445, 1959, 2373, 2705, 2891, 2974, 2995, 2995],
   operatingExpenses: {
-    marketing:    [199, 358, 636, 835, 955, 994, 994, 994, 994, 994, 994, 994],
-    salary:       [58, 116, 232, 348, 464, 580, 580, 580, 580, 580, 580, 580],
-    fixed:        [70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70],
-    simRefill:    [0, 0, 0, 0, 0, 0, 73, 131, 232, 305, 348, 363],
-    total:        [327, 544, 938, 1253, 1489, 1644, 1717, 1775, 1877, 1949, 1993, 2007],
+    marketing: [199, 358, 636, 835, 955, 994, 994, 994, 994, 994, 994, 994],
+    salary: [58, 116, 232, 348, 464, 580, 580, 580, 580, 580, 580, 580],
+    fixed: [70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70, 70],
+    simRefill: [0, 0, 0, 0, 0, 0, 73, 131, 232, 305, 348, 363],
+    total: [327, 544, 938, 1253, 1489, 1644, 1717, 1775, 1877, 1949, 1993, 2007],
   },
   finalNetProfit: [-98, -86, 62, 234, 523, 773, 968, 1085, 1066, 1031, 996, 982],
   finalProfitMargin: ['-31.6%', '-12.1%', '4.0%', '9.6%', '15.1%', '17.7%', '19.1%', '19.5%', '18.3%', '17.3%', '16.6%', '16.4%'],
@@ -1342,7 +1410,7 @@ function fmtPos(n: number) {
 // Helper handles dynamic financial calculations for any given data set
 const calculateFinancials = (d: any) => {
   const opProfitArray = d.months.map((_, i: number) => d.grossRevenueByCohort[i] - d.netCostsToProvider[i] - d.operatingExpenses.total[i]);
-  
+
   let cumOpProfit = 0;
   const kpiBonusArray = opProfitArray.map((p, i) => {
     cumOpProfit += p;
@@ -1532,7 +1600,7 @@ const FinancialMasterTable = ({ title, data: d, results, badge, badgeColor }: { 
 
 const InvestmentTable = ({ data }: { data: typeof BRAND_INVESTMENT_DATA }) => {
   const months = MASTER_PLAN_DATA.months;
-  
+
   const calculateTotal = (values: number[]) => values.reduce((sum, v) => sum + v, 0);
   const grandTotal = data.items.reduce((sum, item) => sum + calculateTotal(item.values), 0);
 
@@ -1601,10 +1669,10 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
   // Define Scenario 1: Marketing cost is 20% of monthly revenue
   const d1 = JSON.parse(JSON.stringify(MASTER_PLAN_DATA));
   d1.operatingExpenses.marketing = d1.grossRevenueByCohort.map((v: number) => Math.round(v * 0.2));
-  d1.operatingExpenses.total = d1.months.map((_: any, i: number) => 
-    d1.operatingExpenses.marketing[i] + 
-    d1.operatingExpenses.salary[i] + 
-    d1.operatingExpenses.fixed[i] + 
+  d1.operatingExpenses.total = d1.months.map((_: any, i: number) =>
+    d1.operatingExpenses.marketing[i] +
+    d1.operatingExpenses.salary[i] +
+    d1.operatingExpenses.fixed[i] +
     d1.operatingExpenses.simRefill[i]
   );
   const results1 = calculateFinancials(d1);
@@ -1612,13 +1680,13 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
   // Define Scenario 2: Marketing cost is reduced to flat 10% of monthly revenue
   const SCENARIO_2_DATA = JSON.parse(JSON.stringify(MASTER_PLAN_DATA));
   SCENARIO_2_DATA.operatingExpenses.marketing = SCENARIO_2_DATA.grossRevenueByCohort.map((v: number) => Math.round(v * 0.1));
-  SCENARIO_2_DATA.operatingExpenses.total = SCENARIO_2_DATA.months.map((_: any, i: number) => 
-    SCENARIO_2_DATA.operatingExpenses.marketing[i] + 
-    SCENARIO_2_DATA.operatingExpenses.salary[i] + 
-    SCENARIO_2_DATA.operatingExpenses.fixed[i] + 
+  SCENARIO_2_DATA.operatingExpenses.total = SCENARIO_2_DATA.months.map((_: any, i: number) =>
+    SCENARIO_2_DATA.operatingExpenses.marketing[i] +
+    SCENARIO_2_DATA.operatingExpenses.salary[i] +
+    SCENARIO_2_DATA.operatingExpenses.fixed[i] +
     SCENARIO_2_DATA.operatingExpenses.simRefill[i]
   );
-  
+
   const results2 = calculateFinancials(SCENARIO_2_DATA);
 
   const navigate = useNavigate();
@@ -1645,22 +1713,20 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl mt-8 w-fit">
           <button
             onClick={() => navigate('/business')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeSubTab === 'finance'
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'finance'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             <BarChart3 className="w-4 h-4" />
             Dự báo Tài chính
           </button>
           <button
             onClick={() => navigate('/action-plan')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeSubTab === 'action'
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'action'
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
-            }`}
+              }`}
           >
             <Calendar className="w-4 h-4" />
             Kế hoạch 4 tháng

@@ -31,18 +31,6 @@ export interface Department {
   color: string;
 }
 
-export interface SalaryDetail {
-  formula: string;
-  commissions?: Array<{ label: string; value: string }>;
-  bonuses?: Array<{ label: string; value: string }>;
-}
-
-export interface KPIWeight {
-  label: string;
-  weight: number;
-  color: string;
-}
-
 export interface JobDescription {
   title: string;
   objective: string;
@@ -53,6 +41,4 @@ export interface JobDescription {
   salaryRange: string;
   baseSalary?: string;
   salaryCalculation: string;
-  salaryDetail?: SalaryDetail;
-  kpiWeights?: KPIWeight[];
 }

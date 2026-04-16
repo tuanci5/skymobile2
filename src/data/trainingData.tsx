@@ -123,3 +123,81 @@ export const CORE_VALUES = [
   { id: '4', title: 'Học hỏi', desc: 'Liên tục cập nhật kiến thức SIM/Wifi.' },
   { id: '5', title: 'Hiệu quả', desc: 'Tất cả hoạt động đều đo bằng năng suất.' }
 ];
+
+export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.ReactNode }> = {
+  'Giới thiệu công ty và mô hình doanh thu': {
+    title: 'Giới thiệu công ty và mô hình doanh thu',
+    content: (
+      <div className="space-y-6">
+        <section>
+          <h5 className="font-bold text-slate-900 mb-2">1. Sứ mệnh & Tầm nhìn</h5>
+          <p className="text-slate-600 text-sm leading-relaxed">
+            Sky Mobile Japan là đơn vị viễn thông hàng đầu cung cấp giải pháp kết nối (SIM, Wifi) cho cộng đồng người nước ngoài tại Nhật Bản. Sứ mệnh của chúng tôi là "Kết nối không rào cản", giúp mỗi người Việt sang Nhật đều dễ dàng tiếp cận internet.
+          </p>
+        </section>
+        <section>
+          <h5 className="font-bold text-slate-900 mb-2">2. Mô hình doanh thu cốt lõi</h5>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <li className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+              <span className="font-bold text-blue-700 block text-xs uppercase mb-1">Dòng thu nhập A</span>
+              <span className="text-sm">Bán lẻ thiết bị SIM Data & Pocket Wifi (Dòng tiền ngay)</span>
+            </li>
+            <li className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+              <span className="font-bold text-emerald-700 block text-xs uppercase mb-1">Dòng thu nhập B</span>
+              <span className="text-sm">Thu cước hàng tháng (Dòng tiền định kỳ & bền vững)</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+    )
+  },
+  'Cơ cấu tổ chức & Vai trò các phòng ban': {
+    title: 'Cơ cấu tổ chức & Vai trò các phòng ban',
+    content: (
+      <div className="space-y-6">
+        <p className="text-slate-600 text-sm">Vận hành theo mô hình phối hợp 3 chân kiềng để tối ưu phễu khách hàng:</p>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <div className="font-bold text-slate-900">MKT</div>
+            <div className="text-slate-500 mt-1">Tìm khách (Lead)</div>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <div className="font-bold text-blue-700">SALE</div>
+            <div className="text-blue-500 mt-1">Chốt đơn</div>
+          </div>
+          <div className="p-3 bg-emerald-50 rounded-lg">
+            <div className="font-bold text-emerald-700">CSKH</div>
+            <div className="text-emerald-500 mt-1">Gia hạn</div>
+          </div>
+        </div>
+        <section>
+          <h5 className="font-bold text-slate-900 mb-2">Quản trị nòng cốt</h5>
+          <p className="text-slate-600 text-sm">Ban Giám đốc định hướng chiến lược và hỗ trợ nguồn lực (Hành chính, Tài chính, Kỹ thuật).</p>
+        </section>
+      </div>
+    )
+  },
+  'Nội quy, quy trình báo cáo & bảo mật': {
+    title: 'Nội quy, quy trình báo cáo & bảo mật',
+    content: (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="flex gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+            <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center shrink-0">🕒</div>
+            <div>
+              <h6 className="font-bold text-slate-900 text-sm">Giờ giấc & Báo cáo</h6>
+              <p className="text-slate-600 text-xs mt-1">Báo cáo chỉ số KPI ngày trước 18h hàng ngày trên nhóm Slack chính thức.</p>
+            </div>
+          </div>
+          <div className="flex gap-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+            <div className="w-10 h-10 rounded-full bg-rose-200 flex items-center justify-center shrink-0">🔒</div>
+            <div>
+              <h6 className="font-bold text-slate-900 text-sm">Bảo mật thông tin</h6>
+              <p className="text-slate-600 text-xs mt-1">Tuyệt đối không tiết lộ thông tin khách hàng, kịch bản tư vấn và danh sách giá nhập ra bên ngoài.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+};

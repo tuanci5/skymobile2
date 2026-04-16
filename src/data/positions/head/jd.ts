@@ -27,22 +27,5 @@ export const headJD: JobDescription = {
   ],
   salaryRange: '15M - 25M VNĐ',
   baseSalary: '10M - 12M VNĐ',
-  salaryCalculation: 'Lương cứng + % Doanh thu toàn phòng + Thưởng KPI tổng',
-  salaryDetail: {
-    formula: 'Lương cứng + (Doanh số mới × %HH) + (Doanh số gia hạn × %Thưởng) + Thưởng KPI',
-    commissions: [
-      { label: '% Doanh số mới (Toàn bộ lead phòng)', value: '0.5%' },
-      { label: '% Doanh số gia hạn (Kế thừa data phòng)', value: '1.0%' }
-    ],
-    bonuses: [
-      { label: 'Đạt 80% KPI', value: '100% Lương cứng' },
-      { label: 'Đạt 100% KPI', value: '+ Thưởng 3M - 5M' },
-      { label: 'Vượt 120% KPI', value: 'Thưởng nóng + Vinh danh' }
-    ]
-  },
-  kpiWeights: [
-    { label: 'Marketing (Lead & Cost)', weight: 40, color: 'bg-blue-600' },
-    { label: 'Sale (Doanh thu mới)', weight: 40, color: 'bg-emerald-600' },
-    { label: 'CSKH (Tỷ lệ gia hạn)', weight: 20, color: 'bg-rose-600' }
-  ]
+  salaryCalculation: 'Lương cứng + % Doanh thu toàn phòng + Thưởng KPI tổng'
 };
