@@ -58,7 +58,7 @@ const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.goo
 
 // --- Types ---
 
-type TabType = 'model' | 'hr' | 'salary' | 'cost' | 'training' | 'business';
+type TabType = 'model' | 'hr' | 'salary' | 'cost' | 'training' | 'business' | 'action-plan';
 
 // --- Components ---
 
@@ -362,6 +362,7 @@ const TAB_TO_PATH: Record<TabType, string> = {
   cost: '/cost',
   training: '/training',
   business: '/business',
+  'action-plan': '/action-plan',
 };
 
 const Sidebar = ({
@@ -387,6 +388,7 @@ const Sidebar = ({
     { id: 'cost', label: 'Cơ cấu chi phí', icon: <PieChart className="w-5 h-5" />, adminOnly: true },
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'business', label: 'Kế hoạch kinh doanh', icon: <TrendingUp className="w-5 h-5" />, adminOnly: true },
+    { id: 'action-plan', label: 'Kế hoạch 4 tháng', icon: <Calendar className="w-5 h-5" />, adminOnly: true },
   ];
 
   const deptLinks = DEPARTMENTS.map(dept => ({
@@ -1594,7 +1596,7 @@ const InvestmentTable = ({ data }: { data: typeof BRAND_INVESTMENT_DATA }) => {
   );
 }
 
-const BusinessPlanTab = () => {
+const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'action' }) => {
   // Define Scenario 1: Marketing cost is 20% of monthly revenue
   const d1 = JSON.parse(JSON.stringify(MASTER_PLAN_DATA));
   d1.operatingExpenses.marketing = d1.grossRevenueByCohort.map((v: number) => Math.round(v * 0.2));
@@ -1618,7 +1620,12 @@ const BusinessPlanTab = () => {
   
   const results2 = calculateFinancials(SCENARIO_2_DATA);
 
-  const [activeSubTab, setActiveSubTab] = useState<'finance' | 'action'>('finance');
+  const [activeSubTab, setActiveSubTab] = useState<'finance' | 'action'>(initialSubTab || 'finance');
+
+  // Sync state with prop if it changes via URL
+  React.useEffect(() => {
+    if (initialSubTab) setActiveSubTab(initialSubTab);
+  }, [initialSubTab]);
 
   return (
     <div className="max-w-full mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
@@ -1839,7 +1846,8 @@ function AppContent() {
   const teamSeg = pathParts[2] || '';
 
   const PATH_TO_TAB: Record<string, TabType> = {
-    model: 'model', hr: 'hr', salary: 'salary', cost: 'cost', training: 'training', business: 'business',
+    model: 'model', hr: 'hr', salary: 'salary', cost: 'cost', training: 'training',
+    business: 'business', 'action-plan': 'action-plan',
   };
   const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
 
@@ -2632,7 +2640,8 @@ function AppContent() {
               )}
               {activeTab === 'cost' && (isAdmin ? <CostTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
               {activeTab === 'training' && <TrainingTab />}
-              {activeTab === 'business' && (isAdmin ? <BusinessPlanTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
+              {activeTab === 'business' && (isAdmin ? <BusinessPlanTab initialSubTab="finance" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
+              {activeTab === 'action-plan' && (isAdmin ? <BusinessPlanTab initialSubTab="action" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
             </motion.div>
 
           </AnimatePresence>

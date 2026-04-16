@@ -311,15 +311,34 @@ export const CandidateEvalModal: React.FC<Props> = ({
 
             {/* Info pills */}
             <div className="flex flex-wrap gap-3 mt-5 relative z-10">
-              {[
-                { icon: <Clock className="w-3.5 h-3.5" />, label: candidate.interviewDate },
-                { icon: <User className="w-3.5 h-3.5" />, label: candidate.interviewer },
-                { icon: <Briefcase className="w-3.5 h-3.5" />, label: candidate.position },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/20">
-                  {item.icon}<span>{item.label}</span>
-                </div>
-              ))}
+              {(() => {
+                const formatDate = (dateStr: string) => {
+                  if (!dateStr) return '—';
+                  try {
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return dateStr;
+                    return d.toLocaleDateString('vi-VN', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }).replace(',', '');
+                  } catch {
+                    return dateStr;
+                  }
+                };
+
+                return [
+                  { icon: <Clock className="w-3.5 h-3.5" />, label: formatDate(candidate.interviewDate) },
+                  { icon: <User className="w-3.5 h-3.5" />, label: candidate.interviewer },
+                  { icon: <Briefcase className="w-3.5 h-3.5" />, label: candidate.position },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/20">
+                    {item.icon}<span>{item.label}</span>
+                  </div>
+                ));
+              })()}
               {candidate.cvLink && (
                 <a
                   href={candidate.cvLink}
