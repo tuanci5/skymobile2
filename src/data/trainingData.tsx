@@ -186,78 +186,48 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
     )
   },
   'Cơ cấu tổ chức & Vai trò các phòng ban': {
-    title: 'Cơ cấu Khối vận hành Thương mại',
+    title: 'Cơ cấu tổ chức & Vai trò các phòng ban',
     content: (
       <div className="space-y-6">
-        <p className="text-slate-600 text-sm mb-4">Với việc mở rộng hệ sinh thái dịch vụ, cấu trúc tổ chức của chúng ta hoạt động như một cỗ máy liên hoàn (Cross-selling):</p>
-        
-        <div className="space-y-4">
-          <div className="flex gap-4 p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-              <Network className="w-6 h-6 text-slate-700" />
-            </div>
-            <div>
-              <h6 className="font-bold text-slate-900">Phòng MKT (Marketing & Lead Gen)</h6>
-              <p className="text-xs text-slate-600 mt-1">Đảm nhiệm vai trò hút <strong className="text-blue-600">Khách hàng mới</strong>. Chạy chiến dịch phủ sóng cho không chỉ mảng SIM/Wifi mà còn tiếp cận các nhu cầu cấp thiết như chuyển nhà cần Cáp quang, Điện nước.</p>
-            </div>
+        <p className="text-slate-600 text-sm">Với tầm nhìn mới, hệ thống chúng ta vận hành tối ưu phễu khách hàng qua mô hình phối hợp 3 chân kiềng vững chắc cho mảng Viễn thông cốt lõi:</p>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <div className="font-bold text-slate-900">MKT</div>
+            <div className="text-slate-500 mt-1">Tìm khách (Lead)</div>
           </div>
-
-          <div className="flex gap-4 p-5 bg-blue-50 rounded-xl border border-blue-100 shadow-sm">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-              <Users className="w-6 h-6 text-blue-700" />
-            </div>
-            <div>
-              <h6 className="font-bold text-blue-900">Phòng KD (Sales & Cross-sell)</h6>
-              <p className="text-xs text-blue-800 mt-1">Thay vì chỉ tư vấn 1 sản phẩm rời rạc, <strong className="text-blue-600">Sale phải là một Cố vấn Giải pháp</strong>. Khách hỏi SIM &rarr; Tư vấn luôn combo Internet không giới hạn. Khách cần Internet nhà &rarr; Nhắc nhở thủ tục Điện/Nước.</p>
-            </div>
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <div className="font-bold text-blue-700">SALE</div>
+            <div className="text-blue-500 mt-1">Chốt đơn</div>
           </div>
-
-          <div className="flex gap-4 p-5 bg-emerald-50 rounded-xl border border-emerald-100 shadow-sm">
-            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-6 h-6 text-emerald-700" />
-            </div>
-            <div>
-              <h6 className="font-bold text-emerald-900">Phòng CSKH & Vận hành (Ops/Nghiệp vụ)</h6>
-              <p className="text-xs text-emerald-800 mt-1">Quản lý vòng đời khách hàng. Phối hợp với nhà mạng, công ty điện nước để hoàn tất hồ sơ, cài đặt thiết bị và <strong className="text-emerald-700">duy trì tỷ lệ gia hạn/thanh toán cước liên tục.</strong></p>
-            </div>
+          <div className="p-3 bg-emerald-50 rounded-lg">
+            <div className="font-bold text-emerald-700">CSKH</div>
+            <div className="text-emerald-500 mt-1">Gia hạn</div>
           </div>
         </div>
+        <section>
+          <h5 className="font-bold text-slate-900 mb-2">Đội ngũ Vận hành</h5>
+          <p className="text-slate-600 text-sm">Ban Giám đốc định hướng chiến lược. Khối Hành chính - Nhân sự, Tài chính - Kế toán, và Kỹ thuật & Hạ tầng sẽ đóng vai trò hỗ trợ, đảm bảo vận hành linh hoạt cho cả giải pháp SIM/WiFi và các dịch vụ tương lai.</p>
+        </section>
       </div>
     )
   },
   'Nội quy, quy trình báo cáo & bảo mật': {
-    title: 'Nội quy & Quy chế cốt lõi',
+    title: 'Nội quy, quy trình báo cáo & bảo mật',
     content: (
       <div className="space-y-6">
-        <p className="text-slate-600 text-sm">Việc mở rộng đa ngành (đặc biệt liên quan hợp đồng Điện, Nước, Internet cáp quang) đòi hỏi tính chuyên nghiệp và nghiêm ngặt cực cao.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div className="p-5 bg-red-50 rounded-2xl border border-red-100">
-            <div className="mb-3"><Lock className="w-6 h-6 text-red-600" /></div>
-            <h6 className="font-bold text-red-900 mb-2">Bảo mật thông tin tuyệt đối</h6>
-            <ul className="text-xs text-red-800 space-y-2 list-disc list-inside">
-              <li>Không lộ thông tin cá nhân (Thẻ ngoại kiều, MyNumber, thẻ ngân hàng).</li>
-              <li>Thông tin hợp đồng đa dịch vụ là tài sản công ty.</li>
-              <li>Vi phạm có thể bị xử lý pháp lý.</li>
-            </ul>
+        <div className="space-y-4">
+          <div className="flex gap-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+            <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center shrink-0">🕒</div>
+            <div>
+              <h6 className="font-bold text-slate-900 text-sm">Giờ giấc & Báo cáo</h6>
+              <p className="text-slate-600 text-xs mt-1">Báo cáo chỉ số KPI ngày trước 18h hàng ngày trên nhóm Slack chính thức. Dù phát triển đa ngành, tính kỷ luật vẫn là yếu tố tiên quyết.</p>
+            </div>
           </div>
-
-          <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100">
-            <div className="mb-3"><FileText className="w-6 h-6 text-indigo-600" /></div>
-            <h6 className="font-bold text-indigo-900 mb-2">Độ chuẩn xác Hồ sơ (Ops)</h6>
-            <ul className="text-xs text-indigo-800 space-y-2 list-disc list-inside">
-              <li>Khai báo sai thông tin điện nước có thể dẫn đến cắt dịch vụ của khách.</li>
-              <li>Phải đối chiếu giấy tờ gốc 100% trước khi submit hệ thống mạng.</li>
-            </ul>
-          </div>
-
-          <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 md:col-span-2">
-            <div className="flex gap-3">
-              <Clock className="w-6 h-6 text-amber-600 shrink-0" />
-              <div>
-                <h6 className="font-bold text-amber-900 mb-1">Văn hoá báo cáo KPIs & Slack</h6>
-                <p className="text-xs text-amber-800">Cập nhật số liệu minh bạch trước 18:00 hàng ngày. Sử dụng Slack làm công cụ làm việc chính thức, không nhắn việc qua tin nhắn cá nhân để đảm bảo mọi đội nhóm (Cross-team) nắm bắt được luồng xử lý đa dịch vụ.</p>
-              </div>
+          <div className="flex gap-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+            <div className="w-10 h-10 rounded-full bg-rose-200 flex items-center justify-center shrink-0">🔒</div>
+            <div>
+              <h6 className="font-bold text-slate-900 text-sm">Bảo mật thông tin</h6>
+              <p className="text-slate-600 text-xs mt-1">Cấm tuyệt đối tiết lộ thông tin khách hàng, kịch bản tư vấn và danh sách giá nhập. Thông tin khách hàng chính là tài sản quý giá nhất để khai thác đa dịch vụ.</p>
             </div>
           </div>
         </div>
