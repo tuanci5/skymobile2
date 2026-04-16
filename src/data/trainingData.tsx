@@ -146,13 +146,23 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
             <h5 className="font-bold text-slate-900 text-lg">2. Hệ sinh thái Dịch vụ (Đang dạng hóa)</h5>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 bg-white rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden">
+            <div className="p-5 bg-white rounded-2xl border border-blue-200 shadow-sm relative overflow-hidden flex flex-col">
               <div className="absolute top-0 right-0 p-2 bg-blue-500 text-white text-[10px] font-bold rounded-bl-lg">CORE</div>
               <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
                 <Smartphone className="w-5 h-5" />
               </div>
               <h6 className="font-bold text-slate-800 mb-2">Viễn thông Di động</h6>
-              <p className="text-xs text-slate-500">Cung cấp SIM Data, SIM Nghe gọi, Pocket Wifi 5G. Nhóm sản phẩm "trải đường" tạo phễu khách hàng khổng lồ.</p>
+              <p className="text-xs text-slate-500 mb-4 flex-grow">Cung cấp SIM Data, SIM Nghe gọi, Pocket Wifi 5G. Nhóm sản phẩm "trải đường" tạo phễu khách hàng khổng lồ.</p>
+              
+              <div className="pt-3 border-t border-slate-100 mt-auto">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Mạng lưới Đối tác</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-2.5 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded border border-red-100">docomo</span>
+                  <span className="px-2.5 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold rounded border border-slate-200">SoftBank</span>
+                  <span className="px-2.5 py-1 bg-orange-50 text-orange-600 text-[10px] font-bold rounded border border-orange-100">au</span>
+                  <span className="px-2.5 py-1 bg-pink-50 text-pink-600 text-[10px] font-bold rounded border border-pink-100">Rakuten</span>
+                </div>
+              </div>
             </div>
             
             <div className="p-5 bg-white rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden">
