@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, GraduationCap, TrendingUp, Settings, Megaphone, HeartHandshake, Zap, Clock, Workflow, FileText } from 'lucide-react';
+import { Users, GraduationCap, TrendingUp, Settings, Megaphone, HeartHandshake, Zap, Clock, Workflow, FileText, Sparkles } from 'lucide-react';
 
 export interface ActionItem {
   title: string;
@@ -17,6 +17,7 @@ export interface MonthPlan {
     recruitment: ActionItem;
     training: ActionItem;
     process: ActionItem;
+    ai?: ActionItem;
     business: ActionItem;
     culture: ActionItem;
   };
@@ -57,6 +58,16 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
           'Quy trình Tuyển dụng & Onboarding chuẩn',
           'Quy trình Phối hợp liên phòng ban (Slack)',
           'Quy trình Quản lý kho & Thiết bị ban đầu'
+        ]
+      },
+      ai: {
+        title: 'Triển khai AI',
+        icon: <Sparkles className="w-5 h-5" />,
+        color: 'bg-cyan-100 text-cyan-600',
+        items: [
+          'Lựa chọn nền tảng AI Chatbot (ManyChat/Gemini)',
+          'Training dữ liệu SIM/WiFi Nhật cho hệ thống AI',
+          'Setup AI hỗ trợ viết Content Ads & Visual'
         ]
       },
       business: {
@@ -115,6 +126,16 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
           'Quy trình Lead-to-Sale (Tư vấn -> Chốt đợn)',
           'Quy trình Giao hàng & Kích hoạt SIM/WiFi',
           'Quy trình Bảo mật thông tin khách hàng'
+        ]
+      },
+      ai: {
+        title: 'Triển khai AI',
+        icon: <Sparkles className="w-5 h-5" />,
+        color: 'bg-cyan-100 text-cyan-600',
+        items: [
+          'Kích hoạt AI Chatbot tư vấn 24/7 & Lọc Lead',
+          'Ứng dụng AI phân tích và tối ưu giá Lead Ads',
+          'A/B Testing hiệu quả Content AI vs Content Người'
         ]
       },
       business: {
