@@ -884,74 +884,75 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: 
         </div>
       </div>
 
-      <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-slate-900 rounded-3xl p-8 text-white">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <PieChart className="w-6 h-6 text-blue-400" />
-            Công thức tính thu nhập
-          </h3>
-          <div className="space-y-6">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <p className="text-blue-400 font-mono text-sm mb-2">THU NHẬP TỔNG =</p>
-              <p className="text-lg font-bold">Lương cứng + (Doanh số mới × %HH) + (Doanh số gia hạn × %Thưởng) + Thưởng KPI</p>
-            </div>
+      {JD_DATA[selectedRole] && (
+        <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-slate-900 rounded-3xl p-8 text-white">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <PieChart className="w-6 h-6 text-blue-400" />
+              Công thức tính thu nhập
+            </h3>
+            <div className="space-y-6">
+              <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+                <p className="text-blue-400 font-mono text-sm mb-2">THU NHẬP TỔNG =</p>
+                <p className="text-lg font-bold">{JD_DATA[selectedRole].salaryDetail?.formula || JD_DATA[selectedRole].salaryCalculation}</p>
+              </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex justify-between items-center p-4 border-b border-white/10">
-                <span className="text-slate-400">Đạt 80% KPI</span>
-                <span className="font-bold">Nhận 100% Lương cứng</span>
-              </div>
-              <div className="flex justify-between items-center p-4 border-b border-white/10">
-                <span className="text-slate-400">Đạt 100% KPI</span>
-                <span className="font-bold text-emerald-400">+ Thưởng 2M - 5M</span>
-              </div>
-              <div className="flex justify-between items-center p-4">
-                <span className="text-slate-400">Vượt 120% KPI</span>
-                <span className="font-bold text-amber-400">Thưởng nóng + Vinh danh</span>
+              <div className="grid grid-cols-1 gap-4">
+                {JD_DATA[selectedRole].salaryDetail?.commissions?.map((comm, i) => (
+                  <div key={i} className="flex justify-between items-center p-4 border-b border-white/10">
+                    <span className="text-slate-400">{comm.label}</span>
+                    <span className="font-bold text-blue-400">{comm.value}</span>
+                  </div>
+                ))}
+                {JD_DATA[selectedRole].salaryDetail?.bonuses?.map((bonus, i) => (
+                  <div key={i} className="flex justify-between items-center p-4 border-b border-white/10 last:border-0">
+                    <span className="text-slate-400">{bonus.label}</span>
+                    <span className="font-bold text-emerald-400">{bonus.value}</span>
+                  </div>
+                )) || (
+                  <>
+                    <div className="flex justify-between items-center p-4 border-b border-white/10">
+                      <span className="text-slate-400">Đạt 80% KPI</span>
+                      <span className="font-bold">Nhận 100% Lương cứng</span>
+                    </div>
+                    <div className="flex justify-between items-center p-4 border-b border-white/10">
+                      <span className="text-slate-400">Đạt 100% KPI</span>
+                      <span className="font-bold text-emerald-400">+ Thưởng 2M - 5M</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-8">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-            Trọng số KPI theo bộ phận
-          </h3>
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">Marketing (Lead & Cost)</span>
-                <span className="text-blue-600 font-bold">40%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 w-[40%]" />
-              </div>
+          <div className="bg-white border border-slate-200 rounded-3xl p-8">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+              <BarChart3 className="w-6 h-6 text-blue-600" />
+              Trọng số KPI theo bộ phận
+            </h3>
+            <div className="space-y-6">
+              {(JD_DATA[selectedRole].kpiWeights || [
+                { label: 'Marketing (Lead & Cost)', weight: 40, color: 'bg-blue-600' },
+                { label: 'Sale (Doanh thu mới)', weight: 40, color: 'bg-emerald-600' },
+                { label: 'CSKH (Tỷ lệ gia hạn)', weight: 20, color: 'bg-rose-600' }
+              ]).map((kpi, i) => (
+                <div key={i}>
+                  <div className="flex justify-between mb-2">
+                    <span className="font-medium text-slate-700">{kpi.label}</span>
+                    <span className={`font-bold ${kpi.color.replace('bg-', 'text-')}`}>{kpi.weight}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${kpi.color}`} style={{ width: `${kpi.weight}%` }} />
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs text-slate-400 mt-4 italic">
+                * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
+              </p>
             </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">Sale (Doanh thu mới)</span>
-                <span className="text-emerald-600 font-bold">40%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-600 w-[40%]" />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">CSKH (Tỷ lệ gia hạn)</span>
-                <span className="text-rose-600 font-bold">20%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-rose-600 w-[20%]" />
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-4 italic">
-              * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
-            </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
