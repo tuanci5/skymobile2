@@ -156,11 +156,19 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
               
               <div className="pt-3 border-t border-slate-100 mt-auto">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Mạng lưới Đối tác</p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-2.5 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded border border-red-100">docomo</span>
-                  <span className="px-2.5 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold rounded border border-slate-200">SoftBank</span>
-                  <span className="px-2.5 py-1 bg-orange-50 text-orange-600 text-[10px] font-bold rounded border border-orange-100">au</span>
-                  <span className="px-2.5 py-1 bg-pink-50 text-pink-600 text-[10px] font-bold rounded border border-pink-100">Rakuten</span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/e/ed/NTT_docomo_logo.svg" alt="docomo" className="h-3 md:h-4 w-auto object-contain" />
+                  </div>
+                  <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/cc/SoftBank_logo.svg" alt="SoftBank" className="h-3 md:h-4 w-auto object-contain" />
+                  </div>
+                  <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Au_logo.svg" alt="au" className="h-3 md:h-4 w-auto object-contain" />
+                  </div>
+                  <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/1/14/Rakuten_logo_2017.svg" alt="Rakuten" className="h-3 md:h-4 w-auto object-contain max-w-[60px]" />
+                  </div>
                 </div>
               </div>
             </div>
