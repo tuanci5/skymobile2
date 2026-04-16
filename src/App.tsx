@@ -1620,6 +1620,7 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
   
   const results2 = calculateFinancials(SCENARIO_2_DATA);
 
+  const navigate = useNavigate();
   const [activeSubTab, setActiveSubTab] = useState<'finance' | 'action'>(initialSubTab || 'finance');
 
   // Sync state with prop if it changes via URL
@@ -1642,7 +1643,7 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
         {/* Sub-tab Navigation */}
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl mt-8 w-fit">
           <button
-            onClick={() => setActiveSubTab('finance')}
+            onClick={() => navigate('/business')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
               activeSubTab === 'finance'
                 ? 'bg-white text-blue-600 shadow-sm'
@@ -1653,7 +1654,7 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
             Dự báo Tài chính
           </button>
           <button
-            onClick={() => setActiveSubTab('action')}
+            onClick={() => navigate('/action-plan')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
               activeSubTab === 'action'
                 ? 'bg-white text-blue-600 shadow-sm'
