@@ -1123,7 +1123,7 @@ const TrainingTab = () => {
     }
 
     return (
-      <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+      <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
         <button
           onClick={() => setSelectedCourse(null)}
           className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 group font-medium"
