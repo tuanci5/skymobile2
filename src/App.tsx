@@ -79,8 +79,8 @@ const Header = () => (
         Phòng Kinh doanh – Marketing – CSKH
       </h1>
       <p className="max-w-3xl mx-auto mt-4 text-lg text-slate-600">
-        Mô hình quản trị vòng đời khách hàng chuyên biệt cho <span className="font-bold text-blue-600">SIM Data & Pocket WiFi</span>.
-        Tối ưu hóa từ lúc tìm khách đến khi gia hạn và giới thiệu.
+        Mô hình quản trị Cross-selling đa dịch vụ: <span className="font-bold text-blue-600">Viễn thông, Điện nước & Tiện ích</span>. 
+        Tối ưu hóa từ lúc tiếp cận đến thiết lập và duy trì hệ sinh thái khách hàng trọn đời.
       </p>
     </motion.div>
   </header>
@@ -1984,9 +1984,9 @@ function AppContent() {
 
   const teamDetails: Record<'marketing' | 'sale' | 'cskh', TeamDetail> = {
     marketing: {
-      title: 'Tổ Marketing',
-      objective: 'Tổ chức và triển khai hoạt động marketing nhằm thu hút đúng khách hàng mục tiêu là người nước ngoài tại Nhật có nhu cầu SIM Data, Pocket WiFi và dịch vụ viễn thông.',
-      summary: 'Xây dựng hệ thống lead chất lượng qua quảng cáo, nội dung và thông điệp phù hợp để hỗ trợ sale chốt đơn nhanh chóng.',
+      title: 'Phòng MKT (Marketing & Lead Gen)',
+      objective: 'Tổ chức marketing thu hút người Việt tại Nhật có nhu cầu Hệ sinh thái giải pháp: Viễn thông (SIM, Wifi, Cáp quang) và Tiện ích đời sống (Điện, Nước).',
+      summary: 'Xây dựng thông điệp phủ sóng tạo phễu đa dịch vụ, hỗ trợ Khối Kinh doanh chốt sales và bán chéo (cross-sell) hiệu quả.',
       tasks: [
         'Xây dựng kế hoạch marketing theo tuần/tháng',
         'Triển khai quảng cáo trên Facebook, TikTok, Google, Instagram và nền tảng phù hợp',
@@ -2030,9 +2030,9 @@ function AppContent() {
       ]
     },
     sale: {
-      title: 'Tổ Sale / Tư vấn',
-      objective: 'Quản lý đội tư vấn, đảm bảo tiếp nhận khách nhanh và tư vấn đúng nhu cầu để chốt đơn hiệu quả.',
-      summary: 'Đội tư vấn lấy lead từ marketing, xác định nhu cầu và thuyết phục khách chốt gói SIM hoặc Pocket WiFi phù hợp.',
+      title: 'Phòng KD (Sales & Cross-sell)',
+      objective: 'Phát triển đội ngũ Cố vấn Giải pháp, tối ưu hóa kịch bản bán chéo (Combo SIM + Điện/Nước + Internet nhà) để tối đa hoá doanh thu trên mỗi khách hàng.',
+      summary: 'Đội ngũ lấy lead từ MKT, khai thác sâu nhu cầu thực tế và tư vấn giải pháp trọn gói, liên hoàn (Cross-sell) thay vì bán lẻ sản phẩm rời rạc.',
       tasks: [
         'Phân chia lead cho nhân viên tư vấn',
         'Giám sát tốc độ phản hồi khách hàng',
@@ -2053,9 +2053,9 @@ function AppContent() {
       ],
       roles: [
         {
-          title: 'Trưởng nhóm Sale/Tư vấn',
-          description: 'Quản lý quy trình tư vấn, phân bổ lead và nâng cao tỷ lệ chốt.',
-          items: [
+          title: 'Trưởng nhóm Cố vấn Giải pháp',
+          description: 'Quản lý quy trình tư vấn kỹ năng Bán chéo đa dịch vụ, phân bổ lead và nâng cao tỷ lệ chốt.',
+            items: [
             'Phân chia lead và giám sát phản hồi',
             'Theo dõi tỷ lệ chốt đơn cá nhân',
             'Chuẩn hóa kịch bản tư vấn',
@@ -2085,9 +2085,9 @@ function AppContent() {
       ]
     },
     cskh: {
-      title: 'Tổ Chăm sóc khách hàng',
-      objective: 'Tổ chức chăm sóc sau bán để khách dùng dịch vụ ổn định, hài lòng và gia hạn/tái mua.',
-      summary: 'Đội CSKH đảm bảo khách được hỗ trợ sau mua, giải quyết sự cố và được nhắc gia hạn đúng hạn.',
+      title: 'Phòng CSKH & Vận hành (Ops)',
+      objective: 'Đảm bảo sự trơn tru trong quá trình làm hồ sơ, cài đặt thiết bị đa dịch vụ (nhà mạng, đối tác điện nước) và nhắc nhở gia hạn.',
+      summary: 'Quản lý vòng đời khách hàng liên tục. Phối hợp với các nhà mạng và công ty tiện ích nội địa để hỗ trợ thủ tục, giải quyết sự cố.',
       tasks: [
         'Xây dựng quy trình CSKH sau bán',
         'Phân công danh sách khách cần chăm sóc',
