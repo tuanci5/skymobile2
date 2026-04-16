@@ -1123,8 +1123,8 @@ const TrainingTab = () => {
     }
 
     return (
-      <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
-        <button 
+      <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+        <button
           onClick={() => setSelectedCourse(null)}
           className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 group font-medium"
         >
@@ -1189,11 +1189,10 @@ const TrainingTab = () => {
                     <li
                       key={idx}
                       onClick={() => hasContent && setSelectedCourse(course)}
-                      className={`flex items-start gap-3 text-sm font-medium transition-all ${
-                        hasContent 
-                          ? 'text-indigo-600 cursor-pointer hover:translate-x-1 hover:text-indigo-800' 
+                      className={`flex items-start gap-3 text-sm font-medium transition-all ${hasContent
+                          ? 'text-indigo-600 cursor-pointer hover:translate-x-1 hover:text-indigo-800'
                           : 'text-slate-700'
-                      }`}
+                        }`}
                     >
                       <div className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${hasContent ? 'bg-indigo-400 animate-pulse' : 'bg-blue-400'}`} />
                       <span className="leading-snug underline-offset-4 hover:underline decoration-indigo-300">
@@ -1269,9 +1268,9 @@ const ActionPlanView = () => {
             {/* Month Header Card */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300">
               <div className={`p-6 text-white relative overflow-hidden ${idx === 0 ? 'bg-gradient-to-br from-blue-600 to-indigo-700' :
-                  idx === 1 ? 'bg-gradient-to-br from-emerald-600 to-teal-700' :
-                    idx === 2 ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                      'bg-gradient-to-br from-indigo-700 to-purple-800'
+                idx === 1 ? 'bg-gradient-to-br from-emerald-600 to-teal-700' :
+                  idx === 2 ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                    'bg-gradient-to-br from-indigo-700 to-purple-800'
                 }`}>
                 <div className="absolute right-[-10px] top-[-10px] opacity-10">
                   {idx === 0 ? <Clock className="w-24 h-24" /> : <Rocket className="w-24 h-24" />}
@@ -1696,8 +1695,8 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
           <button
             onClick={() => navigate('/business')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'finance'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
               }`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -1706,8 +1705,8 @@ const BusinessPlanTab = ({ initialSubTab }: { initialSubTab?: 'finance' | 'actio
           <button
             onClick={() => navigate('/action-plan')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'action'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
               }`}
           >
             <Calendar className="w-4 h-4" />
