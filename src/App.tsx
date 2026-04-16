@@ -40,13 +40,16 @@ import {
   GraduationCap,
   BookOpen,
   Star,
-  Sparkles
+  Sparkles,
+  Calendar,
+  Rocket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JobDescription, Role, ProcessStep } from './types';
 import { JD_DATA, ROLES } from './data/hrData';
 import { PROCESS_STEPS, DEPARTMENTS } from './data/modelData';
 import { TRAINING_GROUPS, CULTURE_PILLARS, CORE_VALUES } from './data/trainingData';
+import { ACTION_PLAN_4_MONTHS } from './data/actionPlanData';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import LoginPage from './components/LoginPage';
 import { InterviewTab } from './components/InterviewTab';
@@ -1197,6 +1200,101 @@ const TrainingTab = () => {
   );
 };
 
+const ActionPlanView = () => {
+  return (
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {ACTION_PLAN_4_MONTHS.map((plan, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="flex flex-col h-full"
+          >
+            {/* Month Header Card */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300">
+              <div className={`p-6 text-white relative overflow-hidden ${
+                idx === 0 ? 'bg-gradient-to-br from-blue-600 to-indigo-700' :
+                idx === 1 ? 'bg-gradient-to-br from-emerald-600 to-teal-700' :
+                idx === 2 ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                'bg-gradient-to-br from-indigo-700 to-purple-800'
+              }`}>
+                <div className="absolute right-[-10px] top-[-10px] opacity-10">
+                  {idx === 0 ? <Clock className="w-24 h-24" /> : <Rocket className="w-24 h-24" />}
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold tracking-widest uppercase opacity-80">{plan.label}</span>
+                    <span className="px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold uppercase">{plan.phase}</span>
+                  </div>
+                  <h3 className="text-2xl font-black">{plan.month}</h3>
+                </div>
+              </div>
+
+              <div className="p-6 flex-1 flex flex-col space-y-6">
+                <p className="text-slate-500 text-sm italic leading-relaxed">
+                  "{plan.description}"
+                </p>
+
+                <div className="space-y-6">
+                  {Object.entries(plan.actions).map(([key, action], aIdx) => (
+                    <div key={key} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`p-1.5 rounded-lg ${action.color}`}>
+                          {React.cloneElement(action.icon as React.ReactElement, { className: 'w-4 h-4' })}
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm">{action.title}</h4>
+                      </div>
+                      <ul className="space-y-2 ml-1">
+                        {action.items.map((item, iIdx) => (
+                          <li key={iIdx} className="flex items-start gap-2 text-[13px] text-slate-600 leading-tight">
+                            <div className="mt-1.5 w-1 h-1 rounded-full bg-slate-300 shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Summary Footer */}
+      <div className="bg-slate-900 rounded-[2.5rem] p-8 lg:p-12 text-white relative overflow-hidden shadow-2xl">
+        <div className="absolute right-0 top-0 opacity-10 pointer-events-none">
+          <TrendingUp className="w-64 h-64 translate-x-20 -translate-y-20" />
+        </div>
+        <div className="relative z-10 grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="space-y-2">
+            <p className="text-blue-400 text-xs font-bold uppercase tracking-widest">Thời gian áp dụng</p>
+            <p className="text-2xl font-bold">16/04 - 31/07</p>
+            <p className="text-slate-400 text-sm">Giai đoạn kiến tạo nền móng</p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Mục tiêu Quy mô</p>
+            <p className="text-2xl font-bold">10 Team full-stack</p>
+            <p className="text-slate-400 text-sm">50+ nhân sự được đào tạo chuẩn</p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-amber-400 text-xs font-bold uppercase tracking-widest">Sản phẩm trọng tâm</p>
+            <p className="text-2xl font-bold">SIM Data & Pocket WiFi</p>
+            <p className="text-slate-400 text-sm">Thị trường người Việt tại Nhật</p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-rose-400 text-xs font-bold uppercase tracking-widest">Cam kết văn hóa</p>
+            <p className="text-2xl font-bold">Hiệu quả & Tận tâm</p>
+            <p className="text-slate-400 text-sm">Đo lường bằng sự hài lòng khách</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Business Plan Tab ───────────────────────────────────────────────────────
 
 const MASTER_PLAN_DATA = {
@@ -1520,6 +1618,8 @@ const BusinessPlanTab = () => {
   
   const results2 = calculateFinancials(SCENARIO_2_DATA);
 
+  const [activeSubTab, setActiveSubTab] = useState<'finance' | 'action'>('finance');
+
   return (
     <div className="max-w-full mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
       {/* Header */}
@@ -1529,119 +1629,159 @@ const BusinessPlanTab = () => {
         </div>
         <h2 className="text-4xl font-bold text-slate-900 mb-4">Kế hoạch Kinh doanh</h2>
         <p className="text-slate-600 max-w-3xl text-lg">
-          Bảng Dự Toán Tài Chính Toàn Diện <span className="font-bold text-slate-800">12 Tháng (Master Plan)</span> — so sánh các phương án vận hành và đầu tư.
+          Chiến lược vận hành và Dự báo tài chính <span className="font-bold text-slate-800">Sky Mobile Japan</span>.
         </p>
-      </div>
 
-      {/* Part 0: Brand Investment Table (CAPEX) */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-8 bg-indigo-600 rounded-full" />
-          <h4 className="text-2xl font-bold text-slate-800">Phần 1: Ngân sách đầu tư thương hiệu & Cơ sở vật chất</h4>
+        {/* Sub-tab Navigation */}
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-2xl mt-8 w-fit">
+          <button
+            onClick={() => setActiveSubTab('finance')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeSubTab === 'finance'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Dự báo Tài chính
+          </button>
+          <button
+            onClick={() => setActiveSubTab('action')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeSubTab === 'action'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            Kế hoạch 4 tháng
+          </button>
         </div>
-        <InvestmentTable data={BRAND_INVESTMENT_DATA} />
       </div>
 
-      {/* Comparison Divider */}
-      <div className="py-8 flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-200" />
-        <div className="px-6 py-2 bg-slate-100 rounded-full text-slate-500 text-sm font-bold uppercase tracking-widest">Phần 2: Kịch bản kinh doanh vận hành (OPEX)</div>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-
-      {/* Table 1: Original */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-8 bg-blue-600 rounded-full" />
-          <h4 className="text-2xl font-bold text-slate-800">Phương án 1: Kế hoạch kinh doanh dựa trên phương án chi phí Marketing chiếm 20% doanh thu</h4>
-        </div>
-        <FinancialMasterTable title="Bảng Dự Toán Phương Án 1" data={d1} results={results1} badge="MKT 20%" badgeColor="bg-blue-600" />
-      </div>
-
-      {/* Comparison Divider */}
-      <div className="py-8 flex items-center gap-4">
-        <div className="flex-1 h-px bg-slate-200" />
-        <div className="px-6 py-2 bg-slate-100 rounded-full text-slate-500 text-sm font-bold uppercase tracking-widest">Phân tích đối chiếu kịch bản</div>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-
-      {/* Table 2: Scenario 2 */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-8 bg-emerald-600 rounded-full" />
-          <h4 className="text-2xl font-bold text-slate-800">Phương án 2: Tối ưu Marketing (10% Doanh thu)</h4>
-        </div>
-        <FinancialMasterTable title="Bảng Dự Toán Phương Án 2" data={SCENARIO_2_DATA} results={results2} badge="TỐI ƯU MKT" badgeColor="bg-emerald-600" />
-      </div>
-
-      {/* Summary comparison cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {[
-          { label: 'LN Sau Thuế (PA 1)', value: `~${results1.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 20%)', color: 'bg-blue-600', icon: <TrendingUp className="w-6 h-6" /> },
-          { label: 'LN Sau Thuế (PA 2)', value: `~${results2.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 10%)', color: 'bg-emerald-600', icon: <TrendingUp className="w-6 h-6" /> },
-          { label: 'Chênh lệch lợi nhuận', value: `+${(results2.patArray[11] - results1.patArray[11]).toLocaleString('vi-VN')} Tr`, sub: 'Mỗi tháng khi tối ưu MKT', color: 'bg-amber-600', icon: <TrendingUp className="w-6 h-6" /> },
-          { label: 'Biên LN PA2 ổn định', value: results2.patMarginArray[11], sub: 'Hiệu suất vận hành tối đa', color: 'bg-indigo-600', icon: <BarChart3 className="w-6 h-6" /> },
-        ].map((card, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-            <div className={`p-3 rounded-xl w-fit mb-4 text-white ${card.color}`}>{card.icon}</div>
-            <p className="text-xs text-slate-500 mb-1">{card.label}</p>
-            <p className="text-3xl font-black text-slate-900">{card.value}</p>
-            <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* 3 management insights */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-          <Star className="w-7 h-7 text-amber-500" />
-          <h3 className="text-2xl font-bold text-slate-900">3 Điểm sáng Quản trị từ Master Plan</h3>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {[
-            {
-              num: '01',
-              title: 'Giai đoạn "Thung lũng chết" T1 - T2',
-              color: 'from-blue-600 to-indigo-700',
-              highlight: '-98 triệu VNĐ trong tháng đầu',
-              body: 'Do chi phí Marketing và lương đội ngũ được chi trả ngay từ đầu trong khi doanh thu tích lũy chưa đủ lớn, dòng tiền sẽ âm nhẹ trong 2 tháng đầu. Đây là giai đoạn đầu tư nền móng cực kỳ quan trọng.',
-              tag: 'Đầu tư chiến lược',
-            },
-            {
-              num: '02',
-              title: 'Điểm hòa vốn và Bùng nổ từ Tháng 4',
-              color: 'from-emerald-600 to-teal-700',
-              highlight: 'Bầu trời lợi nhuận sau bù lỗ',
-              body: 'Từ tháng thứ 4, sau khi đã bù xong các khoản lỗ vận hành ban đầu, hệ thống bắt đầu trích thưởng KPI 5% và thực hiện nghĩa vụ thuế 20%, dòng tiền thực nhận vẫn cực kỳ mạnh mẽ.',
-              tag: 'Thu hoạch quả ngọt',
-            },
-            {
-              num: '03',
-              title: 'Cơ chế "Payback" nhanh và biên LN thực',
-              color: 'from-amber-500 to-orange-600',
-              highlight: `Biên LN ròng thực ~${results2.patMarginArray[11]}`,
-              body: 'Nhờ tối ưu hóa phí đầu vào và tập trung vào các dòng sản phẩm có biên lợi nhuận cao, tỷ suất lợi nhuận sau cùng (đã trừ mọi chi phí vận hành, KPI và Thuế) duy trì mức cực kỳ ấn tượng.',
-              tag: 'Mô hình tối ưu',
-            },
-          ].map((item, i) => (
-            <div key={i} className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col">
-              <div className={`p-6 text-white bg-gradient-to-br ${item.color} relative overflow-hidden`}>
-                <div className="absolute right-4 top-2 font-black text-8xl opacity-10 select-none">{item.num}</div>
-                <div className="relative z-10">
-                  <span className="text-xs font-bold tracking-widest opacity-80 uppercase">Điểm sáng {item.num}</span>
-                  <h4 className="text-lg font-bold mt-2 leading-snug">{item.title}</h4>
-                  <span className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">{item.highlight}</span>
-                </div>
+      <AnimatePresence mode="wait">
+        {activeSubTab === 'finance' ? (
+          <motion.div
+            key="finance"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+            className="space-y-16"
+          >
+            {/* Part 1: Brand Investment Table (CAPEX) */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-8 bg-indigo-600 rounded-full" />
+                <h4 className="text-2xl font-bold text-slate-800">Phần 1: Ngân sách đầu tư thương hiệu & Cơ sở vật chất</h4>
               </div>
-              <div className="p-6 flex-1 flex flex-col justify-between">
-                <p className="text-slate-600 text-sm leading-relaxed">
-                  {item.body} <span className="font-bold text-slate-900">{item.tag}</span>.
-                </p>
+              <InvestmentTable data={BRAND_INVESTMENT_DATA} />
+            </div>
+
+            {/* Comparison Divider */}
+            <div className="py-8 flex items-center gap-4">
+              <div className="flex-1 h-px bg-slate-200" />
+              <div className="px-6 py-2 bg-slate-100 rounded-full text-slate-500 text-sm font-bold uppercase tracking-widest">Phần 2: Kịch bản kinh doanh vận hành (OPEX)</div>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            {/* Table 1: Original */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-8 bg-blue-600 rounded-full" />
+                <h4 className="text-2xl font-bold text-slate-800">Phương án 1: Kế hoạch kinh doanh dựa trên phương án chi phí Marketing chiếm 20% doanh thu</h4>
+              </div>
+              <FinancialMasterTable title="Bảng Dự Toán Phương Án 1" data={d1} results={results1} badge="MKT 20%" badgeColor="bg-blue-600" />
+            </div>
+
+            {/* Table 2: Scenario 2 */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-8 bg-emerald-600 rounded-full" />
+                <h4 className="text-2xl font-bold text-slate-800">Phương án 2: Tối ưu Marketing (10% Doanh thu)</h4>
+              </div>
+              <FinancialMasterTable title="Bảng Dự Toán Phương Án 2" data={SCENARIO_2_DATA} results={results2} badge="TỐI ƯU MKT" badgeColor="bg-emerald-600" />
+            </div>
+
+            {/* Summary comparison cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-16">
+              {[
+                { label: 'LN Sau Thuế (PA 1)', value: `~${results1.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 20%)', color: 'bg-blue-600', icon: <TrendingUp className="w-6 h-6" /> },
+                { label: 'LN Sau Thuế (PA 2)', value: `~${results2.patArray[11].toLocaleString('vi-VN')} Tr`, sub: 'Giai đoạn ổn định (MKT 10%)', color: 'bg-emerald-600', icon: <TrendingUp className="w-6 h-6" /> },
+                { label: 'Chênh lệch lợi nhuận', value: `+${(results2.patArray[11] - results1.patArray[11]).toLocaleString('vi-VN')} Tr`, sub: 'Mỗi tháng khi tối ưu MKT', color: 'bg-amber-600', icon: <TrendingUp className="w-6 h-6" /> },
+                { label: 'Biên LN PA2 ổn định', value: results2.patMarginArray[11], sub: 'Hiệu suất vận hành tối đa', color: 'bg-indigo-600', icon: <BarChart3 className="w-6 h-6" /> },
+              ].map((card, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                  <div className={`p-3 rounded-xl w-fit mb-4 text-white ${card.color}`}>{card.icon}</div>
+                  <p className="text-xs text-slate-500 mb-1">{card.label}</p>
+                  <p className="text-3xl font-black text-slate-900">{card.value}</p>
+                  <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* 3 management insights */}
+            <div className="space-y-6 mt-16">
+              <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                <Star className="w-7 h-7 text-amber-500" />
+                <h3 className="text-2xl font-bold text-slate-900">3 Điểm sáng Quản trị từ Master Plan</h3>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {[
+                  {
+                    num: '01',
+                    title: 'Giai đoạn "Thung lũng chết" T1 - T2',
+                    color: 'from-blue-600 to-indigo-700',
+                    highlight: '-98 triệu VNĐ trong tháng đầu',
+                    body: 'Do chi phí Marketing và lương đội ngũ được chi trả ngay từ đầu trong khi doanh thu tích lũy chưa đủ lớn, dòng tiền sẽ âm nhẹ trong 2 tháng đầu. Đây là giai đoạn đầu tư nền móng cực kỳ quan trọng.',
+                    tag: 'Đầu tư chiến lược',
+                  },
+                  {
+                    num: '02',
+                    title: 'Điểm hòa vốn và Bùng nổ từ Tháng 4',
+                    color: 'from-emerald-600 to-teal-700',
+                    highlight: 'Bầu trời lợi nhuận sau bù lỗ',
+                    body: 'Từ tháng thứ 4, sau khi đã bù xong các khoản lỗ vận hành ban đầu, hệ thống bắt đầu trích thưởng KPI 5% và thực hiện nghĩa vụ thuế 20%, dòng tiền thực nhận vẫn cực kỳ mạnh mẽ.',
+                    tag: 'Thu hoạch quả ngọt',
+                  },
+                  {
+                    num: '03',
+                    title: 'Cơ chế "Payback" nhanh và biên LN thực',
+                    color: 'from-amber-500 to-orange-600',
+                    highlight: `Biên LN ròng thực ~${results2.patMarginArray[11]}`,
+                    body: 'Nhờ tối ưu hóa phí đầu vào và tập trung vào các dòng sản phẩm có biên lợi nhuận cao, tỷ suất lợi nhuận sau cùng (đã trừ mọi chi phí vận hành, KPI và Thuế) duy trì mức cực kỳ ấn tượng.',
+                    tag: 'Mô hình tối ưu',
+                  },
+                ].map((item, i) => (
+                  <div key={i} className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col">
+                    <div className={`p-6 text-white bg-gradient-to-br ${item.color} relative overflow-hidden`}>
+                      <div className="absolute right-4 top-2 font-black text-8xl opacity-10 select-none">{item.num}</div>
+                      <div className="relative z-10">
+                        <span className="text-xs font-bold tracking-widest opacity-80 uppercase">Điểm sáng {item.num}</span>
+                        <h4 className="text-lg font-bold mt-2 leading-snug">{item.title}</h4>
+                        <span className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">{item.highlight}</span>
+                      </div>
+                    </div>
+                    <div className="p-6 flex-1 flex flex-col justify-between">
+                      <p className="text-slate-600 text-sm leading-relaxed">
+                        {item.body} <span className="font-bold text-slate-900">{item.tag}</span>.
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="action"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+          >
+            <ActionPlanView />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Assumptions footnote */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 flex items-start gap-4">
