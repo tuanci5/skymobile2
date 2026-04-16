@@ -262,11 +262,29 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
                 <Lock className="w-5 h-5" />
                 <h5 className="font-bold">Tài sản cần bảo vệ</h5>
               </div>
-              <ul className="space-y-3 text-sm text-slate-600">
-                <li className="flex items-start gap-2">• <strong className="text-slate-800">Thông tin khách hàng:</strong> Tên, SĐT, địa chỉ, ảnh giấy tờ tùy thân (thẻ ngoại kiều) - Đây là tài sản nhạy cảm nhất.</li>
-                <li className="flex items-start gap-2">• <strong className="text-slate-800">Bí mật kinh doanh:</strong> Kịch bản chốt đơn, danh sách giá nhập, biên lợi nhuận, chiến lược Marketing.</li>
-                <li className="flex items-start gap-2">• <strong className="text-slate-800">Dữ liệu hệ thống:</strong> Tài khoản quản trị, mã nguồn, mật khẩu công cụ công ty.</li>
-              </ul>
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 items-start">
+                  <div className="mt-2 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                  <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-x-3">
+                    <span className="font-bold text-slate-800">Thông tin khách hàng:</span>
+                    <span className="text-slate-600">Tên, SĐT, địa chỉ, ảnh giấy tờ tùy thân (thẻ ngoại kiều) - Đây là tài sản nhạy cảm nhất.</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 items-start">
+                  <div className="mt-2 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                  <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-x-3">
+                    <span className="font-bold text-slate-800">Bí mật kinh doanh:</span>
+                    <span className="text-slate-600">Kịch bản chốt đơn, danh sách giá nhập, biên lợi nhuận, chiến lược Marketing.</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 items-start">
+                  <div className="mt-2 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                  <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-x-3">
+                    <span className="font-bold text-slate-800">Dữ liệu hệ thống:</span>
+                    <span className="text-slate-600">Tài khoản quản trị, mã nguồn, mật khẩu công cụ công ty.</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100">
