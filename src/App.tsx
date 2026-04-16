@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Users,
@@ -43,7 +43,8 @@ import {
   Sparkles,
   Calendar,
   Rocket,
-  ArrowLeft
+  ArrowLeft,
+  ArrowUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JobDescription, Role, ProcessStep } from './types';
@@ -1872,12 +1873,57 @@ const ROLE_MAPPING: Record<string, string> = {
   'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head'
 };
 
+const ScrollToTop = ({ scrollContainerRef }: { scrollContainerRef: React.RefObject<HTMLDivElement | null> }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const toggleVisibility = () => {
+      if (container.scrollTop > 300) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    container.addEventListener('scroll', toggleVisibility);
+    return () => container.removeEventListener('scroll', toggleVisibility);
+  }, [scrollContainerRef]);
+
+  const scrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {isVisible && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.5, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.5, y: 20 }}
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-[100] p-4 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all group"
+          title="Lên đầu trang"
+        >
+          <ArrowUp className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+};
+
 function AppContent() {
   const [user, setUser] = useState<any>(() => {
     const savedUser = localStorage.getItem('sky_mobile_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -2658,7 +2704,10 @@ function AppContent() {
         user={user}
       />
 
-      <main className="flex-1 p-4 md:p-12 overflow-y-auto">
+      <main 
+        ref={scrollContainerRef}
+        className="flex-1 p-4 md:p-12 overflow-y-auto"
+      >
         <div className="max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
@@ -2703,6 +2752,8 @@ function AppContent() {
           </footer>
         </div>
       </main>
+
+      <ScrollToTop scrollContainerRef={scrollContainerRef} />
     </div>
   );
 }
