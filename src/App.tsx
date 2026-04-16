@@ -42,7 +42,8 @@ import {
   Star,
   Sparkles,
   Calendar,
-  Rocket
+  Rocket,
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JobDescription, Role, ProcessStep } from './types';
@@ -1111,65 +1112,46 @@ const CostTab = () => {
   );
 };
 
-const TrainingDetailModal = ({ course, onClose }: { course: string, onClose: () => void }) => {
-  const data = ONBOARDING_CONTENT[course];
-  if (!data) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-      >
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-indigo-50/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">{data.title}</h3>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-600">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="p-8 overflow-y-auto custom-scrollbar">
-          {data.content}
-        </div>
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-95"
-          >
-            Đã hiểu nội dung
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
 const TrainingTab = () => {
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
+  if (selectedCourse) {
+    const data = ONBOARDING_CONTENT[selectedCourse];
+    if (!data) {
+      setSelectedCourse(null);
+      return null;
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+        <button 
+          onClick={() => setSelectedCourse(null)}
+          className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 group font-medium"
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          Quay lại danh sách khóa học
+        </button>
+
+        <div className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100">
+            <div className="p-4 bg-indigo-100 text-indigo-600 rounded-2xl">
+              <BookOpen className="w-8 h-8" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-indigo-600 uppercase tracking-wider mb-1">Tài liệu đào tạo</p>
+              <h2 className="text-3xl font-bold text-slate-900">{data.title}</h2>
+            </div>
+          </div>
+          <div className="prose prose-slate max-w-none prose-headings:text-slate-900 prose-p:text-slate-600 prose-li:text-slate-600">
+            {data.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
-      <AnimatePresence>
-        {selectedCourse && (
-          <TrainingDetailModal
-            course={selectedCourse}
-            onClose={() => setSelectedCourse(null)}
-          />
-        )}
-      </AnimatePresence>
       <div className="mb-10 text-center flex flex-col items-center">
         <div className="p-4 bg-indigo-100 text-indigo-600 rounded-full mb-6 shadow-sm">
           <GraduationCap className="w-10 h-10" />
