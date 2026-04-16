@@ -35,9 +35,9 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
         icon: <Users className="w-5 h-5" />,
         color: 'bg-blue-100 text-blue-600',
         items: [
-          'Tuyển 2 Trưởng nhóm (Leads) nòng cốt',
-          'Tuyển 4-6 Nhân viên tư vấn đợt 1',
-          'Hoàn thiện JD và cơ chế lương thưởng (KPI)'
+          'Tuyển 2 Trưởng nhóm (Leads) cho 2 Team nòng cốt',
+          'Tuyển 10 nhân sự: 6 Ads, 2 Sale, 2 CSKH',
+          'Định biên Team: 1 Lead + 3 Ads + 1 Sale + 1 CSKH'
         ]
       },
       training: {
@@ -103,9 +103,9 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
         icon: <Users className="w-5 h-5" />,
         color: 'bg-blue-100 text-blue-600',
         items: [
-          'Mở rộng quy mô lên 4-5 Team (20-25 NV)',
-          'Đánh giá năng lực nhóm nòng cốt sau 2 tuần',
-          'Xây dựng đội ngũ dự phòng (Talent Pool)'
+          'Mở rộng lên 5 Team (Tổng 30 nhân sự)',
+          'Tuyển thêm 3 Lead, 9 Ads, 3 Sale, 3 CSKH',
+          'Đánh giá năng lực nhóm nòng cốt sau 2 tuần'
         ]
       },
       training: {
@@ -171,9 +171,9 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
         icon: <Users className="w-5 h-5" />,
         color: 'bg-blue-100 text-blue-600',
         items: [
-          'Hoàn thiện 8-10 Team ( ~40-50 NV)',
-          'Bổ nhiệm các Leader triển vọng từ nhóm cũ',
-          'Chuẩn hóa sơ đồ tổ chức chi tiết'
+          'Hoàn thiện quy mô 10 Team (Tổng 60 nhân sự)',
+          'Kiện toàn bộ máy: 10 Lead, 30 Ads, 10 Sale, 10 CSKH',
+          'Bổ nhiệm các Leader triển vọng từ nhóm cũ'
         ]
       },
       training: {
@@ -229,7 +229,7 @@ export const ACTION_PLAN_4_MONTHS: MonthPlan[] = [
         icon: <Users className="w-5 h-5" />,
         color: 'bg-blue-100 text-blue-600',
         items: [
-          'Ổn định nhân sự 10 Team',
+          'Ổn định nhân sự 10 Team (60 người)',
           'Đánh giá hiệu suất (Performance Review) quý',
           'Xây dựng lộ trình thăng tiến cán bộ nòng cốt'
         ]
