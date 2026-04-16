@@ -158,16 +158,16 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Mạng lưới Đối tác</p>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/e/ed/NTT_docomo_logo.svg" alt="docomo" className="h-3 md:h-4 w-auto object-contain" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/NTT_docomo_logo.svg/512px-NTT_docomo_logo.svg.png" alt="docomo" className="h-3 md:h-4 w-auto object-contain" />
                   </div>
                   <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/cc/SoftBank_logo.svg" alt="SoftBank" className="h-3 md:h-4 w-auto object-contain" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/SoftBank_logo.svg/512px-SoftBank_logo.svg.png" alt="SoftBank" className="h-3 md:h-4 w-auto object-contain" />
                   </div>
                   <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Au_logo.svg" alt="au" className="h-3 md:h-4 w-auto object-contain" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Au_logo.svg/512px-Au_logo.svg.png" alt="au" className="h-3 md:h-4 w-auto object-contain" />
                   </div>
                   <div className="px-2 py-1 bg-white rounded border border-slate-100 flex items-center justify-center">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/1/14/Rakuten_logo_2017.svg" alt="Rakuten" className="h-3 md:h-4 w-auto object-contain max-w-[60px]" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Rakuten_logo_2017.svg/512px-Rakuten_logo_2017.svg.png" alt="Rakuten" className="h-3 md:h-4 w-auto object-contain max-w-[60px]" />
                   </div>
                 </div>
               </div>
