@@ -11,7 +11,9 @@ import { mktMediaJD } from './positions/mkt_media/jd';
 import { telesaleJD } from './positions/telesale/jd';
 import { crmJD } from './positions/crm/jd';
 import { opsJD } from './positions/ops/jd';
+import { accountantJD } from './positions/accountant/jd';
 import { headRole } from './positions/head/role';
+import { accountantRole } from './positions/accountant/role';
 // Import other roles similarly...
 
 export const JD_DATA: Record<string, JobDescription> = {
@@ -26,10 +28,12 @@ export const JD_DATA: Record<string, JobDescription> = {
   'mkt_media': mktMediaJD,
   'telesale': telesaleJD,
   'crm': crmJD,
-  'ops': opsJD
+  'ops': opsJD,
+  'accountant': accountantJD
 };
 
 export const ROLES: Role[] = [
   headRole,
+  accountantRole,
   // Add other roles...
 ];

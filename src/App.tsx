@@ -1869,6 +1869,8 @@ const ROLE_MAPPING: Record<string, string> = {
   'Nhân viên CSKH': 'cskh_staff',
   'Telesale': 'telesale',
   'Nhân viên Kỹ thuật': 'ops',
+  'Nhân viên Kế toán': 'accountant',
+  'Kế toán tổng hợp': 'accountant',
   'Quản lý': 'head',
   'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head'
 };
@@ -2605,6 +2607,7 @@ function AppContent() {
         color: 'text-rose-600 bg-rose-100',
         icon: <DollarSign className="w-8 h-8" />,
         teams: [
+          'Kế toán tổng hợp',
           'Kế toán doanh thu',
           'Kế toán chi phí',
           'Kế toán công nợ',
