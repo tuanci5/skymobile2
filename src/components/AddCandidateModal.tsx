@@ -14,6 +14,7 @@ import { opsJD } from '../data/positions/ops/jd';
 import { saleLeadJD } from '../data/positions/sale_lead/jd';
 import { saleStaffJD } from '../data/positions/sale_staff/jd';
 import { telesaleJD } from '../data/positions/telesale/jd';
+import { accountantJD } from '../data/positions/accountant/jd';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -34,6 +35,7 @@ const POSITION_OPTIONS = [
   opsJD.title,
   saleStaffJD.title,
   telesaleJD.title,
+  accountantJD.title,
 ];
 
 export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSuccess, appsScriptUrl }) => {
