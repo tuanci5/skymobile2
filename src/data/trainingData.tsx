@@ -1,5 +1,5 @@
 import React from 'react';
-import { Target, Monitor, Users, Settings, UserPlus, HeartHandshake, Globe2, Layers, Smartphone, Lightbulb, Wifi, Briefcase, Network, ShieldCheck, FileText, Lock, Clock, CalendarCheck, AlertTriangle, Scale } from 'lucide-react';
+import { Target, Monitor, Users, Settings, UserPlus, HeartHandshake, Globe2, Layers, Smartphone, Lightbulb, Wifi, Briefcase, Network, ShieldCheck, FileText, Lock, Clock, CalendarCheck, AlertTriangle, Scale, Sparkles, Bot, Zap, Cpu } from 'lucide-react';
 
 export const TRAINING_GROUPS = [
   {
@@ -85,6 +85,19 @@ export const TRAINING_GROUPS = [
       'Lộ trình thăng tiến cán bộ nòng cốt',
       'Lập kế hoạch và đo lường hiệu suất (SLA, Tỉ lệ chốt...)',
       'Văn hoá coaching nâng chuẩn đội ngũ'
+    ]
+  },
+  {
+    id: 'G',
+    title: 'Ứng dụng AI',
+    desc: 'Tối ưu hiệu quả Marketing, Sale và CSKH bằng AI',
+    color: 'bg-violet-600',
+    lightColor: 'bg-violet-50 border-violet-100',
+    icon: <Sparkles className="w-6 h-6 text-violet-600" />,
+    courses: [
+      'AI trong tối ưu nội dung & Marketing',
+      'Sử dụng AI hỗ trợ tư vấn & chốt đơn',
+      'Tự động hóa báo cáo & quản lý dữ liệu bằng AI'
     ]
   }
 ];
@@ -327,6 +340,127 @@ export const ONBOARDING_CONTENT: Record<string, { title: string, content: React.
             </div>
           </div>
         </section>
+      </div>
+    )
+  },
+  'AI trong tối ưu nội dung & Marketing': {
+    title: 'AI trong tối ưu nội dung & Marketing',
+    content: (
+      <div className="space-y-8">
+        <section className="bg-gradient-to-br from-violet-50 to-white p-8 rounded-3xl border border-violet-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-violet-600 text-white rounded-2xl shadow-lg shadow-violet-600/20">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h4 className="text-xl font-bold text-slate-900">Sáng tạo nội dung bứt phá</h4>
+          </div>
+          <p className="text-slate-600 mb-6 italic">"Đừng làm việc chăm chỉ, hãy làm việc thông minh với sự hỗ trợ của trí tuệ nhân tạo."</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm leading-relaxed">
+              <h5 className="font-bold text-violet-700 mb-2 flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Viết kịch bản & Content
+              </h5>
+              <p className="text-sm text-slate-600">Sử dụng **ChatGPT/Gemini** để lên ý tưởng vỉal video, kịch bản chốt đơn và bài viết quảng cáo chuẩn insight người Việt tại Nhật.</p>
+            </div>
+            <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm leading-relaxed">
+              <h5 className="font-bold text-violet-700 mb-2 flex items-center gap-2">
+                <Smartphone className="w-4 h-4" /> Thiết kế & Media AI
+              </h5>
+              <p className="text-sm text-slate-600">Tạo hình ảnh quảng cáo chuyên nghiệp với **Canva AI/Midjourney** và video người ảo nói tiếng Việt với **D-ID/HeyGen**.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h5 className="font-bold text-slate-900 border-l-4 border-violet-600 pl-3">Quy trình thực hiện</h5>
+          <div className="space-y-3">
+            {[
+              { t: 'Nghiên cứu thị trường', d: 'Dùng AI phân tích hành vi khách hàng và các gói cước đối thủ.' },
+              { t: 'Tạo nội dung thô', d: 'Yêu cầu AI đưa ra 5-10 phương án tiêu đề và nội dung bài viết.' },
+              { t: 'Tối ưu và Kiểm tra', d: 'Con người kiểm tra tính xác thực, chỉnh sửa văn phong cho phù hợp văn hóa.' }
+            ].map((step, i) => (
+              <div key={i} className="flex gap-4 p-4 hover:bg-slate-50 rounded-2xl transition-colors">
+                <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0 font-bold text-sm">{i+1}</div>
+                <div>
+                  <div className="font-bold text-slate-800 text-sm">{step.t}</div>
+                  <div className="text-slate-500 text-xs mt-1">{step.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    )
+  },
+  'Sử dụng AI hỗ trợ tư vấn & chốt đơn': {
+    title: 'Sử dụng AI hỗ trợ tư vấn & chốt đơn',
+    content: (
+      <div className="space-y-8">
+        <section className="grid md:grid-cols-3 gap-6">
+          <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-center">
+            <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/20">
+              <Bot className="w-7 h-7" />
+            </div>
+            <h5 className="font-bold text-slate-900 mb-2">Trợ lý AI 24/7</h5>
+            <p className="text-xs text-slate-600 leading-relaxed">Chatbot tự động trả lời các câu hỏi thường gặp về gói cước, thủ tục và phí phát sinh.</p>
+          </div>
+          <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 text-center">
+            <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/20">
+              <Globe2 className="w-7 h-7" />
+            </div>
+            <h5 className="font-bold text-slate-900 mb-2">Dịch thuật tức thì</h5>
+            <p className="text-xs text-slate-600 leading-relaxed">Xử lý tài liệu tiếng Nhật, giao tiếp với nhà mạng hoặc hỗ trợ khách nước ngoài chuyên nghiệp.</p>
+          </div>
+          <div className="p-6 bg-violet-50 rounded-3xl border border-violet-100 text-center">
+            <div className="w-12 h-12 bg-violet-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-600/20">
+              <Lightbulb className="w-7 h-7" />
+            </div>
+            <h5 className="font-bold text-slate-900 mb-2">Gợi ý kịch bản</h5>
+            <p className="text-xs text-slate-600 leading-relaxed">AI phân tích nhu cầu và gợi ý gói cước tối ưu cùng cách thuyết phục phù hợp nhất cho từng khách.</p>
+          </div>
+        </section>
+
+        <section className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+          <h5 className="font-bold text-slate-900 mb-4 flex items-center gap-2 italic">
+            <Zap className="w-5 h-5 text-amber-500" /> Lưu ý: AI không thay thế con người trong cảm xúc và sự chân thành.
+          </h5>
+          <p className="text-sm text-slate-600">Hãy sử dụng AI như một công cụ hỗ trợ thông tin nhanh, nhưng việc chốt đơn cuối cùng phụ thuộc vào sự tin tưởng và thái độ phục vụ của chính bạn.</p>
+        </section>
+      </div>
+    )
+  },
+  'Tự động hóa báo cáo & quản lý dữ liệu bằng AI': {
+    title: 'Tự động hóa báo cáo & quản lý dữ liệu bằng AI',
+    content: (
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row gap-8 items-center bg-slate-900 text-white p-10 rounded-3xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-20" />
+          <div className="relative z-10 flex-1">
+            <h4 className="text-2xl font-bold mb-4 flex items-center gap-3">
+              <Cpu className="w-8 h-8 text-violet-400" /> Quản trị bằng dữ liệu AI
+            </h4>
+            <p className="text-slate-400 text-sm leading-relaxed mb-6">Tự động hóa các tác vụ lặp đi lặp lại để dành thời gian cho những chiến lược quan trọng hơn.</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-violet-400" />
+                <span>Tự động phân tích KPI từ file Excel/Google Sheets.</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-violet-400" />
+                <span>Dự báo xu hướng doanh thu và số lượng lead.</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-2 h-2 rounded-full bg-violet-400" />
+                <span>Kết nối các công cụ làm việc (Slack, CRM, Mail) bằng AI.</span>
+              </div>
+            </div>
+          </div>
+          <div className="relative z-10 hidden lg:block">
+            <div className="w-48 h-48 rounded-full border-8 border-violet-500/20 flex items-center justify-center animate-pulse">
+              <Zap className="w-24 h-24 text-violet-400 shadow-2xl" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
