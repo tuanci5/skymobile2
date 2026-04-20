@@ -2587,7 +2587,7 @@ function AppContent() {
       );
     }
 
-    const OTHER_DEPTS_DATA: Record<string, { title: string, objective: string, teams: string[], icon: any, color: string }> = {
+    const OTHER_DEPTS_DATA: Record<string, { title: string, objective: string, teams: (string | {name: string, desc: string})[], icon: any, color: string }> = {
       'hr-dept': {
         title: 'Hành chính – Nhân sự',
         objective: 'Tuyển đúng người, đào tạo nhanh, giữ người và chuẩn hóa vận hành nội quy nội bộ.',
@@ -2607,12 +2607,12 @@ function AppContent() {
         color: 'text-rose-600 bg-rose-100',
         icon: <DollarSign className="w-8 h-8" />,
         teams: [
-          'Kế toán tổng hợp',
-          'Kế toán doanh thu',
-          'Kế toán chi phí',
-          'Kế toán công nợ',
-          'Theo dõi dòng tiền',
-          'Lương – thưởng – hoa hồng'
+          { name: 'Kế toán tổng hợp', desc: 'Lập báo cáo tài chính, quyết toán thuế, đối soát số liệu tổng hợp toàn công ty.' },
+          { name: 'Kế toán doanh thu', desc: 'Ghi nhận doanh thu từ các kênh, đối soát giao dịch thẻ, chuyển khoản ngân hàng.' },
+          { name: 'Kế toán chi phí', desc: 'Theo dõi hạn mức ngân sách, kiểm soát và duyệt chi phí vận hành, marketing đúng quy định.' },
+          { name: 'Kế toán công nợ', desc: 'Quản lý thu hồi công nợ khách hàng, đối soát và thanh toán công nợ nhà cung cấp/nhà mạng.' },
+          { name: 'Theo dõi dòng tiền', desc: 'Lập kế hoạch thu chi, báo cáo Cashflow, cân đối ngoại tệ JPY - VND cập nhật hàng ngày.' },
+          { name: 'Lương – thưởng – hoa hồng', desc: 'Chấm công, tính lương, thưởng KPI và hoa hồng cho Sale, CSKH chính xác hàng tháng.' }
         ]
       },
       'comms-dept': {
@@ -2675,14 +2675,21 @@ function AppContent() {
                   Cơ cấu Nhân sự
                 </h3>
                 <div className="grid md:grid-cols-2 gap-x-16 gap-y-6 relative z-10">
-                  {deptData.teams.map((team, idx) => (
-                    <div key={idx} className="bg-slate-50 rounded-2xl p-6 border border-slate-200 flex items-center gap-4 hover:shadow-md transition-shadow hover:-translate-y-0.5">
-                      <div className="w-10 h-10 rounded-full bg-white shadow-sm border border-slate-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                  {deptData.teams.map((team, idx) => {
+                    const isObj = typeof team === 'object' && team !== null;
+                    const teamName = isObj ? (team as any).name : team;
+                    const teamDesc = isObj ? (team as any).desc : null;
+                    return (
+                    <div key={idx} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-start gap-4 hover:shadow-md transition-shadow hover:-translate-y-0.5 group">
+                      <div className="w-10 h-10 rounded-full bg-slate-50 shadow-sm border border-slate-100 text-blue-600 flex items-center justify-center font-bold shrink-0 mt-1 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
                         {idx + 1}
                       </div>
-                      <h4 className="font-bold text-slate-800 leading-snug">{team}</h4>
+                      <div>
+                        <h4 className="font-bold text-slate-800 leading-snug mb-1.5">{teamName as string}</h4>
+                        {teamDesc && <p className="text-sm text-slate-600 leading-relaxed">{teamDesc}</p>}
+                      </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             </div>
