@@ -2594,11 +2594,11 @@ function AppContent() {
         color: 'text-emerald-600 bg-emerald-100',
         icon: <Briefcase className="w-8 h-8" />,
         teams: [
-          'Tuyển dụng',
-          'Đào tạo nội bộ',
-          'Hành chính văn phòng',
-          'Quản lý hồ sơ nhân sự',
-          'Văn hóa doanh nghiệp / nội quy'
+          { name: 'Tuyển dụng', desc: 'Lập kế hoạch tuyển dụng, đăng tuyển, sơ vấn và phỏng vấn ứng viên các bộ phận.' },
+          { name: 'Đào tạo nội bộ', desc: 'Lên chương trình hội nhập nhân sự mới, tổ chức các khóa nâng cao kỹ năng mềm, nghiệp vụ.' },
+          { name: 'Hành chính văn phòng', desc: 'Quản lý thiết bị, văn phòng phẩm, chấm công, quản lý môi trường làm việc trực tiếp.' },
+          { name: 'Quản lý hồ sơ nhân sự', desc: 'Quản lý hợp đồng lao động, bảo hiểm, đánh giá năng lực và các thủ tục nhân sự.' },
+          { name: 'Văn hóa doanh nghiệp / nội quy', desc: 'Tổ chức sự kiện nội bộ, teambuilding, giám sát việc tuân thủ nội quy công ty.' }
         ]
       },
       'finance-dept': {
@@ -2621,11 +2621,11 @@ function AppContent() {
         color: 'text-amber-600 bg-amber-100',
         icon: <Megaphone className="w-8 h-8" />,
         teams: [
-          'Nhóm Content & PR (Viral)',
-          'Nhóm Media & Thiết kế (Video, Ảnh)',
-          'Nhóm Quản trị Thương hiệu & Cộng đồng',
-          'Sản xuất ấn phẩm & POSM',
-          'Xử lý khủng hoảng truyền thông'
+          { name: 'Nhóm Content & PR (Viral)', desc: 'Sáng tạo nội dung trên Fanpage, Tiktok, báo chí kết nối với cộng đồng.' },
+          { name: 'Nhóm Media & Thiết kế (Video, Ảnh)', desc: 'Quay chụp, dựng video, thiết kế hình ảnh cho quảng cáo và truyền thông.' },
+          { name: 'Nhóm Quản trị Thương hiệu & Cộng đồng', desc: 'Xây dựng Group, hỗ trợ giải đáp thành viên, định vị hình ảnh thương hiệu trong cộng đồng.' },
+          { name: 'Sản xuất ấn phẩm & POSM', desc: 'Thiết kế, in ấn bao bì, ấn phẩm đóng gói sản phẩm, standee, tờ rơi sự kiện.' },
+          { name: 'Xử lý khủng hoảng truyền thông', desc: 'Theo dõi dư luận, kịp thời kiểm soát và xử lý các phản hồi tiêu cực trên mạng xã hội.' }
         ]
       },
       'technical': {
@@ -2634,11 +2634,11 @@ function AppContent() {
         color: 'text-indigo-600 bg-indigo-100',
         icon: <Cpu className="w-8 h-8" />,
         teams: [
-          'Nhóm quản lý SIM / nhà mạng / cấu hình gói',
-          'Nhóm hỗ trợ kỹ thuật khách hàng',
-          'Nhóm quản lý thiết bị Pocket WiFi',
-          'Nhóm kiểm tra chất lượng / kích hoạt / đổi lỗi',
-          'Nhóm vận hành kho thiết bị – SIM'
+          { name: 'Nhóm quản lý SIM / nhà mạng / cấu hình gói', desc: 'Đăng ký SIM với nhà mạng, thiết lập và thay đổi gói cước theo nhu cầu khách hàng.' },
+          { name: 'Nhóm hỗ trợ kỹ thuật khách hàng', desc: 'Hỗ trợ khách hàng xử lý lỗi kỹ thuật, mất kết nối, cài đặt APN nhanh chóng.' },
+          { name: 'Nhóm quản lý thiết bị Pocket WiFi', desc: 'Kiểm tra, bảo trì, thay thế các thiết bị Pocket WiFi trước và sau khi khách hàng sử dụng.' },
+          { name: 'Nhóm kiểm tra chất lượng / kích hoạt / đổi lỗi', desc: 'Test thiết bị và SIM trước xuất kho, tiếp nhận xử lý đổi trả bảo hành.' },
+          { name: 'Nhóm vận hành kho thiết bị – SIM', desc: 'Quản lý tồn kho, nhập hàng, kiểm soát luân chuyển hàng hóa liên tục.' }
         ]
       }
     };
