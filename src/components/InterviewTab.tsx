@@ -10,6 +10,7 @@ import { CandidateEvalModal, Candidate } from './CandidateEvalModal';
 import { EvalReportModal, EvaluationData } from './EvalReportModal';
 import { AddCandidateModal } from './AddCandidateModal';
 import { CVEditModal, CVData } from './CVEditModal';
+import { JD_DATA } from '../data/hrData';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const MOCK_CANDIDATES: Candidate[] = [
@@ -736,7 +737,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <select value={positionFilter} onChange={e => setPositionFilter(e.target.value)}
                 className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer sm:max-w-xs truncate">
-                {['Tất cả vị trí', ...Array.from(new Set(candidates.map(c => c.position).filter(Boolean))).sort()].map(s => <option key={s} value={s}>{s}</option>)}
+                {['Tất cả vị trí', ...Array.from(new Set(Object.values(JD_DATA).map(jd => jd.title))).sort()].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
