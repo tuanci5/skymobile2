@@ -1998,7 +1998,7 @@ function AppContent() {
 
   const PATH_TO_TAB: Record<string, TabType> = {
     model: 'model', hr: 'hr', salary: 'salary', cost: 'cost', training: 'training',
-    business: 'business', 'action-plan': 'action-plan',
+    business: 'business', 'action-plan': 'action-plan', products: 'products',
   };
   const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
 
