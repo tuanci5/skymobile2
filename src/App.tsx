@@ -56,12 +56,13 @@ import { ACTION_PLAN_4_MONTHS } from './data/actionPlanData';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import LoginPage from './components/LoginPage';
 import { InterviewTab } from './components/InterviewTab';
+import { ProductsTab } from './components/ProductsTab';
 
 const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.googleusercontent.com';
 
 // --- Types ---
 
-type TabType = 'model' | 'hr' | 'salary' | 'cost' | 'training' | 'business' | 'action-plan';
+type TabType = 'model' | 'hr' | 'salary' | 'cost' | 'training' | 'business' | 'action-plan' | 'products';
 
 // --- Components ---
 
@@ -366,6 +367,7 @@ const TAB_TO_PATH: Record<TabType, string> = {
   training: '/training',
   business: '/business',
   'action-plan': '/action-plan',
+  products: '/products',
 };
 
 const Sidebar = ({
@@ -392,6 +394,7 @@ const Sidebar = ({
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'business', label: 'Kế hoạch kinh doanh', icon: <TrendingUp className="w-5 h-5" />, adminOnly: true },
     { id: 'action-plan', label: 'Kế hoạch 4 tháng', icon: <Calendar className="w-5 h-5" />, adminOnly: true },
+    { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
   ];
 
   const deptLinks = DEPARTMENTS.map(dept => ({
@@ -2801,6 +2804,7 @@ function AppContent() {
               {activeTab === 'training' && <TrainingTab />}
               {activeTab === 'business' && (isAdmin ? <BusinessPlanTab initialSubTab="finance" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
               {activeTab === 'action-plan' && (isAdmin ? <BusinessPlanTab initialSubTab="action" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
+              {activeTab === 'products' && <ProductsTab />}
             </motion.div>
 
           </AnimatePresence>
