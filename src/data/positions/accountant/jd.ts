@@ -1,7 +1,7 @@
 import { JobDescription } from '../../../types';
 
 export const accountantJD: JobDescription = {
-  title: 'Kế toán tổng hợp',
+  title: 'Nhân viên kế toán tổng hợp',
   objective: 'Quản lý toàn bộ hệ thống số liệu kế toán, kiểm soát dòng tiền, đối soát nhà mạng và hỗ trợ quản trị tài chính doanh nghiệp.',
   tasks: [
     'Đối soát doanh thu chi tiết từ hệ thống CRM với báo cáo nhà mạng và đối tác thanh toán',

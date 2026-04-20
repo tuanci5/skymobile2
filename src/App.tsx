@@ -1920,7 +1920,7 @@ const ROLE_MAPPING: Record<string, string> = {
   'Telesale': 'telesale',
   'Nhân viên Kỹ thuật': 'ops',
   'Nhân viên Kế toán': 'accountant',
-  'Kế toán tổng hợp': 'accountant',
+  'Nhân viên kế toán tổng hợp': 'accountant',
   'Nhân viên Hành chính & Nhân sự': 'hr_staff',
   'Quản lý': 'head',
   'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head'
@@ -2658,7 +2658,7 @@ function AppContent() {
         color: 'text-rose-600 bg-rose-100',
         icon: <DollarSign className="w-8 h-8" />,
         teams: [
-          { name: 'Kế toán tổng hợp', desc: 'Lập báo cáo tài chính, quyết toán thuế, đối soát số liệu tổng hợp toàn công ty.' },
+          { name: 'Nhân viên kế toán tổng hợp', desc: 'Lập báo cáo tài chính, quyết toán thuế, đối soát số liệu tổng hợp toàn công ty.' },
           { name: 'Kế toán doanh thu', desc: 'Ghi nhận doanh thu từ các kênh, đối soát giao dịch thẻ, chuyển khoản ngân hàng.' },
           { name: 'Kế toán chi phí', desc: 'Theo dõi hạn mức ngân sách, kiểm soát và duyệt chi phí vận hành, marketing đúng quy định.' },
           { name: 'Kế toán công nợ', desc: 'Quản lý thu hồi công nợ khách hàng, đối soát và thanh toán công nợ nhà cung cấp/nhà mạng.' },

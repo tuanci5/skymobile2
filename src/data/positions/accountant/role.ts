@@ -4,7 +4,7 @@ import React from 'react';
 
 export const accountantRole: Role = {
   id: 'accountant',
-  title: 'Kế toán tổng hợp',
+  title: 'Nhân viên kế toán tổng hợp',
   icon: React.createElement(Calculator, { className: 'w-6 h-6' }),
   color: 'bg-rose-600',
   description: 'Quản lý tài chính, đối soát doanh thu và kiểm soát dòng tiền.',
