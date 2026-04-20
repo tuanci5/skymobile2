@@ -1871,6 +1871,7 @@ const ROLE_MAPPING: Record<string, string> = {
   'Nhân viên Kỹ thuật': 'ops',
   'Nhân viên Kế toán': 'accountant',
   'Kế toán tổng hợp': 'accountant',
+  'Nhân viên Hành chính & Nhân sự': 'hr_staff',
   'Quản lý': 'head',
   'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head'
 };
