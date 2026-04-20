@@ -276,6 +276,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   const [fetchError,       setFetchError]       = useState('');
   const [search,           setSearch]           = useState('');
   const [statusFilter,     setStatusFilter]     = useState<string>('Tất cả');
+  const [positionFilter,   setPositionFilter]   = useState<string>('Tất cả vị trí');
   const [datePreset,       setDatePreset]       = useState<string>('7 ngày gần nhất');
   const [fromDate,         setFromDate]         = useState<string>('');
   const [toDate,           setToDate]           = useState<string>('');
@@ -579,16 +580,25 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
 
   const finalFiltered = useMemo(() => {
     const filtered = searchFiltered.filter(c => {
-      if (statusFilter === 'Tất cả') return true;
-      if (statusFilter === 'Đã phỏng vấn') return c.status !== 'Chờ phỏng vấn';
-      return c.status === statusFilter;
+      if (statusFilter !== 'Tất cả') {
+        if (statusFilter === 'Đã phỏng vấn') {
+          if (c.status === 'Chờ phỏng vấn') return false;
+        } else if (c.status !== statusFilter) {
+          return false;
+        }
+      }
+      
+      if (positionFilter !== 'Tất cả vị trí') {
+        if (c.position !== positionFilter) return false;
+      }
+      return true;
     });
     
     // Sắp xếp theo vị trí từ cao xuống thấp (giả định dựa trên thứ tự trong JD hoặc độ dài tên vị trí)
     // Ở đây ta sẽ sắp xếp theo thứ tự bảng chữ cái giảm dần của position để minh họa "cao xuống thấp" 
     // hoặc nếu có một danh sách ưu tiên vị trí thì sẽ dùng danh sách đó.
     return [...filtered].sort((a, b) => b.position.localeCompare(a.position));
-  }, [searchFiltered, statusFilter]);
+  }, [searchFiltered, statusFilter, positionFilter]);
 
   const openEval   = (c: Candidate) => { setSelectedCandidate(c); setModalMode('eval'); };
   const openReport = (c: Candidate) => { setSelectedCandidate(c); setModalMode('report'); };
@@ -719,6 +729,14 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               <select value={datePreset} onChange={e => setDatePreset(e.target.value)}
                 className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer">
                 {['7 ngày gần nhất', 'Tất cả thời gian', 'Hôm nay', 'Tuần này', 'Tháng này', 'Tùy chỉnh'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="relative shrink-0">
+              <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <select value={positionFilter} onChange={e => setPositionFilter(e.target.value)}
+                className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer sm:max-w-xs truncate">
+                {['Tất cả vị trí', ...Array.from(new Set(candidates.map(c => c.position).filter(Boolean))).sort()].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
