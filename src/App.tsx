@@ -44,7 +44,8 @@ import {
   Calendar,
   Rocket,
   ArrowLeft,
-  ArrowUp
+  ArrowUp,
+  Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JobDescription, Role, ProcessStep } from './types';
@@ -547,9 +548,41 @@ const Sidebar = ({
   );
 };
 
+const FILTER_DEPTS = [
+  { id: 'all', label: 'Tất cả phòng ban' },
+  { id: 'sales-mkt', label: 'Phòng KD - MKT - CSKH' },
+  { id: 'comms-dept', label: 'Phòng Truyền thông' },
+  { id: 'hr-dept', label: 'Hành chính - Nhân sự' },
+  { id: 'finance-dept', label: 'Tài chính - Kế toán' },
+  { id: 'technical', label: 'Kỹ thuật - Vận hành' }
+];
+
+const DEPT_MAPPING: Record<string, string> = {
+  'head': 'sales-mkt',
+  'mkt_lead': 'sales-mkt',
+  'sale_lead': 'sales-mkt',
+  'cskh_lead': 'sales-mkt',
+  'sale_staff': 'sales-mkt',
+  'cskh_staff': 'sales-mkt',
+  'mkt_ads': 'sales-mkt',
+  'telesale': 'sales-mkt',
+  'crm': 'sales-mkt',
+  'ops': 'sales-mkt', // Xử lý đơn hàng / Vận hành
+  'mkt_content': 'comms-dept',
+  'mkt_media': 'comms-dept',
+  'accountant': 'finance-dept',
+  'hr_staff': 'hr-dept'
+};
+
 const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubTab, user }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean, hrSubTab?: string, user: any }) => {
   const navigate = useNavigate();
   const currentSubTab = hrSubTab === 'interview' ? 'interview' : 'jd';
+  const [selectedDept, setSelectedDept] = useState<string>('all');
+
+  const filteredRoles = Object.entries(JD_DATA).filter(([id]) => {
+    if (selectedDept === 'all') return true;
+    return DEPT_MAPPING[id] === selectedDept;
+  });
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -588,19 +621,36 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* JD List */}
             {!restricted && (
-              <div className="lg:col-span-1 space-y-2">
-                {Object.entries(JD_DATA).map(([id, jd]) => (
-                  <button
-                    key={id}
-                    onClick={() => setSelectedRole(id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
-                      ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                      : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
-                      }`}
+              <div className="lg:col-span-1 space-y-4">
+                <div className="relative">
+                  <select
+                    value={selectedDept}
+                    onChange={(e) => setSelectedDept(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-700 appearance-none shadow-sm"
                   >
-                    <div className="text-sm">{jd.title}</div>
-                  </button>
-                ))}
+                    {FILTER_DEPTS.map(d => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
+                  </select>
+                  <Filter className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                
+                <div className="space-y-2 h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                  {filteredRoles.length > 0 ? filteredRoles.map(([id, jd]) => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedRole(id)}
+                      className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
+                        ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
+                        : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                        }`}
+                    >
+                      <div className="text-sm">{jd.title}</div>
+                    </button>
+                  )) : (
+                    <div className="text-sm text-slate-400 text-center py-4">Chưa có vị trí nào</div>
+                  )}
+                </div>
               </div>
             )}
 
