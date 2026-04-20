@@ -33,19 +33,21 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string;
   'Đạt':           { label: 'Đạt',             dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
   'Không đạt':     { label: 'Không đạt',       dot: 'bg-red-400',                badge: 'bg-red-50 text-red-700 border-red-200',         icon: <XCircle    className="w-3 h-3" /> },
   'Đã nhận việc':   { label: 'Đã nhận việc',    dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
+  'Không nhận việc':{ label: 'Không nhận việc', dot: 'bg-red-400',                badge: 'bg-red-50 text-red-700 border-red-200',         icon: <XCircle    className="w-3 h-3" /> },
   'Đã nghỉ việc':   { label: 'Đã nghỉ việc',    dot: 'bg-emerald-500',            badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="w-3 h-3" /> },
 };
 
-const ALL_STATUSES = ['Tất cả', 'Chờ phỏng vấn', 'Đang phỏng vấn', 'Đã phỏng vấn', 'Cân nhắc (Vòng 2)', 'Đạt', 'Không đạt', 'Đã nhận việc', 'Đã nghỉ việc'] as const;
+const ALL_STATUSES = ['Tất cả', 'Chờ phỏng vấn', 'Đang phỏng vấn', 'Đã phỏng vấn', 'Cân nhắc (Vòng 2)', 'Đạt', 'Không đạt', 'Đã nhận việc', 'Không nhận việc', 'Đã nghỉ việc'] as const;
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
 const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter: (status: string) => void }) => {
   const stats = useMemo(() => {
     const waiting = candidates.filter(c => c.status === 'Chờ phỏng vấn').length;
     const considering = candidates.filter(c => c.status === 'Cân nhắc (Vòng 2)').length;
-    const passed = candidates.filter(c => c.status === 'Đạt' || c.status === 'Đã nhận việc' || c.status === 'Đã nghỉ việc').length;
+    const passed = candidates.filter(c => c.status === 'Đạt' || c.status === 'Đã nhận việc' || c.status === 'Đã nghỉ việc' || c.status === 'Không nhận việc').length;
     const received = candidates.filter(c => c.status === 'Đã nhận việc').length;
     const resigned = candidates.filter(c => c.status === 'Đã nghỉ việc').length;
+    const refused = candidates.filter(c => c.status === 'Không nhận việc').length;
     const failed = candidates.filter(c => c.status === 'Không đạt').length;
 
     return {
@@ -56,13 +58,14 @@ const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter:
       considering,
       passed,
       received,
+      refused,
       resigned,
       failed,
     };
   }, [candidates]);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-3">
       {[
         { label: 'Tổng',          value: stats.total,      color: 'text-slate-700',   bg: 'bg-slate-100', filter: 'Tất cả' },
         { label: 'Chờ PV',        value: stats.waiting,    color: 'text-amber-700',   bg: 'bg-amber-50', filter: 'Chờ phỏng vấn' },
@@ -70,8 +73,9 @@ const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter:
         { label: 'Cân nhắc',      value: stats.considering,color: 'text-orange-700',  bg: 'bg-orange-50', filter: 'Cân nhắc (Vòng 2)' },
         { label: 'Đạt',           value: stats.passed,     color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đạt' },
         { label: 'Không đạt',     value: stats.failed,     color: 'text-red-700',     bg: 'bg-red-50', filter: 'Không đạt' },
-        { label: 'Đã nhận việc',  value: stats.received,   color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đã nhận việc' },
-        { label: 'Đã nghỉ việc',  value: stats.resigned,   color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đã nghỉ việc' },
+        { label: 'Nhận việc',     value: stats.received,   color: 'text-emerald-700', bg: 'bg-emerald-50', filter: 'Đã nhận việc' },
+        { label: 'Từ chối',       value: stats.refused,    color: 'text-red-700',     bg: 'bg-red-50', filter: 'Không nhận việc' },
+        { label: 'Đã nghỉ',       value: stats.resigned,   color: 'text-slate-700',   bg: 'bg-slate-50', filter: 'Đã nghỉ việc' },
       ].map(s => (
         <div 
           key={s.label} 

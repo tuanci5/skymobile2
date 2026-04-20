@@ -22,7 +22,7 @@ export interface Candidate {
   interviewDate: string;
   interviewTime?: string;
   interviewer: string;
-  status: 'Chờ phỏng vấn' | 'Đang phỏng vấn' | 'Đã phỏng vấn' | 'Cân nhắc (Vòng 2)' | 'Đạt' | 'Không đạt' | 'Đã nhận việc' | 'Đã nghỉ việc';
+  status: 'Chờ phỏng vấn' | 'Đang phỏng vấn' | 'Đã phỏng vấn' | 'Cân nhắc (Vòng 2)' | 'Đạt' | 'Không đạt' | 'Đã nhận việc' | 'Đã nghỉ việc' | 'Không nhận việc';
   cvLink?: string;
   phone?: string;
   source?: string;
