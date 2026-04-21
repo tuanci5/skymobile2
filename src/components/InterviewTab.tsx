@@ -340,6 +340,11 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       const res = await fetch('/api/evaluations');
       const apiData = await res.json();
       
+      if (apiData.error) {
+        console.warn('Server error fetching evaluations:', apiData.error);
+        return;
+      }
+
       setEvaluations(prev => {
         const now = Date.now();
         const next = { ...apiData };
@@ -379,6 +384,9 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
           }
           return filtered;
         });
+      } else if (apiData.error) {
+        setFetchError('Lỗi Server: ' + apiData.error);
+        setCandidates([]);
       } else {
         setCandidates([]);
       }

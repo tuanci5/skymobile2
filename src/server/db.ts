@@ -2,8 +2,10 @@ import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Construct the correct path to .env.local
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+// Only load dotenv in non-Vercel environments
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+}
 
 export const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
