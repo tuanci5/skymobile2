@@ -244,11 +244,20 @@ export const CandidateEvalModal: React.FC<Props> = ({
 
     try {
       if (appsScriptUrl) {
-        await fetch(appsScriptUrl, {
+        await fetch('/api/evaluations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          mode: 'no-cors',
+          body: JSON.stringify({
+            candidateId: candidate!.id,
+            scores,
+            notes,
+            totalScore,
+            strengths,
+            weaknesses,
+            decision,
+            salaryNote,
+            submittedAt: new Date().toISOString()
+          })
         });
       } else {
         await new Promise(r => setTimeout(r, 1200));

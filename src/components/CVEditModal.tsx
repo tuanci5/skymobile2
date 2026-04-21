@@ -188,27 +188,23 @@ export const CVEditModal: React.FC<Props> = ({
         console.error('Failed to save to localStorage:', e);
       }
 
-      // Optionally submit to Apps Script
-      if (appsScriptUrl) {
-        try {
-          const response = await fetch(appsScriptUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'submitCV',
-              candidateId: candidate.id,
-              candidateName: candidate.name,
-              cvData,
-            }),
-          });
+      // Save to Node API
+      try {
+        const response = await fetch('/api/cvs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidateId: candidate.id,
+            ...cvData
+          }),
+        });
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-        } catch (e) {
-          console.error('Failed to submit to Apps Script:', e);
-          // Continue anyway since we saved locally
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
+      } catch (e) {
+        console.error('Failed to submit to Backend:', e);
+        throw e;
       }
 
       setSubmitted(true);

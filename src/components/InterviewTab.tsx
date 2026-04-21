@@ -282,7 +282,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   const [search,           setSearch]           = useState('');
   const [statusFilter,     setStatusFilter]     = useState<string>('Tất cả');
   const [positionFilter,   setPositionFilter]   = useState<string>('Tất cả vị trí');
-  const [datePreset,       setDatePreset]       = useState<string>('7 ngày gần nhất');
+  const [datePreset,       setDatePreset]       = useState<string>('Tuần này');
   const [fromDate,         setFromDate]         = useState<string>('');
   const [toDate,           setToDate]           = useState<string>('');
 
@@ -336,151 +336,70 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   };
 
   const fetchEvaluations = async () => {
-    if (!appsScriptUrl && !resultSheetCsvUrl) return;
-    
     try {
-      let sheetEvals: Record<string, EvaluationData & { _localTimestamp?: number }> = {};
-      
-      // 1. ƯU TIÊN: Thử lấy dữ liệu thời gian thực từ Apps Script API (không bị cache)
-      if (appsScriptUrl) {
-        try {
-          const apiRes = await fetch(`${appsScriptUrl}?action=getEvaluations`);
-          const apiData = await apiRes.json();
-          
-          if (Array.isArray(apiData)) {
-            apiData.forEach(item => {
-              const scoresObj: any = {};
-              const notesObj: any = {};
-              item.scores.forEach((s: any, i: number) => scoresObj[`c${i+1}`] = Number(s) || 0);
-              item.notes.forEach((n: any, i: number) => notesObj[`c${i+1}`] = n || "");
-              
-              // Đảm bảo ID luôn là String để so khớp chính xác
-              const cId = String(item.candidateId);
-              sheetEvals[cId] = {
-                scores: scoresObj,
-                notes: notesObj,
-                totalScore: Number(item.totalScore) || 0,
-                strengths: item.strengths || "",
-                weaknesses: item.weaknesses || "",
-                decision: item.decision || "",
-                salaryNote: item.salaryNote || "",
-                submittedAt: item.submittedAt
-              };
-            });
-          }
-        } catch (apiErr) {
-          console.warn("Apps Script API (GET) failed, falling back to CSV", apiErr);
-        }
-      }
-
-      // 2. DỰ PHÒNG: Nếu API không trả về dữ liệu, dùng link CSV (có thể trễ 5-10p)
-      if (Object.keys(sheetEvals).length === 0 && resultSheetCsvUrl) {
-        const res = await fetch(resultSheetCsvUrl);
-        const csv = await res.text();
-        const rows = csv.trim().split('\n').slice(1);
-        
-        for (const row of rows) {
-          const cols = parseCSVRow(row);
-          const candidateId = cols[1]?.trim();
-          if (!candidateId) continue;
-
-          const scores: Record<string, number> = {};
-          for (let i = 0; i < 12; i++) scores[`c${i + 1}`] = Number(cols[10 + i]) || 0;
-          const notes: Record<string, string> = {};
-          for (let i = 0; i < 12; i++) notes[`c${i + 1}`] = cols[22 + i]?.trim() || '';
-
-          sheetEvals[candidateId] = {
-            scores, notes,
-            totalScore:  Number(cols[5]) || 0,
-            strengths:   cols[6]?.trim() || '',
-            weaknesses:  cols[7]?.trim() || '',
-            decision:    cols[8]?.trim() || '',
-            salaryNote:  cols[9]?.trim() || '',
-            submittedAt: cols[0]?.trim() || new Date().toISOString(),
-          };
-        }
-      }
+      const res = await fetch('/api/evaluations');
+      const apiData = await res.json();
       
       setEvaluations(prev => {
         const now = Date.now();
-        // Nguồn tin cậy chính là dữ liệu từ Sheet
-        const next = { ...sheetEvals };
-        
-        // Chỉ giữ lại các bản ghi cục bộ nếu chúng MỚI (dưới 1 phút) và CHƯA có trên Sheet
+        const next = { ...apiData };
         Object.keys(prev).forEach(id => {
           const item = prev[id];
-          if (item._localTimestamp && (now - item._localTimestamp < 60000) && !sheetEvals[id]) {
+          if (item._localTimestamp && (now - item._localTimestamp < 60000) && !apiData[id]) {
             next[id] = item;
           }
         });
-
         try { localStorage.setItem('sky_mobile_evaluations', JSON.stringify(next)); } catch {}
         return next;
       });
     } catch (err) { console.warn('Không thể tải đánh giá:', err); }
   };
 
+  const fetchCVData = async () => {
+    try {
+      const res = await fetch('/api/cvs');
+      const apiData = await res.json();
+      setCvData(apiData);
+      try { localStorage.setItem('sky_mobile_cv_data', JSON.stringify(apiData)); } catch {}
+    } catch (err) { console.warn('Không thể tải dữ liệu CV:', err); }
+  };
+
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      let parsed: Candidate[] = [];
-
-      // 1. ƯU TIÊN: Apps Script API (Real-time)
-      if (appsScriptUrl) {
-        try {
-          const apiRes = await fetch(`${appsScriptUrl}?action=getCandidates`);
-          const apiData = await apiRes.json();
-          if (Array.isArray(apiData)) {
-            parsed = apiData.map((c: any) => ({ ...c, id: String(c.id) }));
-          }
-        } catch (e) {
-          console.warn("Apps Script API (GET Candidates) failed", e);
-        }
-      }
-
-      // 2. DỰ PHÒNG: CSV Link
-      if (parsed.length === 0 && sheetCsvUrl) {
-        const res  = await fetch(sheetCsvUrl);
-        const csv  = await res.text();
-        const rows = csv.trim().split('\n').slice(1);
-        parsed = rows.map((row, i) => {
-          const cols = parseCSVRow(row);
-          return {
-            id:            cols[0] || String(i + 1),
-            name:          cols[1] || '',
-            position:      cols[2] || '',
-            interviewDate: cols[3] || '',
-            interviewer:   cols[4] || '',
-            status:        (cols[5] as Candidate['status']) || 'Chờ phỏng vấn',
-            cvLink:        cols[6] || undefined,
-            phone:         cols[7] || undefined,
-            source:        cols[8] || undefined,
-          };
-        });
-      }
+      const res = await fetch('/api/candidates');
+      const apiData = await res.json();
       
-      if (parsed.length > 0) {
-        setCandidates(parsed);
-        // Clear local cache if already on server
+      if (Array.isArray(apiData)) {
+        setCandidates(apiData);
         setLocalAdded(prev => {
-          const filtered = prev.filter(item => !parsed.some(c => c.id === item.data.id));
+          const filtered = prev.filter(item => !apiData.some(c => c.id === item.data.id));
           if (filtered.length !== prev.length) {
             localStorage.setItem('sky_mobile_local_added_uv', JSON.stringify(filtered));
           }
           return filtered;
         });
+      } else {
+        setCandidates([]);
       }
-    } catch { setFetchError('Không thể tải dữ liệu.'); } finally { setLoading(false); }
+    } catch (e) {
+      console.warn("Backend API (GET Candidates) failed", e);
+      setFetchError('Không thể tải dữ liệu từ server nội bộ.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { 
     fetchCandidates(); 
     fetchEvaluations();
+    fetchCVData();
 
     // Tự động lấy dữ liệu mỗi 10 phút
     const pollInterval = setInterval(() => {
       fetchCandidates();
       fetchEvaluations();
+      fetchCVData();
     }, 10 * 60 * 1000);
 
     // Dọn dẹp cache quá hạn 1 phút mỗi 30 giây
@@ -621,23 +540,17 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     });
 
     try {
-      await fetch(appsScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteCandidate', candidateId: id })
-      });
+      await fetch(`/api/candidates/${id}`, { method: 'DELETE' });
     } catch (err) { console.error(err); }
   };
 
   const updateCandidateStatus = async (candidate: Candidate, newStatus: string) => {
     setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, status: newStatus as any } : c));
     try {
-      await fetch(appsScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
+      await fetch(`/api/candidates/${candidate.id}/status`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateStatus', candidateId: candidate.id, status: newStatus })
+        body: JSON.stringify({ status: newStatus })
       });
     } catch (err) { console.error(err); }
   };
@@ -693,7 +606,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               Danh sách ứng viên phỏng vấn
             </h3>
             <p className="text-slate-500 text-sm mt-1">
-              {sheetCsvUrl ? 'Dữ liệu từ Google Sheet' : 'Dữ liệu mẫu – kết nối Google Sheet để đồng bộ'}
+              Dữ liệu lưu trữ nội bộ MySQL
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -16,6 +16,8 @@ import { saleStaffJD } from '../data/positions/sale_staff/jd';
 import { telesaleJD } from '../data/positions/telesale/jd';
 import { accountantJD } from '../data/positions/accountant/jd';
 import { hrStaffJD } from '../data/positions/hr_staff/jd';
+import { jpSupportAfterSalesJD } from '../data/positions/jp_support_after_sales/jd';
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -38,6 +40,7 @@ const POSITION_OPTIONS = [
   telesaleJD.title,
   accountantJD.title,
   hrStaffJD.title,
+  jpSupportAfterSalesJD.title
 ];
 
 export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSuccess, appsScriptUrl }) => {
@@ -76,16 +79,12 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
       };
 
       if (appsScriptUrl) {
-        // Gửi data sang Apps Script (không chờ response do no-cors)
-        fetch(appsScriptUrl, {
+        // Gửi data sang Node API
+        fetch('/api/candidates', {
           method: 'POST',
-          mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'addCandidate',
-            candidate: newCandidate,
-          }),
-        }).catch(err => console.warn('Lỗi khi gửi lên Sheet:', err));
+          body: JSON.stringify(newCandidate),
+        }).catch(err => console.warn('Lỗi khi lưu lên DB:', err));
       }
 
       // Giả lập độ trễ mạng

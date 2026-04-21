@@ -574,7 +574,8 @@ const DEPT_MAPPING: Record<string, string> = {
   'mkt_content': 'comms-dept',
   'mkt_media': 'comms-dept',
   'accountant': 'finance-dept',
-  'hr_staff': 'hr-dept'
+  'hr_staff': 'hr-dept',
+  'jp_support_after_sales': 'technical'
 };
 
 const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubTab, user }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean, hrSubTab?: string, user: any }) => {

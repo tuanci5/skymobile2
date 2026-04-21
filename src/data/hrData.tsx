@@ -16,6 +16,8 @@ import { headRole } from './positions/head/role';
 import { accountantRole } from './positions/accountant/role';
 import { hrStaffJD } from './positions/hr_staff/jd';
 import { hrStaffRole } from './positions/hr_staff/role';
+import { jpSupportAfterSalesJD } from './positions/jp_support_after_sales/jd';
+import { jpSupportAfterSalesRole } from './positions/jp_support_after_sales/role';
 // Import other roles similarly...
 
 export const JD_DATA: Record<string, JobDescription> = {
@@ -32,12 +34,14 @@ export const JD_DATA: Record<string, JobDescription> = {
   'crm': crmJD,
   'ops': opsJD,
   'accountant': accountantJD,
-  'hr_staff': hrStaffJD
+  'hr_staff': hrStaffJD,
+  'jp_support_after_sales': jpSupportAfterSalesJD
 };
 
 export const ROLES: Role[] = [
   headRole,
   accountantRole,
   hrStaffRole,
+  jpSupportAfterSalesRole,
   // Add other roles...
 ];
