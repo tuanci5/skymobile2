@@ -156,9 +156,14 @@ app.post('/api/cvs', async (req, res) => {
   }
 });
 
-// ─── START SERVER ───────────────────────────────────────────────────────────────
+// ─── EXPORT/START ──────────────────────────────────────────────────────────────
 
 const PORT = 3001;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 API Server running on http://localhost:${PORT}`);
-});
+// Chỉ chạy app.listen nếu không phải môi trường Vercel
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 API Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
