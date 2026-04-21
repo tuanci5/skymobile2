@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wifi, Router, Smartphone, Zap, Laptop, Share2, 
   Briefcase, Globe, Store, Network, Search, CheckCircle2,
-  PackageSearch
+  PackageSearch, X, Eye, Info
 } from 'lucide-react';
 import { PRODUCTS, ProductItem } from '../data/productData';
+import { SUB_PRODUCTS_DATA } from '../data/subProductsData';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   Wifi: <Wifi className="w-8 h-8" />,
@@ -60,6 +61,7 @@ const itemVariants = {
 export const ProductsTab: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterObj, setFilterObj] = useState<string>('Tất cả');
+  const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
 
   // Lấy danh sách các Mục tiêu duy nhất từ dữ liệu
   const uniqueObjectives = useMemo(() => {
@@ -155,19 +157,24 @@ export const ProductsTab: React.FC = () => {
             <motion.div
               key={product.id}
               variants={itemVariants}
-              className="group bg-white rounded-[2rem] p-1 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full"
+              onClick={() => setSelectedProduct(product)}
+              className="group bg-white rounded-[2rem] p-1 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full cursor-pointer relative"
             >
               <div className="p-6 pb-5 flex gap-4 items-start border-b border-dashed border-slate-100">
                 <div className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${gradientClass} shadow-lg flex items-center justify-center text-white transform group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
                   {ICON_MAP[product.icon] || <PackageSearch className="w-7 h-7" />}
                 </div>
-                <div>
+                <div className="flex-1 pr-6">
                   <div className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wide border ${badgeClass} mb-2`}>
                     {product.objective}
                   </div>
-                  <h3 className="text-lg font-black text-slate-800 leading-tight">
+                  <h3 className="text-lg font-black text-slate-800 leading-tight group-hover:text-blue-600 transition-colors duration-300">
                     {product.name}
                   </h3>
+                </div>
+                {/* View Icon */}
+                <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors duration-300">
+                  <Eye className="w-4 h-4" />
                 </div>
               </div>
               
@@ -197,6 +204,116 @@ export const ProductsTab: React.FC = () => {
           <p className="text-slate-500 mt-2">Vui lòng thử lại với từ khóa hoặc bộ lọc khác.</p>
         </div>
       )}
+
+      {/* ── Modal Chi tiết ── */}
+      <AnimatePresence>
+        {selectedProduct && (
+          <div className="fixed inset-0 z-50 flex justify-center p-4 sm:p-6 pb-0 flex-col overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedProduct(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm shadow-black"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="bg-white rounded-t-[2.5rem] shadow-2xl w-full max-w-5xl mx-auto h-[90vh] overflow-hidden relative z-10 flex flex-col border border-slate-200/50 mt-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 md:p-8 border-b border-slate-100 bg-white shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br ${COLOR_MAP[selectedProduct.color] || COLOR_MAP['blue']} shadow-lg flex items-center justify-center text-white`}>
+                    {ICON_MAP[selectedProduct.icon] || <PackageSearch className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black text-slate-800">{selectedProduct.name}</h2>
+                    <p className="text-slate-500 text-sm font-medium mt-1">Hệ sinh thái sản phẩm</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedProduct(null)}
+                  className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 hover:text-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="p-6 md:p-8 overflow-y-auto bg-slate-50/50 flex-1">
+                {SUB_PRODUCTS_DATA[selectedProduct.id] ? (
+                  <div className="space-y-8 pb-10">
+                    {/* Tables */}
+                    {SUB_PRODUCTS_DATA[selectedProduct.id].tables?.map((table, idx) => (
+                      <div key={idx} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div className="bg-gradient-to-r from-slate-100 to-slate-50/50 px-6 py-4 border-b border-slate-200 flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wide">{table.title}</h4>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
+                              <tr>
+                                {table.headers.map((th, i) => (
+                                  <th key={i} className="px-6 py-4 border-b border-slate-100">{th}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {table.rows.map((row, i) => (
+                                <tr key={i} className="hover:bg-blue-50/50 transition-colors">
+                                  {row.map((cell, j) => (
+                                    <td key={j} className={`px-6 py-4 ${j === 0 ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{cell}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Info Groups */}
+                    {SUB_PRODUCTS_DATA[selectedProduct.id].infoGroups && SUB_PRODUCTS_DATA[selectedProduct.id].infoGroups!.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {SUB_PRODUCTS_DATA[selectedProduct.id].infoGroups!.map((group, idx) => (
+                          <div key={idx} className="bg-white p-6 rounded-2xl border border-blue-100 bg-blue-50/30 shadow-sm relative overflow-hidden">
+                            <div className="flex items-center gap-2 mb-4 relative z-10">
+                              <Info className="w-5 h-5 text-blue-500" />
+                              <h4 className="font-bold text-slate-800">{group.groupName}</h4>
+                            </div>
+                            <ul className="space-y-3 relative z-10">
+                              {group.items.map((item, i) => (
+                                <li key={i} className="flex flex-col sm:flex-row sm:gap-3 text-sm border-b border-blue-100/50 last:border-0 pb-3 last:pb-0">
+                                  <span className="font-bold text-slate-700 shrink-0 min-w-24 mb-1 sm:mb-0">{item.label}:</span>
+                                  <span className="text-slate-600 leading-relaxed whitespace-pre-wrap">{item.value}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 flex flex-col items-center">
+                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+                      <PackageSearch className="w-10 h-10 text-slate-400" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-800 mb-2">Chưa có thông tin chi tiết</h3>
+                    <p className="text-slate-500 max-w-sm text-center leading-relaxed">
+                      Dữ liệu sản phẩm con cho danh mục này sẽ sớm được cập nhật. Vui lòng tiếp tục theo dõi.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
