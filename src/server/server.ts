@@ -29,7 +29,7 @@ app.get('/api/candidates', async (req, res) => {
     res.json(formatted);
   } catch (error) {
     console.error('Error fetching candidates:', error);
-    res.status(500).json({ error: 'Failed to fetch candidates' });
+    res.status(500).json({ error: error.message || 'Failed to fetch candidates' });
   }
 });
 
@@ -94,7 +94,7 @@ app.get('/api/evaluations', async (req, res) => {
     res.json(evaluationsData);
   } catch (error) {
     console.error('Error fetching evaluations:', error);
-    res.status(500).json({ error: 'Failed to fetch evaluations' });
+    res.status(500).json({ error: error.message || 'Failed to fetch evaluations' });
   }
 });
 
@@ -130,7 +130,7 @@ app.get('/api/cvs', async (req, res) => {
     res.json(cvDetails);
   } catch (error) {
     console.error('Error fetching CVs:', error);
-    res.status(500).json({ error: 'Failed to fetch CVs' });
+    res.status(500).json({ error: error.message || 'Failed to fetch CVs' });
   }
 });
 
