@@ -24,6 +24,7 @@ export const pool = new Pool({
 export async function initDBUtils() {
   let client;
   try {
+    console.log(`📡 DB_HOST: ${process.env.DB_HOST ? 'Configured' : 'MISSING'}`);
     console.log(`📡 Attempting to connect to PostgreSQL at ${process.env.DB_HOST}...`);
     client = await pool.connect();
     
