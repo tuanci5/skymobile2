@@ -359,7 +359,10 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/candidates`);
-      if (!res.ok) throw new Error('Failed to fetch candidates');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${res.status}`);
+      }
       const parsed: Candidate[] = await res.json();
 
       // Merge local status updates
