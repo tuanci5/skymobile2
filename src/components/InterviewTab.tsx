@@ -313,13 +313,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     } catch { return {}; }
   });
 
-  const [cvData, setCvData] = useState<Record<string, CVData>>(() => {
-    try {
-      const saved = localStorage.getItem('sky_mobile_cv_data');
-      if (!saved) return {};
-      return JSON.parse(saved);
-    } catch { return {}; }
-  });
+  const [cvData, setCvData] = useState<Record<string, CVData>>({});
 
   const parseCSVRow = (row: string): string[] => {
     const result: string[] = [];
@@ -337,62 +331,74 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
 
   const fetchEvaluations = async () => {
     try {
-      const res = await fetch('/api/evaluations');
-      const apiData = await res.json();
+      const res = await fetch(resultSheetCsvUrl);
+      const text = await res.text();
+      const rows = text.split('\n').map(parseCSVRow);
       
-      if (apiData.error) {
-        console.warn('Server error fetching evaluations:', apiData.error);
-        return;
-      }
-
-      setEvaluations(prev => {
-        const now = Date.now();
-        const next = { ...apiData };
-        Object.keys(prev).forEach(id => {
-          const item = prev[id];
-          if (item._localTimestamp && (now - item._localTimestamp < 60000) && !apiData[id]) {
-            next[id] = item;
-          }
-        });
-        try { localStorage.setItem('sky_mobile_evaluations', JSON.stringify(next)); } catch {}
-        return next;
+      const evalMap: Record<string, EvaluationData> = {};
+      // Skip header
+      rows.slice(1).forEach(row => {
+        if (row.length < 8) return;
+        const candidateId = row[0];
+        try {
+          evalMap[candidateId] = {
+            candidateId,
+            scores: JSON.parse(row[1] || '{}'),
+            notes: JSON.parse(row[2] || '{}'),
+            totalScore: parseInt(row[3] || '0'),
+            strengths: row[4],
+            weaknesses: row[5],
+            decision: row[6],
+            salaryNote: row[7],
+            submittedAt: row[8]
+          };
+        } catch(e) {}
       });
+      setEvaluations(prev => ({...prev, ...evalMap}));
     } catch (err) { console.warn('Không thể tải đánh giá:', err); }
   };
 
   const fetchCVData = async () => {
-    try {
-      const res = await fetch('/api/cvs');
-      const apiData = await res.json();
-      setCvData(apiData);
-      try { localStorage.setItem('sky_mobile_cv_data', JSON.stringify(apiData)); } catch {}
-    } catch (err) { console.warn('Không thể tải dữ liệu CV:', err); }
+    // CV data fetching not strictly required for view, but can be added if needed
+    // Usually combined or handled in CVModal
   };
 
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/candidates');
-      const apiData = await res.json();
+      const urlWithCache = `${sheetCsvUrl}&t=${Date.now()}`;
+      const res = await fetch(urlWithCache);
+      const text = await res.text();
+      const rawRows = text.split('\n').map(parseCSVRow);
       
-      if (Array.isArray(apiData)) {
-        setCandidates(apiData);
-        setLocalAdded(prev => {
-          const filtered = prev.filter(item => !apiData.some(c => c.id === item.data.id));
-          if (filtered.length !== prev.length) {
-            localStorage.setItem('sky_mobile_local_added_uv', JSON.stringify(filtered));
-          }
-          return filtered;
-        });
-      } else if (apiData.error) {
-        setFetchError('Lỗi Server: ' + apiData.error);
-        setCandidates([]);
-      } else {
-        setCandidates([]);
-      }
+      // Header: 0:id, 1:name, 2:position, 3:date, 4:interviewer, 5:status, 6:cv, 7:phone, 8:source
+      const parsed: Candidate[] = rawRows.slice(1)
+        .filter(row => row.length >= 6 && row[0])
+        .map(row => ({
+          id: row[0],
+          name: row[1],
+          position: row[2],
+          interviewDate: row[3],
+          interviewer: row[4],
+          status: row[5],
+          cvLink: row[6] || undefined,
+          phone: row[7] || '',
+          source: row[8] || ''
+        }));
+
+      setCandidates(parsed);
+      
+      // Cleanup localAdded
+      setLocalAdded(prev => {
+        const filtered = prev.filter(item => !parsed.some(c => c.id === item.data.id));
+        if (filtered.length !== prev.length) {
+          localStorage.setItem('sky_mobile_local_added_uv', JSON.stringify(filtered));
+        }
+        return filtered;
+      });
     } catch (e) {
-      console.warn("Backend API (GET Candidates) failed", e);
-      setFetchError('Không thể tải dữ liệu từ server nội bộ.');
+      console.warn("Fetch Candidates failed", e);
+      setFetchError('Không thể tải dữ liệu từ Google Sheets.');
     } finally {
       setLoading(false);
     }
@@ -548,17 +554,32 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     });
 
     try {
-      await fetch(`/api/candidates/${id}`, { method: 'DELETE' });
+      const formData = new URLSearchParams();
+      formData.append('action', 'deleteCandidate');
+      formData.append('id', id);
+
+      await fetch(appsScriptUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      });
     } catch (err) { console.error(err); }
   };
 
   const updateCandidateStatus = async (candidate: Candidate, newStatus: string) => {
     setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, status: newStatus as any } : c));
     try {
-      await fetch(`/api/candidates/${candidate.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+      const formData = new URLSearchParams();
+      formData.append('action', 'updateStatus');
+      formData.append('id', candidate.id);
+      formData.append('status', newStatus);
+
+      await fetch(appsScriptUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
       });
     } catch (err) { console.error(err); }
   };
@@ -614,7 +635,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               Danh sách ứng viên phỏng vấn
             </h3>
             <p className="text-slate-500 text-sm mt-1">
-              Dữ liệu lưu trữ nội bộ MySQL
+              Đồng bộ dữ liệu thời gian thực từ Google Sheets
             </p>
           </div>
           <div className="flex items-center gap-2">

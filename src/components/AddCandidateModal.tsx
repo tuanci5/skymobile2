@@ -79,12 +79,25 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
       };
 
       if (appsScriptUrl) {
-        // Gửi data sang Node API
-        fetch('/api/candidates', {
+        const formData = new URLSearchParams();
+        formData.append('action', 'addCandidate');
+        formData.append('id', newCandidate.id);
+        formData.append('name', newCandidate.name);
+        formData.append('phone', newCandidate.phone || '');
+        formData.append('position', newCandidate.position);
+        formData.append('source', newCandidate.source || '');
+        formData.append('cvLink', newCandidate.cvLink || '');
+        formData.append('interviewDate', newCandidate.interviewDate);
+        formData.append('interviewTime', newCandidate.interviewTime || '');
+        formData.append('interviewer', newCandidate.interviewer);
+        formData.append('status', newCandidate.status);
+
+        fetch(appsScriptUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCandidate),
-        }).catch(err => console.warn('Lỗi khi lưu lên DB:', err));
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
+        }).catch(err => console.warn('Lỗi khi lưu lên Sheet:', err));
       }
 
       // Giả lập độ trễ mạng

@@ -244,20 +244,23 @@ export const CandidateEvalModal: React.FC<Props> = ({
 
     try {
       if (appsScriptUrl) {
-        await fetch('/api/evaluations', {
+        const formData = new URLSearchParams();
+        formData.append('action', 'saveEvaluation');
+        formData.append('candidateId', candidate!.id);
+        formData.append('scores', JSON.stringify(scores));
+        formData.append('notes', JSON.stringify(notes));
+        formData.append('totalScore', totalScore.toString());
+        formData.append('strengths', strengths);
+        formData.append('weaknesses', weaknesses);
+        formData.append('decision', decision);
+        formData.append('salaryNote', salaryNote);
+        formData.append('submittedAt', new Date().toISOString());
+
+        await fetch(appsScriptUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            candidateId: candidate!.id,
-            scores,
-            notes,
-            totalScore,
-            strengths,
-            weaknesses,
-            decision,
-            salaryNote,
-            submittedAt: new Date().toISOString()
-          })
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
         });
       } else {
         await new Promise(r => setTimeout(r, 1200));

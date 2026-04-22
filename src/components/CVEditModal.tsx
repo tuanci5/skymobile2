@@ -188,22 +188,38 @@ export const CVEditModal: React.FC<Props> = ({
         console.error('Failed to save to localStorage:', e);
       }
 
-      // Save to Node API
+      // Save to Google Sheet via Apps Script
       try {
-        const response = await fetch('/api/cvs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            candidateId: candidate.id,
-            ...cvData
-          }),
-        });
+        if (appsScriptUrl) {
+          const formData = new URLSearchParams();
+          formData.append('action', 'saveCV');
+          formData.append('candidateId', candidate.id);
+          formData.append('fullName', cvData.fullName);
+          formData.append('email', cvData.email);
+          formData.append('phone', cvData.phone);
+          formData.append('dateOfBirth', cvData.dateOfBirth);
+          formData.append('address', cvData.address);
+          formData.append('education', cvData.education);
+          formData.append('experience', cvData.experience);
+          formData.append('skills', cvData.skills);
+          formData.append('certifications', cvData.certifications);
+          formData.append('languages', cvData.languages);
+          formData.append('cvLink', cvData.cvLink || '');
+          formData.append('notes', cvData.notes);
+          formData.append('interviewDate', cvData.interviewDate || '');
+          formData.append('interviewTime', cvData.interviewTime || '');
+          formData.append('interviewer', cvData.interviewer || '');
+          formData.append('submittedAt', cvData.submittedAt || '');
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          await fetch(appsScriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+          });
         }
       } catch (e) {
-        console.error('Failed to submit to Backend:', e);
+        console.error('Failed to submit to Apps Script:', e);
         throw e;
       }
 
