@@ -315,6 +315,24 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
 
   const [cvData, setCvData] = useState<Record<string, CVData>>({});
 
+  // localStatusUpdates lưu trạng thái mới nhất được chỉnh ở local (trong 5 phút)
+  // giúp tránh việc bị ghi đè bởi dữ liệu cũ từ CSV (do Google cache)
+  const [localStatusUpdates, setLocalStatusUpdates] = useState<Record<string, { status: string, timestamp: number }>>(() => {
+    try {
+      const stored = localStorage.getItem('sky_mobile_status_updates');
+      if (!stored) return {};
+      const parsed = JSON.parse(stored);
+      const now = Date.now();
+      const cleaned: any = {};
+      Object.keys(parsed).forEach(id => {
+        if (now - parsed[id].timestamp < 30000) { // 30 giây
+          cleaned[id] = parsed[id];
+        }
+      });
+      return cleaned;
+    } catch { return {}; }
+  });
+
   const parseCSVRow = (row: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -405,7 +423,16 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
           source: row[8] || ''
         }));
 
-      setCandidates(parsed);
+      // Merge local status updates
+      const merged = parsed.map(c => {
+        const local = localStatusUpdates[c.id];
+        if (local && (Date.now() - local.timestamp < 30000)) {
+          return { ...c, status: local.status as any };
+        }
+        return c;
+      });
+
+      setCandidates(merged);
       
       // Cleanup localAdded
       setLocalAdded(prev => {
@@ -452,6 +479,11 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       clearInterval(cacheCleanup);
     };
   }, []);
+
+  // Sync localStatusUpdates to localStorage
+  useEffect(() => {
+    localStorage.setItem('sky_mobile_status_updates', JSON.stringify(localStatusUpdates));
+  }, [localStatusUpdates]);
 
   const getPresetRange = (preset: string): [Date | null, Date | null] => {
     const today = new Date();
@@ -587,7 +619,15 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   };
 
   const updateCandidateStatus = async (candidate: Candidate, newStatus: string) => {
+    // 1. Cập nhật state candidates ngay lập tức để UI mượt mà
     setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, status: newStatus as any } : c));
+    
+    // 2. Lưu vào localStatusUpdates để tránh bị fetch cũ ghi đè
+    setLocalStatusUpdates(prev => ({
+      ...prev,
+      [candidate.id]: { status: newStatus, timestamp: Date.now() }
+    }));
+
     try {
       const formData = new URLSearchParams();
       formData.append('action', 'updateStatus');
