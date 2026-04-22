@@ -338,21 +338,40 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       const evalMap: Record<string, EvaluationData> = {};
       // Skip header
       rows.slice(1).forEach(row => {
-        if (row.length < 8) return;
-        const candidateId = row[0];
+        if (row.length < 10) return;
+        const candidateId = row[1]; // ID is at index 1
+        if (!candidateId) return;
+
         try {
+          // Individual scores are at index 10 to 21 (12 criteria)
+          const scores: Record<string, number> = {};
+          const critIds = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12'];
+          critIds.forEach((id, i) => {
+            scores[id] = parseInt(row[10 + i] || '0');
+          });
+
+          // Notes are likely at index 22+ (though structure may vary, we take what we can)
+          const notes: Record<string, string> = {};
+          critIds.forEach((id, i) => {
+             // In the current sheet, notes seem to follow scores or be in a specific range
+             // For now, we take from index 22 onwards if available
+             notes[id] = row[22 + i] || '';
+          });
+
           evalMap[candidateId] = {
             candidateId,
-            scores: JSON.parse(row[1] || '{}'),
-            notes: JSON.parse(row[2] || '{}'),
-            totalScore: parseInt(row[3] || '0'),
-            strengths: row[4],
-            weaknesses: row[5],
-            decision: row[6],
-            salaryNote: row[7],
-            submittedAt: row[8]
+            scores,
+            notes,
+            totalScore: parseInt(row[5] || '0'), // Total score at index 5
+            strengths: row[6],
+            weaknesses: row[7],
+            decision: row[8],
+            salaryNote: row[9],
+            submittedAt: row[0] // Timestamp at index 0
           };
-        } catch(e) {}
+        } catch(e) {
+          console.warn('Error parsing row for candidate', candidateId, e);
+        }
       });
       setEvaluations(prev => ({...prev, ...evalMap}));
     } catch (err) { console.warn('Không thể tải đánh giá:', err); }
