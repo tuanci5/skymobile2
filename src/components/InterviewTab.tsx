@@ -264,7 +264,10 @@ interface Props {
 type ModalMode = 'eval' | 'report' | 'add' | 'cv' | null;
 
 // API base URL - can be overridden by environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+// Ensure no trailing slash to avoid double slashes like //api
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resultSheetCsvUrl, user }) => {
   const [candidates,       setCandidates]       = useState<Candidate[]>([]);
@@ -378,9 +381,9 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
         }
         return filtered;
       });
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Fetch Candidates failed", e);
-      setFetchError('Không thể tải dữ liệu từ Database.');
+      setFetchError(`Không thể tải dữ liệu từ Database: ${e.message || 'Lỗi kết nối'}`);
     } finally {
       setLoading(false);
     }

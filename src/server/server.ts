@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { pool, initDBUtils } from './db.js';
+import { pool, initDBUtils } from './db';
 
 const app = express();
 app.use(cors());
@@ -13,9 +13,8 @@ initDBUtils().catch(console.error);
 
 app.get('/api/candidates', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
-    // Bỏ created_at qua một bên phục vụ React Type matching
-    const formatted = (rows as any[]).map(row => ({
+    const { rows } = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
+    const formatted = rows.map(row => ({
       id: row.id,
       name: row.name,
       position: row.position,
@@ -39,7 +38,7 @@ app.post('/api/candidates', async (req, res) => {
     
     await pool.query(
       `INSERT INTO candidates (id, name, position, interview_date, interviewer, status, cv_link, phone, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [id, name, position, interviewDate, interviewer, status, cvLink, phone, source]
     );
     res.json({ success: true, message: 'Candidate added' });
@@ -54,7 +53,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    await pool.query('UPDATE candidates SET status = ? WHERE id = ?', [status, id]);
+    await pool.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id]);
     res.json({ success: true, message: 'Status updated' });
   } catch (error) {
     console.error('Error updating status:', error);
@@ -65,7 +64,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
 app.delete('/api/candidates/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM candidates WHERE id = ?', [id]);
+    await pool.query('DELETE FROM candidates WHERE id = $1', [id]);
     res.json({ success: true, message: 'Candidate deleted' });
   } catch (error) {
     console.error('Error deleting candidate:', error);
@@ -77,18 +76,18 @@ app.delete('/api/candidates/:id', async (req, res) => {
 
 app.get('/api/evaluations', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM evaluations');
+    const { rows } = await pool.query('SELECT * FROM evaluations');
     const evaluationsData: any = {};
-    (rows as any[]).forEach(row => {
-      evaluationsData[row.candidateId] = {
-        scores: typeof row.scores === 'string' ? JSON.parse(row.scores) : row.scores,
-        notes: typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes,
-        totalScore: row.totalScore,
+    rows.forEach(row => {
+      evaluationsData[row.candidate_id] = {
+        scores: row.scores,
+        notes: row.notes,
+        totalScore: row.total_score,
         strengths: row.strengths,
         weaknesses: row.weaknesses,
         decision: row.decision,
-        salaryNote: row.salaryNote,
-        submittedAt: row.submittedAt
+        salaryNote: row.salary_note,
+        submittedAt: row.submitted_at
       };
     });
     res.json(evaluationsData);
@@ -103,12 +102,12 @@ app.post('/api/evaluations', async (req, res) => {
     const { candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt } = req.body;
     
     await pool.query(
-      `INSERT INTO evaluations (candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-       scores = VALUES(scores), notes = VALUES(notes), totalScore = VALUES(totalScore),
-       strengths = VALUES(strengths), weaknesses = VALUES(weaknesses), decision = VALUES(decision),
-       salaryNote = VALUES(salaryNote), submittedAt = VALUES(submittedAt)`,
+      `INSERT INTO evaluations (candidate_id, scores, notes, total_score, strengths, weaknesses, decision, salary_note, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (candidate_id) DO UPDATE SET
+       scores = EXCLUDED.scores, notes = EXCLUDED.notes, total_score = EXCLUDED.total_score,
+       strengths = EXCLUDED.strengths, weaknesses = EXCLUDED.weaknesses, decision = EXCLUDED.decision,
+       salary_note = EXCLUDED.salary_note, submitted_at = EXCLUDED.submitted_at`,
       [candidateId, JSON.stringify(scores), JSON.stringify(notes), totalScore, strengths, weaknesses, decision, salaryNote, submittedAt]
     );
     res.json({ success: true, message: 'Evaluation saved' });
@@ -122,10 +121,28 @@ app.post('/api/evaluations', async (req, res) => {
 
 app.get('/api/cvs', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM cv_data');
+    const { rows } = await pool.query('SELECT * FROM cv_data');
     const cvDetails: any = {};
-    (rows as any[]).forEach(row => {
-      cvDetails[row.candidateId] = row;
+    rows.forEach(row => {
+      cvDetails[row.candidate_id] = {
+        candidateId: row.candidate_id,
+        fullName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        dateOfBirth: row.date_of_birth,
+        address: row.address,
+        education: row.education,
+        experience: row.experience,
+        skills: row.skills,
+        certifications: row.certifications,
+        languages: row.languages,
+        cvLink: row.cv_link,
+        notes: row.notes,
+        interviewDate: row.interview_date,
+        interviewTime: row.interview_time,
+        interviewer: row.interviewer,
+        submittedAt: row.submitted_at
+      };
     });
     res.json(cvDetails);
   } catch (error) {
@@ -139,14 +156,14 @@ app.post('/api/cvs', async (req, res) => {
     const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt } = req.body;
     
     await pool.query(
-      `INSERT INTO cv_data (candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-       fullName = VALUES(fullName), email = VALUES(email), phone = VALUES(phone), dateOfBirth = VALUES(dateOfBirth),
-       address = VALUES(address), education = VALUES(education), experience = VALUES(experience), skills = VALUES(skills),
-       certifications = VALUES(certifications), languages = VALUES(languages), cvLink = VALUES(cvLink), notes = VALUES(notes),
-       interviewDate = VALUES(interviewDate), interviewTime = VALUES(interviewTime), interviewer = VALUES(interviewer),
-       submittedAt = VALUES(submittedAt)`,
+      `INSERT INTO cv_data (candidate_id, full_name, email, phone, date_of_birth, address, education, experience, skills, certifications, languages, cv_link, notes, interview_date, interview_time, interviewer, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       ON CONFLICT (candidate_id) DO UPDATE SET
+       full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone = EXCLUDED.phone, date_of_birth = EXCLUDED.date_of_birth,
+       address = EXCLUDED.address, education = EXCLUDED.education, experience = EXCLUDED.experience, skills = EXCLUDED.skills,
+       certifications = EXCLUDED.certifications, languages = EXCLUDED.languages, cv_link = EXCLUDED.cv_link, notes = EXCLUDED.notes,
+       interview_date = EXCLUDED.interview_date, interview_time = EXCLUDED.interview_time, interviewer = EXCLUDED.interviewer,
+       submitted_at = EXCLUDED.submitted_at`,
       [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt]
     );
     res.json({ success: true, message: 'CV saved' });

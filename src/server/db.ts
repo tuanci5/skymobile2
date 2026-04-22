@@ -1,32 +1,34 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
+
+const { Pool } = pg;
 
 // Only load dotenv in non-Vercel environments
 if (!process.env.VERCEL) {
   dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 }
 
-export const pool = mysql.createPool({
+export const pool = new Pool({
   host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3306'),
+  port: parseInt(process.env.DB_PORT || '5432'),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  connectTimeout: 10000 // 10 seconds timeout
+  ssl: process.env.DB_HOST?.includes('supabase') ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 export async function initDBUtils() {
-  let connection;
+  let client;
   try {
-    console.log(`📡 Attempting to connect to database at ${process.env.DB_HOST}...`);
-    connection = await pool.getConnection();
+    console.log(`📡 Attempting to connect to PostgreSQL at ${process.env.DB_HOST}...`);
+    client = await pool.connect();
     
     // Ensure candidates table exists
-    await connection.execute(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS candidates (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255),
@@ -41,52 +43,48 @@ export async function initDBUtils() {
       )
     `);
 
-    // ... (rest of the table creation)
-    await connection.execute(`
+    // Ensure evaluations table exists
+    await client.query(`
       CREATE TABLE IF NOT EXISTS evaluations (
-        candidateId VARCHAR(50) PRIMARY KEY,
-        scores JSON,
-        notes JSON,
-        totalScore INT,
+        candidate_id VARCHAR(50) PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+        scores JSONB,
+        notes JSONB,
+        total_score INT,
         strengths TEXT,
         weaknesses TEXT,
         decision VARCHAR(50),
-        salaryNote TEXT,
-        submittedAt VARCHAR(100),
-        FOREIGN KEY (candidateId) REFERENCES candidates(id) ON DELETE CASCADE
+        salary_note TEXT,
+        submitted_at VARCHAR(100)
       )
     `);
 
-    await connection.execute(`
+    // Ensure cv_data table exists
+    await client.query(`
       CREATE TABLE IF NOT EXISTS cv_data (
-        candidateId VARCHAR(50) PRIMARY KEY,
-        fullName VARCHAR(255),
+        candidate_id VARCHAR(50) PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+        full_name VARCHAR(255),
         email VARCHAR(255),
         phone VARCHAR(50),
-        dateOfBirth VARCHAR(50),
+        date_of_birth VARCHAR(50),
         address TEXT,
         education TEXT,
         experience TEXT,
         skills TEXT,
         certifications TEXT,
         languages TEXT,
-        cvLink TEXT,
+        cv_link TEXT,
         notes TEXT,
-        interviewDate VARCHAR(50),
-        interviewTime VARCHAR(50),
+        interview_date VARCHAR(50),
+        interview_time VARCHAR(50),
         interviewer VARCHAR(255),
-        submittedAt VARCHAR(100),
-        FOREIGN KEY (candidateId) REFERENCES candidates(id) ON DELETE CASCADE
+        submitted_at VARCHAR(100)
       )
     `);
 
-    console.log('✅ Database schema verified.');
+    console.log('✅ PostgreSQL schema verified.');
   } catch (err) {
     console.error('❌ Database Initialization Failed:', err.message);
-    if (err.code === 'ETIMEDOUT') {
-      console.error('👉 Tip: Check your server firewall and ensure port 3306 is open.');
-    }
   } finally {
-    if (connection) connection.release();
+    if (client) client.release();
   }
 }
