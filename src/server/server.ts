@@ -6,8 +6,21 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Init DB Schema
-initDBUtils().catch(err => console.error('💥 DB Init Error:', err));
+// Database initialization state
+let isDbInitialized = false;
+const dbInitPromise = initDBUtils().then(() => { isDbInitialized = true; });
+
+// Middleware to ensure DB is initialized
+app.use(async (req, res, next) => {
+  if (!isDbInitialized) {
+    try {
+      await dbInitPromise;
+    } catch (err) {
+      return res.status(500).json({ error: 'Database initialization failed', details: err.message });
+    }
+  }
+  next();
+});
 
 // ─── DEBUG API ────────────────────────────────────────────────────────────────
 app.get('/api/debug', (req, res) => {
