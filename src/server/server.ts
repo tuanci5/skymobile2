@@ -7,7 +7,23 @@ app.use(cors());
 app.use(express.json());
 
 // Init DB Schema
-initDBUtils().catch(console.error);
+initDBUtils().catch(err => console.error('💥 DB Init Error:', err));
+
+// ─── DEBUG API ────────────────────────────────────────────────────────────────
+app.get('/api/debug', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    env: {
+      has_host: !!process.env.DB_HOST,
+      has_user: !!process.env.DB_USER,
+      has_pass: !!process.env.DB_PASSWORD,
+      has_db: !!process.env.DB_NAME,
+      node_env: process.env.NODE_ENV,
+      vercel: !!process.env.VERCEL
+    }
+  });
+});
 
 // ─── CANDIDATES API ─────────────────────────────────────────────────────────────
 
