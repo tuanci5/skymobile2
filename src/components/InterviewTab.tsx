@@ -263,6 +263,9 @@ interface Props {
 
 type ModalMode = 'eval' | 'report' | 'add' | 'cv' | null;
 
+// API base URL - can be overridden by environment variable
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resultSheetCsvUrl, user }) => {
   const [candidates,       setCandidates]       = useState<Candidate[]>([]);
   
@@ -333,66 +336,15 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     } catch { return {}; }
   });
 
-  const parseCSVRow = (row: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < row.length; i++) {
-      const ch = row[i];
-      if (ch === '"') { inQuotes = !inQuotes; }
-      else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-      else { current += ch; }
-    }
-    result.push(current.trim());
-    return result;
-  };
-
   const fetchEvaluations = async () => {
     try {
-      const res = await fetch(resultSheetCsvUrl);
-      const text = await res.text();
-      const rows = text.split('\n').map(parseCSVRow);
-      
-      const evalMap: Record<string, EvaluationData> = {};
-      // Skip header
-      rows.slice(1).forEach(row => {
-        if (row.length < 10) return;
-        const candidateId = row[1]; // ID is at index 1
-        if (!candidateId) return;
-
-        try {
-          // Individual scores are at index 10 to 21 (12 criteria)
-          const scores: Record<string, number> = {};
-          const critIds = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12'];
-          critIds.forEach((id, i) => {
-            scores[id] = parseInt(row[10 + i] || '0');
-          });
-
-          // Notes are likely at index 22+ (though structure may vary, we take what we can)
-          const notes: Record<string, string> = {};
-          critIds.forEach((id, i) => {
-             // In the current sheet, notes seem to follow scores or be in a specific range
-             // For now, we take from index 22 onwards if available
-             notes[id] = row[22 + i] || '';
-          });
-
-          evalMap[candidateId] = {
-            candidateId,
-            scores,
-            notes,
-            totalScore: parseInt(row[5] || '0'), // Total score at index 5
-            strengths: row[6],
-            weaknesses: row[7],
-            decision: row[8],
-            salaryNote: row[9],
-            submittedAt: row[0] // Timestamp at index 0
-          };
-        } catch(e) {
-          console.warn('Error parsing row for candidate', candidateId, e);
-        }
-      });
+      const res = await fetch(`${API_BASE_URL}/api/evaluations`);
+      if (!res.ok) throw new Error('Failed to fetch evaluations');
+      const evalMap = await res.json();
       setEvaluations(prev => ({...prev, ...evalMap}));
-    } catch (err) { console.warn('Không thể tải đánh giá:', err); }
+    } catch (err) { 
+      console.warn('Không thể tải đánh giá từ database:', err); 
+    }
   };
 
   const fetchCVData = async () => {
@@ -403,25 +355,9 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      const urlWithCache = `${sheetCsvUrl}&t=${Date.now()}`;
-      const res = await fetch(urlWithCache);
-      const text = await res.text();
-      const rawRows = text.split('\n').map(parseCSVRow);
-      
-      // Header: 0:id, 1:name, 2:position, 3:date, 4:interviewer, 5:status, 6:cv, 7:phone, 8:source
-      const parsed: Candidate[] = rawRows.slice(1)
-        .filter(row => row.length >= 6 && row[0])
-        .map(row => ({
-          id: row[0],
-          name: row[1],
-          position: row[2],
-          interviewDate: row[3],
-          interviewer: row[4],
-          status: row[5],
-          cvLink: row[6] || undefined,
-          phone: row[7] || '',
-          source: row[8] || ''
-        }));
+      const res = await fetch(`${API_BASE_URL}/api/candidates`);
+      if (!res.ok) throw new Error('Failed to fetch candidates');
+      const parsed: Candidate[] = await res.json();
 
       // Merge local status updates
       const merged = parsed.map(c => {
@@ -444,7 +380,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       });
     } catch (e) {
       console.warn("Fetch Candidates failed", e);
-      setFetchError('Không thể tải dữ liệu từ Google Sheets.');
+      setFetchError('Không thể tải dữ liệu từ Database.');
     } finally {
       setLoading(false);
     }
@@ -605,17 +541,17 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     });
 
     try {
-      const formData = new URLSearchParams();
-      formData.append('action', 'deleteCandidate');
-      formData.append('id', id);
-
-      await fetch(appsScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
+      const res = await fetch(`${API_BASE_URL}/api/candidates/${id}`, {
+        method: 'DELETE'
       });
-    } catch (err) { console.error(err); }
+      if (!res.ok) {
+        throw new Error('Failed to delete candidate');
+      }
+    } catch (err) { 
+      console.error('Error deleting candidate:', err); 
+      // Reload candidates if delete failed
+      await fetchCandidates();
+    }
   };
 
   const updateCandidateStatus = async (candidate: Candidate, newStatus: string) => {
@@ -629,18 +565,20 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     }));
 
     try {
-      const formData = new URLSearchParams();
-      formData.append('action', 'updateStatus');
-      formData.append('id', candidate.id);
-      formData.append('status', newStatus);
-
-      await fetch(appsScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
+      const res = await fetch(`${API_BASE_URL}/api/candidates/${candidate.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
       });
-    } catch (err) { console.error(err); }
+      
+      if (!res.ok) {
+        throw new Error('Failed to update status');
+      }
+    } catch (err) { 
+      console.error('Error updating status:', err);
+      // Reload candidates if update failed
+      await fetchCandidates();
+    }
   };
 
   const handleSubmitSuccess = (id: string, evalData: EvaluationData) => {
@@ -694,7 +632,7 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
               Danh sách ứng viên phỏng vấn
             </h3>
             <p className="text-slate-500 text-sm mt-1">
-              Đồng bộ dữ liệu thời gian thực từ Google Sheets
+              Đồng bộ dữ liệu thời gian thực từ Database
             </p>
           </div>
           <div className="flex items-center gap-2">

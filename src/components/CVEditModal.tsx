@@ -29,8 +29,10 @@ interface Props {
   onClose: () => void;
   initialCVData?: CVData;
   onSubmitSuccess: (candidateId: string, cvData: CVData) => void;
-  appsScriptUrl?: string;
+  appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -188,38 +190,22 @@ export const CVEditModal: React.FC<Props> = ({
         console.error('Failed to save to localStorage:', e);
       }
 
-      // Save to Google Sheet via Apps Script
+      // Save to database via API
       try {
-        if (appsScriptUrl) {
-          const formData = new URLSearchParams();
-          formData.append('action', 'saveCV');
-          formData.append('candidateId', candidate.id);
-          formData.append('fullName', cvData.fullName);
-          formData.append('email', cvData.email);
-          formData.append('phone', cvData.phone);
-          formData.append('dateOfBirth', cvData.dateOfBirth);
-          formData.append('address', cvData.address);
-          formData.append('education', cvData.education);
-          formData.append('experience', cvData.experience);
-          formData.append('skills', cvData.skills);
-          formData.append('certifications', cvData.certifications);
-          formData.append('languages', cvData.languages);
-          formData.append('cvLink', cvData.cvLink || '');
-          formData.append('notes', cvData.notes);
-          formData.append('interviewDate', cvData.interviewDate || '');
-          formData.append('interviewTime', cvData.interviewTime || '');
-          formData.append('interviewer', cvData.interviewer || '');
-          formData.append('submittedAt', cvData.submittedAt || '');
+        const res = await fetch(`${API_BASE_URL}/api/cvs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidateId: candidate.id,
+            ...cvData
+          })
+        });
 
-          await fetch(appsScriptUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData.toString()
-          });
+        if (!res.ok) {
+          throw new Error('Failed to save CV to database');
         }
       } catch (e) {
-        console.error('Failed to submit to Apps Script:', e);
+        console.error('Failed to submit to database:', e);
         throw e;
       }
 

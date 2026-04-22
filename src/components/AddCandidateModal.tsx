@@ -22,8 +22,10 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSubmitSuccess: (candidate: Candidate) => void;
-  appsScriptUrl?: string; // Tích hợp gửi data về Google Sheet
+  appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 const POSITION_OPTIONS = [
   headJD.title,
@@ -78,26 +80,15 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
         status: 'Chờ phỏng vấn',
       };
 
-      if (appsScriptUrl) {
-        const formData = new URLSearchParams();
-        formData.append('action', 'addCandidate');
-        formData.append('id', newCandidate.id);
-        formData.append('name', newCandidate.name);
-        formData.append('phone', newCandidate.phone || '');
-        formData.append('position', newCandidate.position);
-        formData.append('source', newCandidate.source || '');
-        formData.append('cvLink', newCandidate.cvLink || '');
-        formData.append('interviewDate', newCandidate.interviewDate);
-        formData.append('interviewTime', newCandidate.interviewTime || '');
-        formData.append('interviewer', newCandidate.interviewer);
-        formData.append('status', newCandidate.status);
+      // Save to database via API
+      const res = await fetch(`${API_BASE_URL}/api/candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCandidate)
+      });
 
-        fetch(appsScriptUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData.toString()
-        }).catch(err => console.warn('Lỗi khi lưu lên Sheet:', err));
+      if (!res.ok) {
+        throw new Error('Failed to add candidate to database');
       }
 
       // Giả lập độ trễ mạng

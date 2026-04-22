@@ -113,9 +113,11 @@ interface Props {
     totalScore: number;
     submittedAt: string;
   }) => void;
-  /** Google Apps Script Web App URL — để trống nếu chưa có */
+  /** Database API URL - Optional */
   appsScriptUrl?: string;
 }
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const CandidateEvalModal: React.FC<Props> = ({
   candidate,
@@ -243,29 +245,27 @@ export const CandidateEvalModal: React.FC<Props> = ({
     };
 
     try {
-      if (appsScriptUrl) {
-        const formData = new URLSearchParams();
-        formData.append('action', 'saveEvaluation');
-        formData.append('candidateId', candidate!.id);
-        formData.append('scores', JSON.stringify(scores));
-        formData.append('notes', JSON.stringify(notes));
-        formData.append('totalScore', totalScore.toString());
-        formData.append('strengths', strengths);
-        formData.append('weaknesses', weaknesses);
-        formData.append('decision', decision);
-        formData.append('salaryNote', salaryNote);
-        formData.append('submittedAt', new Date().toISOString());
+      // Save to database via API
+      const res = await fetch(`${API_BASE_URL}/api/evaluations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId: candidate!.id,
+          scores,
+          notes,
+          totalScore,
+          strengths,
+          weaknesses,
+          decision,
+          salaryNote,
+          submittedAt: new Date().toISOString()
+        })
+      });
 
-        await fetch(appsScriptUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData.toString()
-        });
-      } else {
-        await new Promise(r => setTimeout(r, 1200));
-        console.log('[MOCK] Evaluation payload:', payload);
+      if (!res.ok) {
+        throw new Error('Failed to save evaluation to database');
       }
+
       const finalEvalData = {
         scores, notes, strengths, weaknesses, decision, salaryNote,
         totalScore,
