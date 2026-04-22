@@ -15,12 +15,16 @@ export const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 10000 // 10 seconds timeout
 });
 
 export async function initDBUtils() {
-  const connection = await pool.getConnection();
+  let connection;
   try {
+    console.log(`📡 Attempting to connect to database at ${process.env.DB_HOST}...`);
+    connection = await pool.getConnection();
+    
     // Ensure candidates table exists
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS candidates (
@@ -37,7 +41,7 @@ export async function initDBUtils() {
       )
     `);
 
-    // Ensure evaluations table exists
+    // ... (rest of the table creation)
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS evaluations (
         candidateId VARCHAR(50) PRIMARY KEY,
@@ -53,7 +57,6 @@ export async function initDBUtils() {
       )
     `);
 
-    // Ensure cv_data table exists
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS cv_data (
         candidateId VARCHAR(50) PRIMARY KEY,
@@ -78,7 +81,12 @@ export async function initDBUtils() {
     `);
 
     console.log('✅ Database schema verified.');
+  } catch (err) {
+    console.error('❌ Database Initialization Failed:', err.message);
+    if (err.code === 'ETIMEDOUT') {
+      console.error('👉 Tip: Check your server firewall and ensure port 3306 is open.');
+    }
   } finally {
-    connection.release();
+    if (connection) connection.release();
   }
 }
