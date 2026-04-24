@@ -103,7 +103,7 @@ const CandidateCard: React.FC<{
 }> = ({
   candidate, onEvaluate, onViewReport, evalData, onStatusChange, onDelete, user, onEditCV,
 }) => {
-  const statusCfg   = STATUS_CONFIG[candidate.status];
+  const statusCfg   = (STATUS_CONFIG as any)[candidate.status] || STATUS_CONFIG['Chờ phỏng vấn'];
   const hasEvalData = !!evalData;
 
   const isAdmin = user?.role === 'Quản trị';
@@ -164,10 +164,9 @@ const CandidateCard: React.FC<{
               {new Date(candidate.interviewDate).toLocaleDateString('vi-VN', {
                 day: '2-digit',
                 month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              }).replace(',', '')}
+                year: 'numeric'
+              })}
+              {candidate.interviewTime && ` - ${candidate.interviewTime}`}
             </span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
@@ -319,7 +318,12 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     } catch { return {}; }
   });
 
-  const [cvData, setCvData] = useState<Record<string, CVData>>({});
+  const [cvData, setCvData] = useState<Record<string, CVData>>(() => {
+    try {
+      const saved = localStorage.getItem('sky_mobile_cv_data');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
 
   // localStatusUpdates lưu trạng thái mới nhất được chỉnh ở local (trong 5 phút)
   // giúp tránh việc bị ghi đè bởi dữ liệu cũ từ CSV (do Google cache)
@@ -351,8 +355,18 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
   };
 
   const fetchCVData = async () => {
-    // CV data fetching not strictly required for view, but can be added if needed
-    // Usually combined or handled in CVModal
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/cvs`);
+      if (!res.ok) throw new Error('Failed to fetch CVs');
+      const data = await res.json();
+      setCvData(prev => {
+        const updated = { ...prev, ...data };
+        try { localStorage.setItem('sky_mobile_cv_data', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+    } catch (err) {
+      console.warn('Không thể tải dữ liệu CV:', err);
+    }
   };
 
   const fetchCandidates = async () => {
@@ -623,6 +637,9 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
       try { localStorage.setItem('sky_mobile_cv_data', JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Refresh data from server to ensure everything is in sync
+    fetchCandidates();
+    fetchCVData();
     closeModal();
   };
 

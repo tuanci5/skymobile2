@@ -45,9 +45,15 @@ import {
   Rocket,
   ArrowLeft,
   ArrowUp,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LECTURE_CULTURE_ATTITUDE } from './data/lecture_culture_attitude';
+import { LECTURE_RESPONSIBILITY } from './data/lecture_responsibility';
+import { LECTURE_PROFESSIONAL_CONDUCT } from './data/lecture_professional_conduct';
+import { LectureViewer } from './components/LectureViewer';
 import { JobDescription, Role, ProcessStep } from './types';
 import { JD_DATA, ROLES } from './data/hrData';
 import { PROCESS_STEPS, DEPARTMENTS } from './data/modelData';
@@ -1169,6 +1175,16 @@ const CostTab = () => {
 
 const TrainingTab = () => {
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [selectedLecture, setSelectedLecture] = useState<any | null>(null);
+
+  if (selectedLecture) {
+    return (
+      <LectureViewer 
+        lecture={selectedLecture} 
+        onBack={() => setSelectedLecture(null)} 
+      />
+    );
+  }
 
   if (selectedCourse) {
     const data = ONBOARDING_CONTENT[selectedCourse];
@@ -1240,19 +1256,45 @@ const TrainingTab = () => {
               <ul className="space-y-3 flex-1">
                 {group.courses.map((course, idx) => {
                   const hasContent = !!ONBOARDING_CONTENT[course];
+                  
+                  // Mapping specific courses to their detailed lectures
+                  const lectureMap: Record<string, any> = {
+                    'Tư duy trách nhiệm: Không đổ lỗi, không né việc': LECTURE_RESPONSIBILITY,
+                    'Văn hóa & Thái độ': LECTURE_CULTURE_ATTITUDE,
+                    'Tác phong làm việc chuyên nghiệp, có checklist': LECTURE_PROFESSIONAL_CONDUCT,
+                  };
+                  
+                  const specificLecture = lectureMap[course];
+                  const isCultureGroup = group.id === 'E';
+
                   return (
                     <li
                       key={idx}
-                      onClick={() => hasContent && setSelectedCourse(course)}
-                      className={`flex items-start gap-3 text-sm font-medium transition-all ${hasContent
+                      onClick={() => {
+                        if (specificLecture) {
+                          setSelectedLecture(specificLecture);
+                        } else if (isCultureGroup) {
+                          setSelectedLecture(LECTURE_CULTURE_ATTITUDE);
+                        } else if (hasContent) {
+                          setSelectedCourse(course);
+                        }
+                      }}
+                      className={`flex items-start gap-3 text-sm font-medium transition-all ${
+                        (hasContent || isCultureGroup)
                           ? 'text-indigo-600 cursor-pointer hover:translate-x-1 hover:text-indigo-800'
                           : 'text-slate-700'
-                        }`}
+                      }`}
                     >
-                      <div className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${hasContent ? 'bg-indigo-400 animate-pulse' : 'bg-blue-400'}`} />
+                      <div className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${
+                        (hasContent || isCultureGroup) ? 'bg-indigo-400 animate-pulse' : 'bg-blue-400'
+                      }`} />
                       <span className="leading-snug underline-offset-4 hover:underline decoration-indigo-300">
                         {course}
-                        {hasContent && <span className="ml-2 text-[10px] bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-500 font-bold uppercase tracking-wider">Xem ngay</span>}
+                        {(hasContent || isCultureGroup) && (
+                          <span className="ml-2 text-[10px] bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-500 font-bold uppercase tracking-wider">
+                            Xem ngay
+                          </span>
+                        )}
                       </span>
                     </li>
                   );

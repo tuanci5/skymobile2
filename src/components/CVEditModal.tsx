@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Loader2, Calendar, Mail, Phone, BookOpen, Briefcase, Code, AlertCircle, CheckCircle, Award, FileText, User, MessageSquare, Clock } from 'lucide-react';
+import { X, Save, Loader2, Calendar, Mail, Phone, BookOpen, Briefcase, Code, AlertCircle, CheckCircle, Award, FileText, User, MessageSquare, Clock, Plus, Trash2, History } from 'lucide-react';
 import { Candidate } from './CandidateEvalModal';
+
+import { crmJD } from '../data/positions/crm/jd';
+import { cskhLeadJD } from '../data/positions/cskh_lead/jd';
+import { cskhStaffJD } from '../data/positions/cskh_staff/jd';
+import { headJD } from '../data/positions/head/jd';
+import { mktAdsJD } from '../data/positions/mkt_ads/jd';
+import { mktContentJD } from '../data/positions/mkt_content/jd';
+import { mktLeadJD } from '../data/positions/mkt_lead/jd';
+import { mktMediaJD } from '../data/positions/mkt_media/jd';
+import { opsJD } from '../data/positions/ops/jd';
+import { saleLeadJD } from '../data/positions/sale_lead/jd';
+import { saleStaffJD } from '../data/positions/sale_staff/jd';
+import { telesaleJD } from '../data/positions/telesale/jd';
+import { accountantJD } from '../data/positions/accountant/jd';
+import { hrStaffJD } from '../data/positions/hr_staff/jd';
+import { jpSupportAfterSalesJD } from '../data/positions/jp_support_after_sales/jd';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,8 +37,29 @@ export interface CVData {
   interviewDate?: string;
   interviewTime?: string;
   interviewer?: string;
+  position?: string;
+  status?: string;
+  hrNotes?: Array<{ id: string; date: string; content: string }>;
   submittedAt?: string;
 }
+
+const POSITION_OPTIONS = [
+  headJD.title,
+  cskhLeadJD.title,
+  mktLeadJD.title,
+  saleLeadJD.title,
+  crmJD.title,
+  cskhStaffJD.title,
+  mktAdsJD.title,
+  mktContentJD.title,
+  mktMediaJD.title,
+  opsJD.title,
+  saleStaffJD.title,
+  telesaleJD.title,
+  accountantJD.title,
+  hrStaffJD.title,
+  jpSupportAfterSalesJD.title
+];
 
 interface Props {
   candidate: Candidate | null;
@@ -32,7 +69,8 @@ interface Props {
   appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -61,6 +99,21 @@ export const CVEditModal: React.FC<Props> = ({
   const [interviewDate, setInterviewDate] = useState('');
   const [interviewTime, setInterviewTime] = useState('');
   const [interviewer, setInterviewer] = useState('');
+  const [position, setPosition] = useState('');
+  const [status, setStatus] = useState('');
+  const [hrNotes, setHrNotes] = useState<Array<{ id: string; date: string; content: string }>>([]);
+
+  const STATUS_OPTIONS = [
+    'Chờ phỏng vấn',
+    'Đang phỏng vấn',
+    'Đã phỏng vấn',
+    'Cân nhắc (Vòng 2)',
+    'Đạt',
+    'Không đạt',
+    'Đã nhận việc',
+    'Đã nghỉ việc',
+    'Không nhận việc'
+  ];
 
   // UI state
   const [error, setError] = useState('');
@@ -70,10 +123,23 @@ export const CVEditModal: React.FC<Props> = ({
 
   // Load initial CV data
   useEffect(() => {
-    if (initialCVData) {
-      setFullName(initialCVData.fullName || '');
+    console.log('CVEditModal - Loading initial data:', { 
+      candidateId: candidate?.id, 
+      candidateName: candidate?.name,
+      candidatePos: candidate?.position,
+      hasInitialCVData: !!initialCVData,
+      initialCVDataKeys: initialCVData ? Object.keys(initialCVData) : []
+    });
+    const fallbackPos = candidate?.position || '';
+    const fallbackCv = candidate?.cvLink || '';
+    const fallbackDate = candidate?.interviewDate || '';
+    const fallbackTime = candidate?.interviewTime || '';
+    const fallbackInterviewer = candidate?.interviewer || '';
+
+    if (initialCVData && (initialCVData.fullName || initialCVData.position || initialCVData.cvLink)) {
+      setFullName(initialCVData.fullName || candidate?.name || '');
       setEmail(initialCVData.email || '');
-      setPhone(initialCVData.phone || '');
+      setPhone(initialCVData.phone || candidate?.phone || '');
       setDateOfBirth(initialCVData.dateOfBirth || '');
       setAddress(initialCVData.address || '');
       setEducation(initialCVData.education || '');
@@ -81,11 +147,25 @@ export const CVEditModal: React.FC<Props> = ({
       setSkills(initialCVData.skills || '');
       setCertifications(initialCVData.certifications || '');
       setLanguages(initialCVData.languages || '');
-      setCvLink(initialCVData.cvLink || '');
+      setCvLink((initialCVData.cvLink || fallbackCv || '').trim());
       setNotes(initialCVData.notes || '');
-      setInterviewDate(initialCVData.interviewDate || '');
-      setInterviewTime(initialCVData.interviewTime || '');
-      setInterviewer(initialCVData.interviewer || '');
+      setInterviewDate(initialCVData.interviewDate || fallbackDate || '');
+      setInterviewTime(initialCVData.interviewTime || fallbackTime || '');
+      setInterviewer(initialCVData.interviewer || fallbackInterviewer || '');
+      setPosition((initialCVData.position || fallbackPos || '').trim());
+      setStatus(initialCVData.status || candidate?.status || '');
+      
+      // Handle hrNotes which might be a JSON string from the database
+      let notes = initialCVData.hrNotes || [];
+      if (typeof notes === 'string') {
+        try {
+          notes = JSON.parse(notes);
+        } catch (e) {
+          console.error('Failed to parse hrNotes string:', e);
+          notes = [];
+        }
+      }
+      setHrNotes(notes);
     } else if (candidate) {
       // Load draft from localStorage
       const draft = localStorage.getItem(`draft_cv_${candidate.id}`);
@@ -107,6 +187,9 @@ export const CVEditModal: React.FC<Props> = ({
           setInterviewDate(parsed.interviewDate || '');
           setInterviewTime(parsed.interviewTime || '');
           setInterviewer(parsed.interviewer || '');
+          setPosition(parsed.position || '');
+          setStatus(parsed.status || '');
+          setHrNotes(parsed.hrNotes || []);
         } catch (e) {
           console.error('Failed to parse CV draft:', e);
         }
@@ -117,9 +200,13 @@ export const CVEditModal: React.FC<Props> = ({
         setInterviewDate(candidate.interviewDate || '');
         setInterviewTime(candidate.interviewTime || '');
         setInterviewer(candidate.interviewer || '');
+        setPosition((candidate.position || '').trim());
+        setStatus(candidate.status || '');
+        setCvLink((candidate.cvLink || '').trim());
+        setHrNotes([]);
       }
     }
-  }, [initialCVData, candidate?.id, candidate?.name, candidate?.phone, candidate?.interviewDate, candidate?.interviewTime, candidate?.interviewer]);
+  }, [initialCVData, candidate?.id, candidate?.name, candidate?.phone, candidate?.interviewDate, candidate?.interviewTime, candidate?.interviewer, candidate?.position, candidate?.status, candidate?.cvLink]);
 
   // Auto-save to localStorage every 30 seconds
   useEffect(() => {
@@ -141,6 +228,9 @@ export const CVEditModal: React.FC<Props> = ({
         interviewDate,
         interviewTime,
         interviewer,
+        position,
+        status,
+        hrNotes,
       };
       try {
         localStorage.setItem(`draft_cv_${candidate.id}`, JSON.stringify(cvDraft));
@@ -151,7 +241,7 @@ export const CVEditModal: React.FC<Props> = ({
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, candidate]);
+  }, [fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, candidate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,6 +265,9 @@ export const CVEditModal: React.FC<Props> = ({
         interviewDate,
         interviewTime,
         interviewer,
+        position,
+        status,
+        hrNotes,
         submittedAt: new Date().toISOString(),
       };
 
@@ -211,9 +304,12 @@ export const CVEditModal: React.FC<Props> = ({
 
       setSubmitted(true);
       onSubmitSuccess(candidate.id, cvData);
-      setTimeout(() => onClose(), 1500);
+      // Removed the redundant onClose() call here since onSubmitSuccess already calls closeModal()
+      // which handles the modal unmounting safely.
     } catch (err) {
+      console.error('Submit error:', err);
       setError((err as Error).message || 'Có lỗi xảy ra');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -233,7 +329,10 @@ export const CVEditModal: React.FC<Props> = ({
     notes !== (initialCVData?.notes || '') ||
     interviewDate !== (initialCVData?.interviewDate || candidate?.interviewDate || '') ||
     interviewTime !== (initialCVData?.interviewTime || candidate?.interviewTime || '') ||
-    interviewer !== (initialCVData?.interviewer || candidate?.interviewer || '');
+    interviewer !== (initialCVData?.interviewer || candidate?.interviewer || '') ||
+    position !== (initialCVData?.position || candidate?.position || '') ||
+    status !== (initialCVData?.status || candidate?.status || '') ||
+    JSON.stringify(hrNotes) !== JSON.stringify(initialCVData?.hrNotes || []);
 
   // Field component
   const Field = ({
@@ -388,6 +487,24 @@ export const CVEditModal: React.FC<Props> = ({
                   onChange={setDateOfBirth}
                   type="date"
                 />
+                <div className="flex gap-3 items-start">
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0 text-slate-400 mt-2.5">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Vị trí ứng tuyển</label>
+                    <select
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm text-slate-700 transition-all appearance-none bg-white"
+                    >
+                      <option value="" disabled>-- Chọn vị trí --</option>
+                      {POSITION_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
               <Field
                 icon={<Briefcase className="w-4 h-4" />}
@@ -498,6 +615,94 @@ export const CVEditModal: React.FC<Props> = ({
                 rows={2}
                 placeholder="Ghi chú về ứng viên, điểm đặc biệt..."
               />
+            </div>
+
+            {/* Recruitment Status Section */}
+            <div className="space-y-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+              <h3 className="text-sm font-bold text-blue-900 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                Trạng thái tuyển dụng hiện tại
+              </h3>
+              <div className="flex gap-3 items-start">
+                <div className="w-5 h-5 flex items-center justify-center shrink-0 text-blue-400 mt-2.5">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs font-semibold text-blue-600 mb-1.5">Chọn trạng thái mới</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm text-slate-700 transition-all appearance-none font-medium shadow-sm"
+                  >
+                    <option value="" disabled>-- Chọn trạng thái --</option>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* HR Interaction History Section */}
+            <div className="space-y-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <History className="w-4 h-4 text-slate-400" />
+                  Lịch sử trao đổi với nhân sự
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newNote = {
+                      id: Date.now().toString(),
+                      date: new Date().toISOString().split('T')[0],
+                      content: '',
+                    };
+                    setHrNotes([...hrNotes, newNote]);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-bold"
+                >
+                  <Plus className="w-3 h-3" />
+                  Thêm ghi chú
+                </button>
+              </div>
+
+              {hrNotes.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs italic">
+                  Chưa có ghi chú trao đổi nào.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {hrNotes.map((note, index) => (
+                    <div key={note.id} className="relative group p-3 bg-white rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md">
+                          Lần {index + 1} – {new Date(note.date).toLocaleDateString('vi-VN')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setHrNotes(hrNotes.filter(n => n.id !== note.id))}
+                          className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                          title="Xóa ghi chú"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <textarea
+                        value={note.content}
+                        onChange={(e) => {
+                          const updated = [...hrNotes];
+                          updated[index].content = e.target.value;
+                          setHrNotes(updated);
+                        }}
+                        placeholder="Nhập nội dung trao đổi..."
+                        rows={2}
+                        className="w-full text-sm text-slate-700 bg-transparent border-none focus:ring-0 resize-none p-0 placeholder:text-slate-300"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Actions */}

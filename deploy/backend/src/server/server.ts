@@ -1,46 +1,89 @@
 import express from 'express';
 import cors from 'cors';
-import { pool, initDBUtils } from './db.js';
+import { pool, initDBUtils } from './db';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Init DB Schema
-initDBUtils().catch(console.error);
+// Database initialization state
+let isDbInitialized = false;
+const dbInitPromise = initDBUtils().then(() => { isDbInitialized = true; });
+
+// Middleware to ensure DB is initialized
+app.use(async (req, res, next) => {
+  if (!isDbInitialized) {
+    try {
+      await dbInitPromise;
+    } catch (err) {
+      return res.status(500).json({ error: 'Database initialization failed', details: err.message });
+    }
+  }
+  next();
+});
+
+// ─── DEBUG API ────────────────────────────────────────────────────────────────
+app.get('/api/debug', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    env: {
+      has_host: !!process.env.DB_HOST,
+      has_user: !!process.env.DB_USER,
+      has_pass: !!process.env.DB_PASSWORD,
+      has_db: !!process.env.DB_NAME,
+      node_env: process.env.NODE_ENV,
+      vercel: !!process.env.VERCEL
+    }
+  });
+});
 
 // ─── CANDIDATES API ─────────────────────────────────────────────────────────────
 
 app.get('/api/candidates', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
-    // Format rows to match React types
-    const formatted = result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      position: row.position,
-      interviewDate: row.interview_date,
-      interviewer: row.interviewer,
-      status: row.status,
-      cvLink: row.cv_link,
-      phone: row.phone,
-      source: row.source
-    }));
-    res.json(formatted);
+    const [rows] = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
+    
+    // Normalize snake_case/different casing from DB to camelCase for Frontend
+    const normalizedRows = (rows as any[]).map(row => {
+      // Create a case-insensitive row getter
+      const get = (key: string) => {
+        const lowerKey = key.toLowerCase().replace(/_/g, '');
+        const foundKey = Object.keys(row).find(k => k.toLowerCase().replace(/_/g, '') === lowerKey);
+        return foundKey ? row[foundKey] : undefined;
+      };
+
+      return {
+        id: get('id'),
+        name: get('name'),
+        position: get('position'),
+        interviewDate: get('interviewdate'),
+        interviewTime: get('interviewtime'),
+        interviewer: get('interviewer'),
+        status: get('status'),
+        cvLink: get('cvlink'),
+        phone: get('phone'),
+        source: get('source'),
+        createdAt: get('createdat')
+      };
+    });
+    
+    console.log(`GET /api/candidates - Returned ${normalizedRows.length} candidates`);
+    res.json(normalizedRows);
   } catch (error) {
-    console.error('Error fetching candidates:', error);
+    console.error('❌ Error fetching candidates:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch candidates' });
   }
 });
 
 app.post('/api/candidates', async (req, res) => {
   try {
-    const { id, name, position, interviewDate, interviewer, status, cvLink, phone, source } = req.body;
+    const { id, name, position, interviewDate, interviewTime, interviewer, status, cvLink, phone, source } = req.body;
     
     await pool.query(
-      `INSERT INTO candidates (id, name, position, interview_date, interviewer, status, cv_link, phone, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, name, position, interviewDate, interviewer, status, cvLink, phone, source]
+      `INSERT INTO candidates (id, name, position, interview_date, interview_time, interviewer, status, cv_link, phone, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, position, interviewDate, interviewTime, interviewer, status, cvLink, phone, source]
     );
     res.json({ success: true, message: 'Candidate added' });
   } catch (error) {
@@ -54,7 +97,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    await pool.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id]);
+    await pool.query('UPDATE candidates SET status = ? WHERE id = ?', [status, id]);
     res.json({ success: true, message: 'Status updated' });
   } catch (error) {
     console.error('Error updating status:', error);
@@ -65,7 +108,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
 app.delete('/api/candidates/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM candidates WHERE id = $1', [id]);
+    await pool.query('DELETE FROM candidates WHERE id = ?', [id]);
     res.json({ success: true, message: 'Candidate deleted' });
   } catch (error) {
     console.error('Error deleting candidate:', error);
@@ -77,19 +120,18 @@ app.delete('/api/candidates/:id', async (req, res) => {
 
 app.get('/api/evaluations', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM evaluations');
+    const [rows] = await pool.query('SELECT * FROM evaluations');
     const evaluationsData: any = {};
-    result.rows.forEach(row => {
-      evaluationsData[row.candidate_id] = {
-        candidateId: row.candidate_id,
-        scores: row.scores || {},
-        notes: row.notes || {},
-        totalScore: row.total_score,
+    (rows as any[]).forEach(row => {
+      evaluationsData[row.candidateId] = {
+        scores: typeof row.scores === 'string' ? JSON.parse(row.scores) : row.scores,
+        notes: typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes,
+        totalScore: row.totalScore,
         strengths: row.strengths,
         weaknesses: row.weaknesses,
         decision: row.decision,
-        salaryNote: row.salary_note,
-        submittedAt: row.submitted_at
+        salaryNote: row.salaryNote,
+        submittedAt: row.submittedAt
       };
     });
     res.json(evaluationsData);
@@ -104,12 +146,12 @@ app.post('/api/evaluations', async (req, res) => {
     const { candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt } = req.body;
     
     await pool.query(
-      `INSERT INTO evaluations (candidate_id, scores, notes, total_score, strengths, weaknesses, decision, salary_note, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (candidate_id) DO UPDATE SET
-       scores = EXCLUDED.scores, notes = EXCLUDED.notes, total_score = EXCLUDED.total_score,
-       strengths = EXCLUDED.strengths, weaknesses = EXCLUDED.weaknesses, decision = EXCLUDED.decision,
-       salary_note = EXCLUDED.salary_note, submitted_at = EXCLUDED.submitted_at`,
+      `INSERT INTO evaluations (candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+       scores = VALUES(scores), notes = VALUES(notes), totalScore = VALUES(totalScore),
+       strengths = VALUES(strengths), weaknesses = VALUES(weaknesses), decision = VALUES(decision),
+       salaryNote = VALUES(salaryNote), submittedAt = VALUES(submittedAt)`,
       [candidateId, JSON.stringify(scores), JSON.stringify(notes), totalScore, strengths, weaknesses, decision, salaryNote, submittedAt]
     );
     res.json({ success: true, message: 'Evaluation saved' });
@@ -123,56 +165,149 @@ app.post('/api/evaluations', async (req, res) => {
 
 app.get('/api/cvs', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM cv_data');
+    console.log('GET /api/cvs - Fetching CV data...');
+    const [rows] = await pool.query('SELECT * FROM cv_data');
     const cvDetails: any = {};
-    result.rows.forEach(row => {
-      cvDetails[row.candidate_id] = {
-        candidateId: row.candidate_id,
-        fullName: row.full_name,
-        email: row.email,
-        phone: row.phone,
-        dateOfBirth: row.date_of_birth,
-        address: row.address,
-        education: row.education,
-        experience: row.experience,
-        skills: row.skills,
-        certifications: row.certifications,
-        languages: row.languages,
-        cvLink: row.cv_link,
-        notes: row.notes,
-        interviewDate: row.interview_date,
-        interviewTime: row.interview_time,
-        interviewer: row.interviewer,
-        submittedAt: row.submitted_at
-      };
+    
+    (rows as any[]).forEach(row => {
+      // Normalize row keys to camelCase to match frontend CVData interface
+      const normalizedRow: any = {};
+      Object.keys(row).forEach(key => {
+        // Simple mapping for common fields
+        let normalizedKey = key;
+        const lKey = key.toLowerCase();
+        if (lKey === 'candidateid') normalizedKey = 'candidateId';
+        else if (lKey === 'fullname') normalizedKey = 'fullName';
+        else if (lKey === 'dateofbirth') normalizedKey = 'dateOfBirth';
+        else if (lKey === 'cvlink') normalizedKey = 'cvLink';
+        else if (lKey === 'interviewdate') normalizedKey = 'interviewDate';
+        else if (lKey === 'interviewtime') normalizedKey = 'interviewTime';
+        else if (lKey === 'hrnotes') normalizedKey = 'hrNotes';
+        else if (lKey === 'submittedat') normalizedKey = 'submittedAt';
+        
+        normalizedRow[normalizedKey] = row[key];
+      });
+
+      if (normalizedRow.candidateId) {
+        cvDetails[normalizedRow.candidateId] = normalizedRow;
+      }
     });
+    
+    console.log(`GET /api/cvs - Found ${Object.keys(cvDetails).length} CVs`);
     res.json(cvDetails);
   } catch (error) {
-    console.error('Error fetching CVs:', error);
+    console.error('❌ Error fetching CVs:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch CVs' });
   }
 });
 
 app.post('/api/cvs', async (req, res) => {
   try {
-    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt } = req.body;
+    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, submittedAt } = req.body;
     
+    console.log(`POST /api/cvs - Saving CV for candidate ${candidateId} (${fullName})`);
+    
+    // 1. Ensure candidate exists in candidates table (for foreign key constraint)
+    const [candidates] = await pool.query('SELECT id FROM candidates WHERE id = ?', [candidateId]);
+    if ((candidates as any[]).length === 0) {
+      console.log(`POST /api/cvs - Candidate ${candidateId} not in DB. Creating dummy record...`);
+      await pool.query(
+        'INSERT INTO candidates (id, name, position, status, interview_date, interview_time, interviewer, cv_link, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [candidateId, fullName, position || 'N/A', status || 'Chờ phỏng vấn', interviewDate || null, interviewTime || null, interviewer || 'N/A', cvLink || null, phone || null]
+      );
+    }
+
+    // 2. Update cv_data table
     await pool.query(
-      `INSERT INTO cv_data (candidate_id, full_name, email, phone, date_of_birth, address, education, experience, skills, certifications, languages, cv_link, notes, interview_date, interview_time, interviewer, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-       ON CONFLICT (candidate_id) DO UPDATE SET
-       full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone = EXCLUDED.phone, date_of_birth = EXCLUDED.date_of_birth,
-       address = EXCLUDED.address, education = EXCLUDED.education, experience = EXCLUDED.experience, skills = EXCLUDED.skills,
-       certifications = EXCLUDED.certifications, languages = EXCLUDED.languages, cv_link = EXCLUDED.cv_link, notes = EXCLUDED.notes,
-       interview_date = EXCLUDED.interview_date, interview_time = EXCLUDED.interview_time, interviewer = EXCLUDED.interviewer,
-       submitted_at = EXCLUDED.submitted_at`,
-      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt]
+      `INSERT INTO cv_data (candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, submittedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+       fullName = VALUES(fullName), email = VALUES(email), phone = VALUES(phone), dateOfBirth = VALUES(dateOfBirth),
+       address = VALUES(address), education = VALUES(education), experience = VALUES(experience), skills = VALUES(skills),
+       certifications = VALUES(certifications), languages = VALUES(languages), cvLink = VALUES(cvLink), notes = VALUES(notes),
+       interviewDate = VALUES(interviewDate), interviewTime = VALUES(interviewTime), interviewer = VALUES(interviewer),
+       position = VALUES(position), status = VALUES(status), hrNotes = VALUES(hrNotes), submittedAt = VALUES(submittedAt)`,
+      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, JSON.stringify(hrNotes || []), submittedAt]
     );
-    res.json({ success: true, message: 'CV saved' });
+
+    // 3. Update basic candidate info in candidates table
+    await pool.query(
+      `UPDATE candidates SET name = ?, phone = ?, position = ?, status = ?, interview_date = ?, interview_time = ?, interviewer = ?, cv_link = ? WHERE id = ?`,
+      [fullName, phone, position, status, interviewDate, interviewTime, interviewer, cvLink, candidateId]
+    );
+
+    console.log(`POST /api/cvs - Success for ${candidateId}`);
+    res.json({ success: true, message: 'CV saved and candidate updated' });
   } catch (error) {
-    console.error('Error saving CV:', error);
-    res.status(500).json({ error: 'Failed to save CV' });
+    console.error('❌ Error saving CV:', error);
+    res.status(500).json({ error: 'Failed to save CV: ' + error.message });
   }
+});
+
+// --- Authentication Endpoints ---
+
+// 1. Verify user from database
+app.get('/api/auth/verify', async (req: express.Request, res: express.Response) => {
+  const email = (req.query.email as string)?.toLowerCase();
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  try {
+    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    const users = rows as any[];
+
+    if (users.length > 0) {
+      res.json({ authorized: true, user: users[0] });
+    } else {
+      res.json({ authorized: false });
+    }
+  } catch (error) {
+    console.error('❌ Error verifying user:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// 2. Sync users from Google Sheet CSV to Database
+// This is an admin-only tool (could be triggered manually or via cron)
+app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
+  const { csvUrl } = req.body;
+  if (!csvUrl) return res.status(400).json({ error: 'csvUrl is required' });
+
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(csvUrl);
+    const csvData = await response.text();
+
+    const lines = csvData.split('\n')
+      .map(line => line.split(','))
+      .filter(row => row[0] && row[0].includes('@'));
+
+    let count = 0;
+    for (const row of lines) {
+      const email = row[0].trim().toLowerCase();
+      const role = row[1]?.trim() || 'Thành viên';
+      const name = email.split('@')[0]; // Default name from email
+
+      await pool.query(
+        'INSERT INTO users (email, name, role) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE role = VALUES(role)',
+        [email, name, role]
+      );
+      count++;
+    }
+
+    res.json({ success: true, message: `Synced ${count} users to database` });
+  } catch (error) {
+    console.error('❌ Error syncing users:', error);
+    res.status(500).json({ error: 'Sync failed: ' + error.message });
+  }
+});
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('💥 Unhandled Error:', err);
+  res.status(500).json({ 
+    error: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // ─── EXPORT/START ──────────────────────────────────────────────────────────────

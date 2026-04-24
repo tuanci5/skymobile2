@@ -25,7 +25,12 @@ interface Props {
   appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL && API_BASE_URL.endsWith('/')) {
+  // Ensure no trailing slash
+  // But since we are using relative path in prod, '' is better.
+}
+
 
 const POSITION_OPTIONS = [
   headJD.title,

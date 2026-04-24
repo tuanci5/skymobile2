@@ -14,7 +14,7 @@ interface LoginPageProps {
   onLoginSuccess: (user: any) => void;
 }
 
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/18COLyL6c9rO0QQjg3EndMpqvAa2aRiDCYyqQK_KcoZI/export?format=csv';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 // ── Dev-only demo accounts ──────────────────────────────────────────────────
 const DEV_ACCOUNTS = [
@@ -63,16 +63,23 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       const decoded: GoogleUser = jwtDecode(credentialResponse.credential);
       const userEmail = decoded.email.toLowerCase();
 
-      const response = await fetch(SHEET_CSV_URL);
-      const csvData = await response.text();
+      // NEW: Check authentication from database instead of Google Sheet
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify?email=${encodeURIComponent(userEmail)}`);
+      
+      if (!response.ok) {
+        throw new Error('Không thể kết nối với máy chủ xác thực');
+      }
 
-      const lines = csvData.split('\n').map(line => line.split(','));
-      const authorizedUser = lines.find(row =>
-        row[0] && row[0].trim().toLowerCase() === userEmail
-      );
+      const data = await response.json();
 
-      if (authorizedUser) {
-        onLoginSuccess({ ...decoded, role: authorizedUser[1]?.trim() || 'Thành viên' });
+      if (data.authorized) {
+        // Use user data from database (role, name)
+        onLoginSuccess({ 
+          ...decoded, 
+          name: data.user.name || decoded.name,
+          role: data.user.role || 'Thành viên',
+          picture: data.user.picture || decoded.picture
+        });
       } else {
         setError(`Email ${userEmail} không có trong danh sách được phép. Vui lòng liên hệ Quản trị viên.`);
       }
