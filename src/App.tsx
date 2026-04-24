@@ -47,7 +47,8 @@ import {
   ArrowUp,
   Filter,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LECTURE_CULTURE_ATTITUDE } from './data/lecture_culture_attitude';
@@ -63,6 +64,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import LoginPage from './components/LoginPage';
 import { InterviewTab } from './components/InterviewTab';
 import { ProductsTab } from './components/ProductsTab';
+import { RecruitmentPlanTab } from './components/RecruitmentPlanTab';
 
 const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.googleusercontent.com';
 
@@ -391,6 +393,7 @@ const Sidebar = ({
 }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const baseMenuItems = [
     { id: 'model', label: 'Mô hình Vận hành', icon: <Users className="w-5 h-5" /> },
@@ -423,31 +426,39 @@ const Sidebar = ({
 
   const hrLinks = [
     { id: 'hr-jd', label: 'Mô tả công việc', icon: <FileText className="w-5 h-5" />, indent: true, small: true },
+    { id: 'hr-plan', label: 'Kế hoạch tuyển dụng', icon: <ClipboardList className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || isHR || isManager },
     { id: 'hr-interview', label: 'Danh sách PV', icon: <Users className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || isHR || isManager },
   ];
 
-  const filteredMenuItems: any[] = [];
-  baseMenuItems.forEach(item => {
-    if (item.adminOnly && user.role !== 'Quản trị') return;
-    filteredMenuItems.push(item);
-    if (item.id === 'model') filteredMenuItems.push(...deptLinks);
-    if (item.id === 'hr') filteredMenuItems.push(...hrLinks.filter(l => l.visible !== false));
-  });
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleNavigate = (item: any) => {
+    const hasSubItems = (item.id === 'model' && deptLinks.length > 0) || (item.id === 'hr' && hrLinks.some(l => l.visible !== false));
+    
     const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
     if (DEPT_IDS.includes(item.id)) {
       navigate(`/model/${item.id}`);
     } else if (item.id === 'hr-jd') {
       navigate('/hr');
+    } else if (item.id === 'hr-plan') {
+      navigate('/hr/plan');
     } else if (item.id === 'hr-interview') {
       navigate('/hr/interview');
     } else if (item.id === 'model') {
       navigate('/model');
+    } else if (item.id === 'hr') {
+      navigate('/hr');
     } else {
       navigate(TAB_TO_PATH[item.id as TabType] || `/${item.id}`);
     }
-    setIsOpen(false);
+    
+    // If it's a mobile view, close the sidebar
+    if (!hasSubItems || window.innerWidth < 768) {
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -481,7 +492,7 @@ const Sidebar = ({
         className={`fixed inset-y-0 left-0 w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
-        <div className="p-6">
+        <div className="p-6 h-full flex flex-col">
           <div className="flex items-center gap-3 mb-10">
             <div className="p-2 bg-blue-600 rounded-lg">
               <Wifi className="w-6 h-6 text-white" />
@@ -502,42 +513,87 @@ const Sidebar = ({
             </div>
           )}
 
-          <nav className="space-y-1">
-            {filteredMenuItems.map((item) => {
-              const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
-              const HR_IDS = ['hr-jd', 'hr-interview'];
-              let isActive = false;
-
-              if (DEPT_IDS.includes(item.id)) {
-                isActive = activeDept === item.id;
-              } else if (HR_IDS.includes(item.id)) {
-                if (item.id === 'hr-jd') isActive = activeTab === 'hr' && hrSubTab !== 'interview';
-                if (item.id === 'hr-interview') isActive = activeTab === 'hr' && hrSubTab === 'interview';
-              } else if (item.id === 'model') {
-                isActive = activeTab === 'model' && !activeDept;
-              } else if (item.id === 'hr') {
-                isActive = activeTab === 'hr' && !hrSubTab; // Only active if no sub-tab is particularly selected (but in our case, one defaults)
-                // If we want the parent to stay active as well, we could do `activeTab === 'hr'`. Let's just highlight the parent if NO child is active.
-                // Wait, default is 'jd', so parent is never active except if we want it to be. Let's make parent not active.
-                isActive = false;
-              } else {
-                isActive = activeTab === item.id;
-              }
+          <nav className="space-y-1 flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+            {baseMenuItems.map((item) => {
+              if (item.adminOnly && user.role !== 'Quản trị') return null;
+              
+              const subItems = item.id === 'model' ? deptLinks : (item.id === 'hr' ? hrLinks.filter(l => l.visible !== false) : []);
+              const hasSubItems = subItems.length > 0;
+              const isExpanded = expanded[item.id];
+              const isActive = activeTab === item.id && (item.id !== 'hr' || !hrSubTab);
 
               return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigate(item)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-left ${item.indent ? 'pl-9' : ''} ${item.small ? 'text-[13px]' : 'text-sm'} ${isActive
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                >
-                  {React.cloneElement(item.icon as React.ReactElement, {
-                    className: item.small ? 'w-4 h-4 shrink-0' : 'w-5 h-5 shrink-0'
-                  })}
-                  <span className="font-medium truncate">{item.label}</span>
-                </button>
+                <div key={item.id} className="space-y-1">
+                  <button
+                    onClick={() => {
+                      if (hasSubItems) {
+                        setExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                      }
+                      handleNavigate(item);
+                    }}
+                    className={`w-full flex items-center justify-between pl-4 pr-2 py-2.5 rounded-xl transition-all duration-200 text-left group ${isActive
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {React.cloneElement(item.icon as React.ReactElement, {
+                        className: 'w-5 h-5 shrink-0'
+                      })}
+                      <span className="font-bold text-sm truncate">{item.label}</span>
+                    </div>
+                    {hasSubItems && (
+                      <motion.div
+                        animate={{ rotate: isExpanded ? 90 : 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ChevronRight className={`w-4 h-4 transition-colors ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                      </motion.div>
+                    )}
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {hasSubItems && isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden space-y-1"
+                      >
+                        {subItems.map(subItem => {
+                          const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
+                          const HR_IDS = ['hr-jd', 'hr-plan', 'hr-interview'];
+                          let isSubActive = false;
+
+                          if (DEPT_IDS.includes(subItem.id)) {
+                            isSubActive = activeDept === subItem.id;
+                          } else if (HR_IDS.includes(subItem.id)) {
+                            if (subItem.id === 'hr-jd') isSubActive = activeTab === 'hr' && hrSubTab !== 'interview' && hrSubTab !== 'plan';
+                            if (subItem.id === 'hr-plan') isSubActive = activeTab === 'hr' && hrSubTab === 'plan';
+                            if (subItem.id === 'hr-interview') isSubActive = activeTab === 'hr' && hrSubTab === 'interview';
+                          }
+
+                          return (
+                            <button
+                              key={subItem.id}
+                              onClick={() => handleNavigate(subItem)}
+                              className={`w-full flex items-center gap-3 pl-11 pr-4 py-2 rounded-xl transition-all duration-200 text-left text-[13px] ${isSubActive
+                                ? 'text-blue-400 font-bold bg-blue-500/5'
+                                : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+                                }`}
+                            >
+                              {React.cloneElement(subItem.icon as React.ReactElement, {
+                                className: 'w-4 h-4 shrink-0'
+                              })}
+                              <span className="truncate">{subItem.label}</span>
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               );
             })}
           </nav>
@@ -586,7 +642,7 @@ const DEPT_MAPPING: Record<string, string> = {
 
 const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubTab, user }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean, hrSubTab?: string, user: any }) => {
   const navigate = useNavigate();
-  const currentSubTab = hrSubTab === 'interview' ? 'interview' : 'jd';
+  const currentSubTab = hrSubTab === 'interview' ? 'interview' : (hrSubTab === 'plan' ? 'plan' : 'jd');
   const [selectedDept, setSelectedDept] = useState<string>('all');
 
   const filteredRoles = Object.entries(JD_DATA).filter(([id]) => {
@@ -611,6 +667,19 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
             resultSheetCsvUrl={import.meta.env.VITE_RESULT_SHEET_CSV_URL}
             user={user}
           />
+        </motion.div>
+      )}
+
+      {/* ── Recruitment Plan sub-tab ── */}
+      {currentSubTab === 'plan' && (
+        <motion.div
+          key="plan"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25 }}
+        >
+          <RecruitmentPlanTab user={user} />
         </motion.div>
       )}
 
@@ -1173,15 +1242,37 @@ const CostTab = () => {
   );
 };
 
-const TrainingTab = () => {
+const TrainingTab = ({ courseSlug, lectureSlug, lectureData }: { courseSlug?: string | null, lectureSlug?: string | null, lectureData?: any }) => {
+  const navigate = useNavigate();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedLecture, setSelectedLecture] = useState<any | null>(null);
+
+  // Course Slug Mapping
+  const COURSE_MAP: Record<string, string> = {
+    'gioi-thieu': 'Giới thiệu công ty và mô hình doanh thu',
+    'co-cau': 'Cơ cấu tổ chức & Vai trò các phòng ban',
+    'noi-quy': 'Nội quy, quy trình báo cáo & bảo mật',
+    'marketing-ai': 'AI trong tối ưu nội dung & Marketing',
+    'sale-ai': 'Sử dụng AI hỗ trợ tư vấn & chốt đơn',
+    'data-ai': 'Tự động hóa báo cáo & quản lý dữ liệu bằng AI',
+  };
+
+  React.useEffect(() => {
+    if (lectureData) {
+      setSelectedLecture(lectureData);
+    } else if (courseSlug && COURSE_MAP[courseSlug]) {
+      setSelectedCourse(COURSE_MAP[courseSlug]);
+    } else {
+      setSelectedCourse(null);
+      setSelectedLecture(null);
+    }
+  }, [courseSlug, lectureData]);
 
   if (selectedLecture) {
     return (
       <LectureViewer 
         lecture={selectedLecture} 
-        onBack={() => setSelectedLecture(null)} 
+        onBack={() => navigate('/training')} 
       />
     );
   }
@@ -1189,14 +1280,14 @@ const TrainingTab = () => {
   if (selectedCourse) {
     const data = ONBOARDING_CONTENT[selectedCourse];
     if (!data) {
-      setSelectedCourse(null);
+      navigate('/training');
       return null;
     }
 
     return (
       <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
         <button
-          onClick={() => setSelectedCourse(null)}
+          onClick={() => navigate('/training')}
           className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors mb-8 group font-medium"
         >
           <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -1257,26 +1348,37 @@ const TrainingTab = () => {
                 {group.courses.map((course, idx) => {
                   const hasContent = !!ONBOARDING_CONTENT[course];
                   
-                  // Mapping specific courses to their detailed lectures
-                  const lectureMap: Record<string, any> = {
-                    'Tư duy trách nhiệm: Không đổ lỗi, không né việc': LECTURE_RESPONSIBILITY,
-                    'Văn hóa & Thái độ': LECTURE_CULTURE_ATTITUDE,
-                    'Tác phong làm việc chuyên nghiệp, có checklist': LECTURE_PROFESSIONAL_CONDUCT,
+                  // Mapping specific courses to their slugs
+                  const lectureMap: Record<string, string> = {
+                    'Tư duy trách nhiệm: Không đổ lỗi, không né việc': 'trach-nhiem',
+                    'Văn hóa & Thái độ': 'van-hoa',
+                    'Tác phong làm việc chuyên nghiệp, có checklist': 'tac-phong',
                   };
                   
-                  const specificLecture = lectureMap[course];
+                  // Reverse mapping for content
+                  const contentMap: Record<string, string> = {
+                    'Giới thiệu công ty và mô hình doanh thu': 'gioi-thieu',
+                    'Cơ cấu tổ chức & Vai trò các phòng ban': 'co-cau',
+                    'Nội quy, quy trình báo cáo & bảo mật': 'noi-quy',
+                    'AI trong tối ưu nội dung & Marketing': 'marketing-ai',
+                    'Sử dụng AI hỗ trợ tư vấn & chốt đơn': 'sale-ai',
+                    'Tự động hóa báo cáo & quản lý dữ liệu bằng AI': 'data-ai',
+                  };
+
+                  const lectureSlug = lectureMap[course];
+                  const contentSlug = contentMap[course];
                   const isCultureGroup = group.id === 'E';
 
                   return (
                     <li
                       key={idx}
                       onClick={() => {
-                        if (specificLecture) {
-                          setSelectedLecture(specificLecture);
+                        if (lectureSlug) {
+                          navigate(`/training/lecture/${lectureSlug}`);
                         } else if (isCultureGroup) {
-                          setSelectedLecture(LECTURE_CULTURE_ATTITUDE);
-                        } else if (hasContent) {
-                          setSelectedCourse(course);
+                          navigate(`/training/lecture/van-hoa`);
+                        } else if (contentSlug) {
+                          navigate(`/training/course/${contentSlug}`);
                         }
                       }}
                       className={`flex items-start gap-3 text-sm font-medium transition-all ${
@@ -2051,7 +2153,18 @@ function AppContent() {
     activeDept === 'sales-mkt' && ['marketing', 'sale', 'cskh'].includes(teamSeg)
       ? teamSeg as 'marketing' | 'sale' | 'cskh'
       : null;
-  const hrSubTab = activeTab === 'hr' && subSeg === 'interview' ? 'interview' : 'jd';
+  const trainingCourseSlug = activeTab === 'training' ? subSeg : null;
+  const trainingLectureSlug = activeTab === 'training' ? teamSeg : null;
+
+  const hrSubTab = activeTab === 'hr' 
+    ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : 'jd')) 
+    : 'jd';
+
+  const LECTURE_SLUGS: Record<string, any> = {
+    'van-hoa': LECTURE_CULTURE_ATTITUDE,
+    'trach-nhiem': LECTURE_RESPONSIBILITY,
+    'tac-phong': LECTURE_PROFESSIONAL_CONDUCT,
+  };
 
   const internalRoleId = user?.role ? (ROLE_MAPPING[user.role] || 'guest') : null;
   const isAdmin = internalRoleId === 'admin';
@@ -2844,7 +2957,13 @@ function AppContent() {
                 />
               )}
               {activeTab === 'cost' && (isAdmin ? <CostTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
-              {activeTab === 'training' && <TrainingTab />}
+              {activeTab === 'training' && (
+                <TrainingTab 
+                  courseSlug={subSeg === 'course' ? teamSeg : null}
+                  lectureSlug={subSeg === 'lecture' ? teamSeg : null}
+                  lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null}
+                />
+              )}
               {activeTab === 'business' && (isAdmin ? <BusinessPlanTab initialSubTab="finance" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
               {activeTab === 'action-plan' && (isAdmin ? <BusinessPlanTab initialSubTab="action" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
               {activeTab === 'products' && <ProductsTab />}

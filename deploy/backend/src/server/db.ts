@@ -138,6 +138,26 @@ export async function initDBUtils() {
       )
     `);
 
+    // Ensure recruitment_plans table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS recruitment_plans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        position VARCHAR(255),
+        target_quantity INT,
+        start_date VARCHAR(50),
+        end_date VARCHAR(50),
+        note TEXT,
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Migration for existing recruitment_plans table
+    try {
+      await connection.execute('ALTER TABLE recruitment_plans ADD COLUMN start_date VARCHAR(50) AFTER target_quantity');
+      await connection.execute('ALTER TABLE recruitment_plans ADD COLUMN end_date VARCHAR(50) AFTER start_date');
+    } catch (e) {}
+
     console.log('✅ MySQL schema verified.');
   } catch (err) {
     console.error('❌ Database Initialization Failed:', err.message);

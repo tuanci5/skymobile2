@@ -301,6 +301,57 @@ app.post('/api/auth/sync', async (req: express.Request, res: express.Response) =
   }
 });
 
+// ─── RECRUITMENT PLANS API ────────────────────────────────────────────────────────
+app.get('/api/recruitment-plans', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM recruitment_plans ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching recruitment plans:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch plans' });
+  }
+});
+
+app.post('/api/recruitment-plans', async (req, res) => {
+  try {
+    const { position, target_quantity, note, start_date, end_date } = req.body;
+    await pool.query(
+      'INSERT INTO recruitment_plans (position, target_quantity, note, start_date, end_date) VALUES (?, ?, ?, ?, ?)',
+      [position, target_quantity, note, start_date, end_date]
+    );
+    res.json({ success: true, message: 'Plan added' });
+  } catch (error) {
+    console.error('Error adding recruitment plan:', error);
+    res.status(500).json({ error: 'Failed to add plan' });
+  }
+});
+
+app.put('/api/recruitment-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { position, target_quantity, note, status, start_date, end_date } = req.body;
+    await pool.query(
+      'UPDATE recruitment_plans SET position = ?, target_quantity = ?, note = ?, status = ?, start_date = ?, end_date = ? WHERE id = ?',
+      [position, target_quantity, note, status, start_date, end_date, id]
+    );
+    res.json({ success: true, message: 'Plan updated' });
+  } catch (error) {
+    console.error('Error updating recruitment plan:', error);
+    res.status(500).json({ error: 'Failed to update plan' });
+  }
+});
+
+app.delete('/api/recruitment-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM recruitment_plans WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Plan deleted' });
+  } catch (error) {
+    console.error('Error deleting recruitment plan:', error);
+    res.status(500).json({ error: 'Failed to delete plan' });
+  }
+});
+
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('💥 Unhandled Error:', err);

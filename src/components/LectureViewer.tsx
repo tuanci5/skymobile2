@@ -112,14 +112,32 @@ export const LectureViewer: React.FC<LectureProps> = ({ lecture, onBack }) => {
                       </span>
                     </div>
 
-                    <div className="ml-11 space-y-4">
+                     <div className="ml-11 space-y-4">
                       <ul className="grid md:grid-cols-2 gap-3">
-                        {item.points.map((point: string, pIdx: number) => (
-                          <li key={pIdx} className="flex items-start gap-3 text-slate-600 leading-relaxed text-sm bg-slate-50 p-3 rounded-xl border border-slate-100 group-hover:border-indigo-200 transition-colors">
-                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                            {point}
-                          </li>
-                        ))}
+                        {item.points.filter((p: string) => p.trim() !== '').map((point: string, pIdx: number) => {
+                          const cleanPoint = point.trim().replace(/^[^a-zA-Z0-9À-ỹ]*/, '');
+                          const isHeading = /^\d+\./.test(cleanPoint) || 
+                                          /^(KỊCH BẢN|VÍ DỤ|TÌNH HUỐNG|BƯỚC \d+|THAY VÌ|BÀI TẬP|TRÁCH NHIỆM:|NHIỆM VỤ:)/i.test(cleanPoint);
+                          
+                          // Improved icon detection: any non-alphanumeric character at the start (except common text punctuation)
+                          const startsWithIcon = /^[^a-zA-Z0-9À-ỹ\s"'(]/.test(point.trim());
+
+                          return (
+                            <li 
+                              key={pIdx} 
+                              className={`flex items-start gap-3 leading-relaxed text-sm p-3 rounded-xl transition-colors ${
+                                isHeading 
+                                  ? 'md:col-span-2 bg-slate-100 border-l-4 border-l-indigo-600 font-bold text-slate-900' 
+                                  : 'bg-slate-50 border border-slate-100 text-slate-600 hover:border-indigo-200'
+                              }`}
+                            >
+                              {!isHeading && !startsWithIcon && (
+                                <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                              )}
+                              {point}
+                            </li>
+                          );
+                        })}
                       </ul>
 
                       {item.examples && (

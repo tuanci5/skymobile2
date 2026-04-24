@@ -9,7 +9,6 @@ import { mktAdsJD } from './positions/mkt_ads/jd';
 import { mktContentJD } from './positions/mkt_content/jd';
 import { mktMediaJD } from './positions/mkt_media/jd';
 import { telesaleJD } from './positions/telesale/jd';
-import { crmJD } from './positions/crm/jd';
 import { opsJD } from './positions/ops/jd';
 import { accountantJD } from './positions/accountant/jd';
 import { headRole } from './positions/head/role';
@@ -31,7 +30,6 @@ export const JD_DATA: Record<string, JobDescription> = {
   'mkt_content': mktContentJD,
   'mkt_media': mktMediaJD,
   'telesale': telesaleJD,
-  'crm': crmJD,
   'ops': opsJD,
   'accountant': accountantJD,
   'hr_staff': hrStaffJD,

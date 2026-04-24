@@ -230,11 +230,36 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                     <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-slate-400" /> Giờ PV
                     </label>
-                    <input
-                      type="time" name="interviewTime" value={formData.interviewTime} onChange={handleChange}
-                      title="Giờ phỏng vấn"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <div className="flex gap-2">
+                      <select
+                        name="interviewHour"
+                        value={formData.interviewTime ? formData.interviewTime.split(':')[0] : ''}
+                        onChange={(e) => {
+                          const minute = formData.interviewTime ? formData.interviewTime.split(':')[1] || '00' : '00';
+                          setFormData({ ...formData, interviewTime: `${e.target.value}:${minute}` });
+                        }}
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm font-medium"
+                      >
+                        <option value="">Giờ</option>
+                        {['08', '09', '10', '11', '12', '13', '14', '15', '16', '17'].map(h => (
+                          <option key={h} value={h}>{h}h</option>
+                        ))}
+                      </select>
+                      <select
+                        name="interviewMinute"
+                        value={formData.interviewTime ? formData.interviewTime.split(':')[1] : ''}
+                        onChange={(e) => {
+                          const hour = formData.interviewTime ? formData.interviewTime.split(':')[0] || '08' : '08';
+                          setFormData({ ...formData, interviewTime: `${hour}:${e.target.value}` });
+                        }}
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-sm font-medium"
+                      >
+                        <option value="">Phút</option>
+                        {['00', '10', '20', '30', '40', '50'].map(m => (
+                          <option key={m} value={m}>{m}p</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-5">
