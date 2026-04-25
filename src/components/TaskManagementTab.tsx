@@ -38,7 +38,9 @@ interface User {
   manager_email?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 const COLUMNS = [
   { id: 'Cần làm', label: 'Cần làm', color: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },

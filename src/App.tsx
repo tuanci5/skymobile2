@@ -2022,10 +2022,14 @@ function AppContent() {
   const { pathname } = useLocation();
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
 
+  let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+  if (API_BASE_URL === '/') API_BASE_URL = '';
+  else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
+
   useEffect(() => {
     const fetchPerms = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/role-permissions`);
+        const res = await fetch(`${API_BASE_URL}/api/role-permissions`);
         if (res.ok) {
           const data = await res.json();
           // Ensure allowed_tabs is parsed if it comes as a string from MySQL

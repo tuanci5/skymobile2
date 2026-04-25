@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Users, UserPlus, Mail, Shield, 
+import {
+  Users, UserPlus, Mail, Shield,
   Trash2, Edit2, Check, X, Search,
   RefreshCw, AlertCircle, ShieldAlert
 } from 'lucide-react';
@@ -15,7 +15,9 @@ interface User {
   manager_email?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 const ROLE_OPTIONS = [
   'Quản trị',
@@ -46,7 +48,7 @@ export const UserManagementTab = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
-  
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -117,12 +119,12 @@ export const UserManagementTab = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = editingUser 
+      const url = editingUser
         ? `${API_BASE_URL}/api/users/${editingUser.email}`
         : `${API_BASE_URL}/api/users`;
-      
+
       const method = editingUser ? 'PUT' : 'POST';
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -130,7 +132,7 @@ export const UserManagementTab = () => {
       });
 
       if (!response.ok) throw new Error('Failed to save user');
-      
+
       await fetchUsers();
       setIsModalOpen(false);
     } catch (err: any) {
@@ -144,7 +146,7 @@ export const UserManagementTab = () => {
       return;
     }
     if (!window.confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/${email}`, {
         method: 'DELETE'
@@ -162,14 +164,14 @@ export const UserManagementTab = () => {
   };
 
   const handleToggleTempPermission = (tabId: string) => {
-    setTempPermissions(prev => 
+    setTempPermissions(prev =>
       prev.includes(tabId) ? prev.filter(t => t !== tabId) : [...prev, tabId]
     );
   };
 
   const handleSaveRolePermissions = async () => {
     if (!editingRole) return;
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/role-permissions`, {
         method: 'POST',
@@ -190,7 +192,7 @@ export const UserManagementTab = () => {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
+    const matchesSearch =
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase());
@@ -227,13 +229,13 @@ export const UserManagementTab = () => {
           <p className="text-slate-500 mt-2">Quản lý người dùng và cấu hình quyền truy cập theo vai trò.</p>
         </div>
         <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
-          <button 
+          <button
             onClick={() => setActiveSubTab('users')}
             className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'users' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Người dùng
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab('roles')}
             className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'roles' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
@@ -247,7 +249,7 @@ export const UserManagementTab = () => {
           <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-              <input 
+              <input
                 type="text"
                 placeholder="Tìm kiếm theo email, tên hoặc vai trò..."
                 className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
@@ -265,7 +267,7 @@ export const UserManagementTab = () => {
                 <option key={role} value={role}>{role}</option>
               ))}
             </select>
-            <button 
+            <button
               onClick={() => handleOpenModal()}
               className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shrink-0"
             >
@@ -354,11 +356,10 @@ export const UserManagementTab = () => {
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      className={`w-9 h-9 rounded-xl text-sm font-bold transition-colors ${
-                        currentPage === page
+                      className={`w-9 h-9 rounded-xl text-sm font-bold transition-colors ${currentPage === page
                           ? 'bg-indigo-600 text-white shadow-sm'
                           : 'text-slate-500 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       {page}
                     </button>
@@ -390,7 +391,7 @@ export const UserManagementTab = () => {
                 {ROLE_OPTIONS.map(role => {
                   const perms = rolePermissions.find(p => p.role === role);
                   let allowedTabs = perms ? (Array.isArray(perms.allowed_tabs) ? perms.allowed_tabs : []) : [];
-                  
+
                   if (perms && typeof perms.allowed_tabs === 'string') {
                     try {
                       allowedTabs = JSON.parse(perms.allowed_tabs);
@@ -401,7 +402,7 @@ export const UserManagementTab = () => {
 
                   const isEditing = editingRole === role;
                   const currentTabs = isEditing ? tempPermissions : allowedTabs;
-                  
+
                   return (
                     <tr key={role} className={`transition-colors ${isEditing ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
                       <td className="px-6 py-6 font-bold text-slate-700">{role}</td>
@@ -410,9 +411,9 @@ export const UserManagementTab = () => {
                           {isEditing ? (
                             TABS_TO_MANAGE.map(tab => (
                               <label key={tab.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer transition-all ${currentTabs.includes(tab.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
-                                <input 
-                                  type="checkbox" 
-                                  className="sr-only" 
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
                                   checked={currentTabs.includes(tab.id)}
                                   onChange={() => handleToggleTempPermission(tab.id)}
                                 />
@@ -441,14 +442,14 @@ export const UserManagementTab = () => {
                       <td className="px-6 py-6 text-right">
                         {isEditing ? (
                           <div className="flex items-center justify-end gap-2">
-                            <button 
+                            <button
                               onClick={() => setEditingRole(null)}
                               className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"
                               title="Hủy"
                             >
                               <X className="w-5 h-5" />
                             </button>
-                            <button 
+                            <button
                               onClick={handleSaveRolePermissions}
                               className="p-2 text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm"
                               title="Lưu thay đổi"
@@ -457,7 +458,7 @@ export const UserManagementTab = () => {
                             </button>
                           </div>
                         ) : (
-                          <button 
+                          <button
                             onClick={() => handleStartEditRole(role, allowedTabs)}
                             className="inline-flex items-center gap-1 px-4 py-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all text-sm font-bold"
                           >
@@ -489,22 +490,22 @@ export const UserManagementTab = () => {
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Email đăng nhập</label>
-                  <input type="email" required disabled={!!editingUser} className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all disabled:bg-slate-50" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                  <input type="email" required disabled={!!editingUser} className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all disabled:bg-slate-50" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Họ và tên</label>
-                  <input type="text" required className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                  <input type="text" required className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Vai trò hệ thống</label>
-                  <select className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 appearance-none bg-white" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
+                  <select className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 appearance-none bg-white" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
                     {ROLE_OPTIONS.map(role => <option key={role} value={role}>{role}</option>)}
                   </select>
                 </div>
                 {formData.role !== 'Quản trị' && (
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">Quản lý trực tiếp (Tùy chọn)</label>
-                    <select className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 appearance-none bg-white" value={formData.manager_email} onChange={(e) => setFormData({...formData, manager_email: e.target.value})}>
+                    <select className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 appearance-none bg-white" value={formData.manager_email} onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })}>
                       <option value="">-- Không có quản lý trực tiếp --</option>
                       {users.filter(u => u.email !== formData.email).map(u => (
                         <option key={u.email} value={u.email}>{u.name} ({u.email}) - {u.role}</option>

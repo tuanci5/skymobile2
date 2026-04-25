@@ -434,6 +434,7 @@ app.delete('/api/recruitment-plans/:id', async (req, res) => {
 app.get('/api/tasks', async (req, res) => {
   try {
     const { email, role } = req.query;
+    console.log(`[TASKS] Fetching tasks for: ${email} (${role})`);
     if (!email) return res.status(400).json({ error: 'Email query parameter is required' });
     
     let query = '';
