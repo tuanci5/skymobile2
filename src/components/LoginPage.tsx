@@ -19,10 +19,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'htt
 // ── Dev-only demo accounts ──────────────────────────────────────────────────
 const DEV_ACCOUNTS = [
   {
-    label: 'Quản trị (Admin)',
+    label: 'Quản trị (System Admin)',
     user: {
       email: 'admin@skymobile.dev',
-      name: 'Admin Demo',
+      name: 'System Administrator',
       picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AD&backgroundColor=3b82f6&textColor=ffffff',
       role: 'Quản trị',
     },
@@ -30,19 +30,82 @@ const DEV_ACCOUNTS = [
   {
     label: 'Trưởng nhóm Marketing',
     user: {
-      email: 'mkt@skymobile.dev',
+      email: 'mkt_lead@skymobile.dev',
       name: 'Marketing Lead',
       picture: 'https://api.dicebear.com/9.x/initials/svg?seed=ML&backgroundColor=8b5cf6&textColor=ffffff',
       role: 'Trưởng nhóm Marketing',
     },
   },
   {
+    label: 'Trưởng nhóm Sale',
+    user: {
+      email: 'sale_lead@skymobile.dev',
+      name: 'Sale Lead',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=SL&backgroundColor=10b981&textColor=ffffff',
+      role: 'Trưởng nhóm Sale',
+    },
+  },
+  {
+    label: 'Trưởng nhóm CSKH',
+    user: {
+      email: 'cskh_lead@skymobile.dev',
+      name: 'CSKH Lead',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=CL&backgroundColor=f59e0b&textColor=ffffff',
+      role: 'Trưởng nhóm CSKH',
+    },
+  },
+  {
+    label: 'Nhân viên Quảng cáo',
+    user: {
+      email: 'ads@skymobile.dev',
+      name: 'Ads Specialist',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AS&backgroundColor=ef4444&textColor=ffffff',
+      role: 'Nhân viên Quảng cáo',
+    },
+  },
+  {
+    label: 'Nhân viên Content',
+    user: {
+      email: 'content@skymobile.dev',
+      name: 'Content Creator',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=CC&backgroundColor=ec4899&textColor=ffffff',
+      role: 'Nhân viên Content',
+    },
+  },
+  {
     label: 'Nhân viên Sale',
     user: {
       email: 'sale@skymobile.dev',
-      name: 'Sale Staff',
-      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=SS&backgroundColor=10b981&textColor=ffffff',
+      name: 'Sale Executive',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=SE&backgroundColor=06b6d4&textColor=ffffff',
       role: 'Nhân viên Sale',
+    },
+  },
+  {
+    label: 'Nhân viên Kế toán',
+    user: {
+      email: 'accountant@skymobile.dev',
+      name: 'Accountant',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AC&backgroundColor=6366f1&textColor=ffffff',
+      role: 'Nhân viên kế toán tổng hợp',
+    },
+  },
+  {
+    label: 'Nhân viên HCNS',
+    user: {
+      email: 'hr@skymobile.dev',
+      name: 'HR Admin',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=HR&backgroundColor=f97316&textColor=ffffff',
+      role: 'Nhân viên Hành chính & Nhân sự',
+    },
+  },
+  {
+    label: 'Telesale',
+    user: {
+      email: 'telesale@skymobile.dev',
+      name: 'Telesale Staff',
+      picture: 'https://api.dicebear.com/9.x/initials/svg?seed=TS&backgroundColor=84cc16&textColor=ffffff',
+      role: 'Telesale',
     },
   },
 ];

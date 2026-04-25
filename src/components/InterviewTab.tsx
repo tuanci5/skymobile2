@@ -65,7 +65,7 @@ const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter:
   }, [candidates]);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-3">
+    <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide snap-x md:grid md:grid-cols-4 lg:grid-cols-9">
       {[
         { label: 'Tổng',          value: stats.total,      color: 'text-slate-700',   bg: 'bg-slate-100', filter: 'Tất cả' },
         { label: 'Chờ PV',        value: stats.waiting,    color: 'text-amber-700',   bg: 'bg-amber-50', filter: 'Chờ phỏng vấn' },
@@ -80,10 +80,10 @@ const StatsBar = ({ candidates, onFilter }: { candidates: Candidate[], onFilter:
         <div 
           key={s.label} 
           onClick={() => onFilter(s.filter)}
-          className={`${s.bg} rounded-2xl p-4 text-center cursor-pointer hover:scale-105 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md`}
+          className={`${s.bg} rounded-2xl p-3 sm:p-4 text-center cursor-pointer hover:scale-105 transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md min-w-[100px] sm:min-w-0 snap-start flex-shrink-0 sm:flex-shrink`}
         >
-          <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-          <p className={`text-xs font-semibold ${s.color} opacity-70 mt-0.5`}>{s.label}</p>
+          <p className={`text-xl sm:text-2xl font-black ${s.color}`}>{s.value}</p>
+          <p className={`text-[10px] sm:text-xs font-semibold ${s.color} opacity-70 mt-0.5 whitespace-nowrap`}>{s.label}</p>
         </div>
       ))}
     </div>
@@ -151,16 +151,16 @@ const CandidateCard: React.FC<{
           </div>
         </div>
 
-        <div className="space-y-2.5 text-[12px] border-t border-slate-50 pt-3">
-          <div className="flex items-center gap-2 text-slate-600">
-            <Briefcase className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-slate-400 w-24">Vị trí ứng tuyển:</span>
-            <span className="font-semibold text-slate-700">{candidate.position}</span>
+        <div className="space-y-2 text-[11px] sm:text-[12px] border-t border-slate-50 pt-3">
+          <div className="flex items-start gap-2 text-slate-600">
+            <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+            <span className="text-slate-400 w-20 shrink-0">Vị trí:</span>
+            <span className="font-semibold text-slate-700 leading-tight flex-1">{candidate.position}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
-            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-slate-400 w-24">Thời gian PV:</span>
-            <span className="text-slate-700 whitespace-nowrap">
+            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-400 w-20 shrink-0">Thời gian:</span>
+            <span className="text-slate-700 whitespace-nowrap flex-1">
               {new Date(candidate.interviewDate).toLocaleDateString('vi-VN', {
                 day: '2-digit',
                 month: '2-digit',
@@ -170,17 +170,17 @@ const CandidateCard: React.FC<{
             </span>
           </div>
           <div className="flex items-center gap-2 text-slate-600">
-            <User className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="text-slate-400 w-24">Người PV:</span>
-            <span className="text-slate-700">{candidate.interviewer}</span>
+            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-400 w-20 shrink-0">Người PV:</span>
+            <span className="text-slate-700 flex-1">{candidate.interviewer}</span>
           </div>
           {candidate.phone && (
             <div className="flex items-center gap-2 text-slate-600">
-              <div className="w-4 h-4 flex items-center justify-center text-slate-400">
-                <span className="text-[14px]">📞</span>
+              <div className="w-3.5 h-3.5 flex items-center justify-center text-slate-400 shrink-0">
+                <span className="text-[12px]">📞</span>
               </div>
-              <span className="text-slate-400 w-24">Liên hệ:</span>
-              <span className="font-medium text-blue-600">
+              <span className="text-slate-400 w-20 shrink-0">Liên hệ:</span>
+              <span className="font-bold text-blue-600 flex-1 tracking-tight">
                 {(() => {
                   const p = String(candidate.phone).trim();
                   return p.startsWith('0') ? p : '0' + p;
@@ -190,62 +190,66 @@ const CandidateCard: React.FC<{
           )}
         </div>
 
-        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-          {canModify && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(candidate.id); }}
-              className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors shrink-0"
-              title="Xóa ứng viên"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-
-          {canModify && (
-            <button onClick={(e) => { e.stopPropagation(); onEditCV(candidate); }}
-              className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors shrink-0"
-              title="Sửa thông tin CV">
-              <Edit className="w-4 h-4" />
-            </button>
-          )}
-
-          {candidate.cvLink && (
-            <a href={candidate.cvLink} target="_blank" rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors text-xs font-semibold shrink-0">
-              <ExternalLink className="w-3.5 h-3.5" /> CV
-            </a>
-          )}
-
-          {hasEvalData ? (
-            <>
-              <button onClick={() => onViewReport(candidate)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors text-xs font-bold shadow-sm shadow-emerald-600/20">
-                <BarChart2 className="w-3.5 h-3.5" />
-                Xem báo cáo
+        <div className="grid grid-cols-[52%_48%] items-center gap-2 mt-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-1.5">
+            {canModify && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(candidate.id); }}
+                className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                title="Xóa ứng viên"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
-              {canEvaluate && (
-                <button onClick={() => onEvaluate(candidate)}
-                  className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors text-xs font-semibold shrink-0">
-                  Sửa
-                </button>
-              )}
-            </>
-          ) : (
-            <button
-              onClick={() => onEvaluate(candidate)}
-              disabled={!canEvaluate}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 text-xs font-bold shadow-sm ${
-                canEvaluate 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20' 
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-70'
-              }`}
-            >
-              <ClipboardList className="w-4 h-4" />
-              {canEvaluate ? 'Đánh giá ngay' : 'Chờ đánh giá'}
-              {canEvaluate && <ChevronRight className="w-4 h-4" />}
-            </button>
-          )}
+            )}
+
+            {canModify && (
+              <button onClick={(e) => { e.stopPropagation(); onEditCV(candidate); }}
+                className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                title="Sửa thông tin CV">
+                <Edit className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {candidate.cvLink && (
+              <a href={candidate.cvLink} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                title="Xem CV">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+
+            {hasEvalData && canEvaluate && (
+              <button onClick={() => onEvaluate(candidate)}
+                className="p-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                title="Sửa đánh giá">
+                <ClipboardList className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            {hasEvalData ? (
+              <button onClick={() => onViewReport(candidate)}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all text-[10px] sm:text-[11px] font-bold shadow-md shadow-emerald-600/20 active:scale-95">
+                <BarChart2 className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">Xem báo cáo</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onEvaluate(candidate)}
+                disabled={!canEvaluate}
+                className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-300 text-[10px] sm:text-[11px] font-bold shadow-md active:scale-95 ${
+                  canEvaluate 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20' 
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-70'
+                }`}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">{canEvaluate ? 'Đánh giá ngay' : 'Chờ đánh giá'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -648,26 +652,30 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
     <>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Users className="w-7 h-7 text-blue-600" />
-              Danh sách ứng viên phỏng vấn
-            </h3>
-            <p className="text-slate-500 text-sm mt-1">
-              Đồng bộ dữ liệu thời gian thực từ Database
-            </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 sm:p-3 bg-blue-100 text-blue-600 rounded-2xl shrink-0">
+              <Users className="w-6 h-6 sm:w-8 sm:h-8" />
+            </div>
+            <div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
+                Tuyển dụng & Phỏng vấn
+              </h3>
+              <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+                Quản lý ứng viên và kết quả đánh giá
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setModalMode('add')} 
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-bold shadow-lg shadow-blue-600/20 flex-1 sm:flex-none justify-center">
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all text-sm font-bold shadow-lg shadow-blue-600/20 flex-1 md:flex-none justify-center active:scale-95">
               <UserPlus className="w-4 h-4" />
-              Thêm ứng viên
+              <span>Thêm ứng viên</span>
             </button>
             <button onClick={() => { fetchCandidates(); fetchEvaluations(); }} disabled={loading}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors text-sm font-semibold shrink-0 disabled:opacity-50 flex-1 sm:flex-none">
+              className="flex items-center justify-center p-2.5 sm:px-4 sm:py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-sm font-semibold shrink-0 disabled:opacity-50 active:scale-95">
               <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Làm mới
+              <span className="hidden sm:inline ml-2">Làm mới</span>
             </button>
           </div>
         </div>
@@ -682,35 +690,35 @@ export const InterviewTab: React.FC<Props> = ({ appsScriptUrl, sheetCsvUrl, resu
         {!loading && <StatsBar candidates={searchFiltered} onFilter={setStatusFilter} />}
 
         {/* Filters */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Tìm theo tên, vị trí, người PV..."
-                value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm" />
-            </div>
+        <div className="flex flex-col gap-2">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Tìm theo tên, vị trí, người PV..."
+              value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm" />
+          </div>
 
-            <div className="relative shrink-0">
-              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select value={datePreset} onChange={e => setDatePreset(e.target.value)}
-                className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer">
+                className="w-full pl-8 pr-6 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none cursor-pointer">
                 {['7 ngày gần nhất', 'Tất cả thời gian', 'Hôm nay', 'Tuần này', 'Tháng này', 'Tùy chỉnh'].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
-            <div className="relative shrink-0">
-              <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <div className="relative col-span-2 md:col-span-1">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select value={positionFilter} onChange={e => setPositionFilter(e.target.value)}
-                className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer sm:max-w-xs truncate">
+                className="w-full pl-8 pr-6 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none cursor-pointer truncate">
                 {['Tất cả vị trí', ...Array.from(new Set(Object.values(JD_DATA).map(jd => jd.title))).sort()].map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
-            <div className="relative shrink-0">
-              <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                className="pl-10 pr-8 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm appearance-none cursor-pointer">
+                className="w-full pl-8 pr-6 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none cursor-pointer">
                 {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>

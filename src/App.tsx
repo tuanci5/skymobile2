@@ -38,6 +38,7 @@ import {
   AlertCircle,
   Cpu,
   GraduationCap,
+  ShieldAlert,
   BookOpen,
   Star,
   Sparkles,
@@ -48,7 +49,8 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LECTURE_CULTURE_ATTITUDE } from './data/lecture_culture_attitude';
@@ -65,12 +67,14 @@ import LoginPage from './components/LoginPage';
 import { InterviewTab } from './components/InterviewTab';
 import { ProductsTab } from './components/ProductsTab';
 import { RecruitmentPlanTab } from './components/RecruitmentPlanTab';
+import { UserManagementTab } from './components/UserManagementTab';
+import { TaskManagementTab } from './components/TaskManagementTab';
 
 const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.googleusercontent.com';
 
 // --- Types ---
 
-type TabType = 'model' | 'hr' | 'salary' | 'cost' | 'training' | 'business' | 'action-plan' | 'products';
+type TabType = 'model' | 'hr' | 'salary' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks';
 
 // --- Components ---
 
@@ -376,6 +380,8 @@ const TAB_TO_PATH: Record<TabType, string> = {
   business: '/business',
   'action-plan': '/action-plan',
   products: '/products',
+  users: '/users',
+  tasks: '/tasks',
 };
 
 const Sidebar = ({
@@ -384,12 +390,16 @@ const Sidebar = ({
   hrSubTab,
   onLogout,
   user,
+  allowedTabs,
+  isSystemAdmin,
 }: {
   activeTab: TabType;
   activeDept: string | null;
   hrSubTab?: string;
   onLogout: () => void;
   user: any;
+  allowedTabs: string[];
+  isSystemAdmin: boolean;
 }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -399,10 +409,11 @@ const Sidebar = ({
     { id: 'model', label: 'Mô hình Vận hành', icon: <Users className="w-5 h-5" /> },
     { id: 'hr', label: 'Nhân sự & JD', icon: <UserCog className="w-5 h-5" /> },
     { id: 'salary', label: 'Lương & KPI', icon: <Wallet className="w-5 h-5" /> },
-    { id: 'cost', label: 'Cơ cấu chi phí', icon: <PieChart className="w-5 h-5" />, adminOnly: true },
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'business', label: 'Kế hoạch kinh doanh', icon: <TrendingUp className="w-5 h-5" />, adminOnly: true },
     { id: 'action-plan', label: 'Kế hoạch 4 tháng', icon: <Calendar className="w-5 h-5" />, adminOnly: true },
+    { id: 'tasks', label: 'Quản lý công việc', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { id: 'users', label: 'Quản lý người dùng', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
   ];
 
@@ -489,7 +500,7 @@ const Sidebar = ({
 
       {/* Sidebar Content */}
       <motion.aside
-        className={`fixed inset-y-0 left-0 w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 w-[80%] md:w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         <div className="p-6 h-full flex flex-col">
@@ -504,18 +515,28 @@ const Sidebar = ({
           </div>
 
           {user && (
-            <div className="mb-6 mx-2 p-3 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
-              <img src={user.picture} alt="" className="w-8 h-8 rounded-full border border-blue-500/30" />
-              <div className="overflow-hidden">
-                <p className="text-xs font-bold text-white truncate">{user.name}</p>
-                <p className="text-[10px] text-blue-400 font-medium">{user.role}</p>
+            <div className="mb-6 mx-2 p-3 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between gap-3 group">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <img src={user.picture} alt="" className="w-9 h-9 rounded-full border border-blue-500/30 shrink-0" />
+                <div className="overflow-hidden">
+                  <p className="text-xs font-bold text-white truncate">{user.name}</p>
+                  <p className="text-[10px] text-blue-400 font-medium">{user.role}</p>
+                </div>
               </div>
+              <button
+                onClick={onLogout}
+                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all shrink-0"
+                title="Đăng xuất"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           )}
 
           <nav className="space-y-1 flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
             {baseMenuItems.map((item) => {
-              if (item.adminOnly && user.role !== 'Quản trị') return null;
+              if (item.adminOnly && !isSystemAdmin) return null;
+              if (!isSystemAdmin && !allowedTabs.includes(item.id)) return null;
               
               const subItems = item.id === 'model' ? deptLinks : (item.id === 'hr' ? hrLinks.filter(l => l.visible !== false) : []);
               const hasSubItems = subItems.length > 0;
@@ -528,8 +549,9 @@ const Sidebar = ({
                     onClick={() => {
                       if (hasSubItems) {
                         setExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                      } else {
+                        handleNavigate(item);
                       }
-                      handleNavigate(item);
                     }}
                     className={`w-full flex items-center justify-between pl-4 pr-2 py-2.5 rounded-xl transition-all duration-200 text-left group ${isActive
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
@@ -598,15 +620,6 @@ const Sidebar = ({
             })}
           </nav>
 
-          <div className="absolute bottom-6 left-6 right-6">
-            <button
-              onClick={onLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 border border-transparent hover:border-red-500/20"
-            >
-              <X className="w-5 h-5" />
-              <span className="font-bold text-xs uppercase tracking-wider">Đăng xuất</span>
-            </button>
-          </div>
         </div>
       </motion.aside>
     </>
@@ -714,17 +727,47 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
                   <Filter className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 
-                <div className="space-y-2 h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                {/* Mobile: Horizontal Scroll Role List */}
+                <div className="flex lg:hidden overflow-x-auto gap-3 pb-2 -mx-4 px-4 scrollbar-hide snap-x">
+                  {filteredRoles.map(([id, jd]) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        setSelectedRole(id);
+                        // Optional: scroll details into view on mobile
+                        const detailsEl = document.getElementById('jd-details');
+                        if (detailsEl) detailsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className={`min-w-[160px] max-w-[200px] flex-shrink-0 text-left p-4 rounded-2xl transition-all snap-start border-2 ${selectedRole === id
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200 ring-4 ring-blue-50'
+                        : 'bg-white border-slate-100 text-slate-600 hover:border-blue-200'
+                        }`}
+                    >
+                      <div className={`p-2 rounded-lg w-fit mb-3 ${selectedRole === id ? 'bg-white/20' : 'bg-slate-50'}`}>
+                        <Briefcase className={`w-4 h-4 ${selectedRole === id ? 'text-white' : 'text-blue-500'}`} />
+                      </div>
+                      <div className="text-xs font-bold leading-snug line-clamp-2 h-8 uppercase tracking-wider">{jd.title}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Desktop: Vertical Role List */}
+                <div className="hidden lg:block space-y-2 h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                   {filteredRoles.length > 0 ? filteredRoles.map(([id, jd]) => (
                     <button
                       key={id}
                       onClick={() => setSelectedRole(id)}
-                      className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
-                        ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                        : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
+                      className={`w-full text-left px-5 py-4 rounded-2xl transition-all border-2 ${selectedRole === id
+                        ? 'bg-blue-50 border-blue-600 shadow-sm text-blue-700 font-bold'
+                        : 'bg-white border-transparent text-slate-600 hover:bg-slate-50 hover:border-slate-100'
                         }`}
                     >
-                      <div className="text-sm">{jd.title}</div>
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${selectedRole === id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <Briefcase className="w-4 h-4" />
+                        </div>
+                        <div className="text-sm">{jd.title}</div>
+                      </div>
                     </button>
                   )) : (
                     <div className="text-sm text-slate-400 text-center py-4">Chưa có vị trí nào</div>
@@ -753,20 +796,24 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
-                          <Briefcase className="w-8 h-8" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-2xl font-bold text-slate-900">{JD_DATA[selectedRole].title}</h3>
-                          <p className="text-slate-500 italic">Mục tiêu: {JD_DATA[selectedRole].objective}</p>
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                          <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl shrink-0 mt-1">
+                            <Briefcase className="w-6 h-6 md:w-8 md:h-8" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-xl md:text-2xl font-bold text-slate-900 leading-tight">{JD_DATA[selectedRole].title}</h3>
+                            <p className="text-slate-500 italic text-sm mt-2 leading-relaxed">
+                              <span className="font-bold not-italic text-slate-700">Mục tiêu:</span> {JD_DATA[selectedRole].objective}
+                            </p>
+                          </div>
                         </div>
                         <button
                           onClick={() => setActiveTab('salary')}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2"
+                          className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 shrink-0 mt-2 md:mt-0"
                         >
-                          <DollarSign className="w-4 h-4" />
-                          Xem Lương & KPI
+                          <DollarSign className="w-5 h-5" />
+                          <span>Xem Lương & KPI</span>
                         </button>
                       </div>
 
@@ -1087,160 +1134,6 @@ const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: 
   );
 };
 
-const CostTab = () => {
-  return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-10 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <PieChart className="w-8 h-8 text-blue-600" />
-            Cơ cấu Chi phí & Biên Lợi nhuận
-          </h2>
-          <p className="text-slate-600 mt-2">Đề xuất mô hình tài chính phân loại theo nhóm sản phẩm cốt lõi.</p>
-        </div>
-      </div>
-
-      <div className="space-y-8">
-        {/* A. Nhóm SIM Data bán đứt 1 năm */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl">
-              <ShoppingCart className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">A. Nhóm SIM Data bán đứt 1 năm</h3>
-          </div>
-          <p className="text-sm text-slate-500 mb-6 italic">Ví dụ: 5GB giá vốn ~65%, 10GB giá vốn ~71%</p>
-
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center text-sm font-bold"><span className="text-slate-600">Hạng mục</span><span className="text-slate-900">Tỷ lệ</span></div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-red-50 text-red-700 rounded-xl"><span>Giá vốn trực tiếp</span><span className="font-bold">65% – 72%</span></div>
-                <div className="flex items-center justify-between p-3 bg-amber-50 text-amber-700 rounded-xl"><span>Marketing</span><span className="font-bold">4% – 6%</span></div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 text-blue-700 rounded-xl"><span>Phòng KD-Marketing-CSKH</span><span className="font-bold">6% – 8%</span></div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 text-slate-700 rounded-xl"><span>Cố định & Rủi ro</span><span className="font-bold">4% – 6%</span></div>
-              </div>
-            </div>
-            <div className="flex flex-col justify-center items-center p-8 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] relative overflow-hidden">
-              <div className="absolute -right-4 -bottom-4 opacity-5"><ShoppingCart className="w-48 h-48" /></div>
-              <TrendingUp className="w-12 h-12 text-emerald-500 mb-4 z-10" />
-              <div className="text-center z-10">
-                <span className="block text-sm text-emerald-800 font-bold mb-1">LỢI NHUẬN RÒNG LẦN MUA</span>
-                <span className="text-4xl font-black text-emerald-600">8% - 15%</span>
-              </div>
-              <p className="text-xs text-emerald-600/80 mt-4 text-center z-10">Thu tiền ngay 1 lần, biên lợi nhuận nằm gọn ở giao dịch đầu.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* B. Nhóm SIM Data thu cước hàng tháng */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl">
-              <RefreshCcw className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">B. Nhóm SIM Data Thu cước hàng tháng</h3>
-          </div>
-          <p className="text-sm text-slate-500 mb-6 italic">Ví dụ: Softbank 30GB giá vốn ~76%, Rakuten 100GB giá vốn ~80%</p>
-
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center text-sm font-bold"><span className="text-slate-600">Hạng mục</span><span className="text-slate-900">Tỷ lệ</span></div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-red-50 text-red-700 rounded-xl"><span>Giá vốn trực tiếp</span><span className="font-bold">74% – 80%</span></div>
-                <div className="flex items-center justify-between p-3 bg-amber-50 text-amber-700 rounded-xl"><span>Marketing</span><span className="font-bold">3% – 5%</span></div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 text-blue-700 rounded-xl"><span>Phòng KD-Marketing-CSKH</span><span className="font-bold">6% – 8%</span></div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 text-slate-700 rounded-xl"><span>Cố định & Rủi ro</span><span className="font-bold">4% – 6%</span></div>
-              </div>
-            </div>
-            <div className="flex flex-col justify-center items-center p-8 bg-emerald-50 rounded-2xl border border-emerald-100 relative overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.02)]">
-              <div className="absolute -right-4 -bottom-4 opacity-5"><RefreshCcw className="w-48 h-48" /></div>
-              <div className="text-center z-10">
-                <span className="block text-sm text-emerald-800 font-bold mb-1">LỢI NHUẬN RÒNG (MỖI THÁNG)</span>
-                <span className="text-4xl font-black text-emerald-600">3% - 8%</span>
-              </div>
-              <div className="mt-6 p-4 bg-emerald-100/50 rounded-xl border border-emerald-200 z-10 flex items-start gap-3">
-                <Info className="w-5 h-5 shrink-0 text-emerald-600" />
-                <p className="text-sm text-emerald-800 font-medium">Lợi nhuận thật sự đến từ: Số tháng duy trì, Phí phạt hủy sớm, Gia hạn vòng đời.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* C. Nhóm Data + Voice */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-amber-100 text-amber-600 rounded-2xl">
-              <Smartphone className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">C. Nhóm Data + Voice</h3>
-          </div>
-          <p className="text-sm text-slate-500 mb-6 italic">Ví dụ: Docomo/Rakuten Voice thường có biên lợi nhuận cao hơn Data thuần.</p>
-
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center text-sm font-bold"><span className="text-slate-600">Hạng mục</span><span className="text-slate-900">Tỷ lệ</span></div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-red-50 text-red-700 rounded-xl"><span>Giá vốn trực tiếp</span><span className="font-bold">60% – 70%</span></div>
-                <div className="flex items-center justify-between p-3 bg-amber-50 text-amber-700 rounded-xl"><span>Marketing</span><span className="font-bold">4% – 6%</span></div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 text-blue-700 rounded-xl"><span>Phòng KD-Marketing-CSKH</span><span className="font-bold">7% – 9%</span></div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 text-slate-700 rounded-xl"><span>Cố định & Rủi ro</span><span className="font-bold">4% – 6%</span></div>
-              </div>
-            </div>
-            <div className="flex flex-col justify-center items-center p-8 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] overflow-hidden relative">
-              <div className="absolute -right-4 -bottom-4 opacity-5"><Smartphone className="w-48 h-48" /></div>
-              <TrendingUp className="w-12 h-12 text-emerald-500 mb-4 z-10" />
-              <div className="text-center z-10">
-                <span className="block text-sm text-emerald-800 font-bold mb-1">LỢI NHUẬN RÒNG</span>
-                <span className="text-4xl font-black text-emerald-600">8% - 15%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 7. Kết luận cuối cùng */}
-        <div className="bg-slate-900 p-8 rounded-3xl shadow-xl text-white relative overflow-hidden">
-          <div className="absolute right-0 top-0 opacity-10"><PieChart className="w-64 h-64 -translate-y-10 translate-x-10" /></div>
-          <div className="relative z-10">
-            <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-              <AlertCircle className="w-6 h-6 text-amber-400" />
-              Kết luận quản trị trọng tâm
-            </h3>
-
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex flex-col items-center justify-center font-bold shrink-0">1</div>
-                <div>
-                  <h4 className="font-bold text-lg mb-1">Mức giá vốn 70% chỉ là trung bình chung</h4>
-                  <p className="text-slate-400">Thực tế phải phân mảnh: <span className="text-white">65-72%</span> (bán đứt), <span className="text-white">74-80%</span> (thu cước), <span className="text-white">60-70%</span> (data+voice). Việc gộp chung sẽ làm sai số chiến lược về giá.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex flex-col items-center justify-center font-bold shrink-0">2</div>
-                <div>
-                  <h4 className="font-bold text-lg mb-1">Bản chất dòng thu nhập rất khác biệt</h4>
-                  <p className="text-slate-400">
-                    <span className="text-white font-medium">Bán đứt:</span> Nhận ngay lợi nhuận ở giao dịch mua mới đầu tiên.<br />
-                    <span className="text-white font-medium">Thu cước:</span> Lợi nhuận nằm rải rác ở số tháng duy trì, phí báo hủy, phí làm lại sim.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex flex-col items-center justify-center font-bold shrink-0">3</div>
-                <div>
-                  <h4 className="font-bold text-lg mb-1">Thiết kế KPI phải tách rời</h4>
-                  <p className="text-slate-400">Tuyệt đối không dùng 1 cơ cấu KPI chung. Chuyên viên đánh vào nhóm bán đứt thiên về <span className="text-white">tốc độ & số lượng</span>, đánh vào nhóm thu cước phải thiên về <span className="text-white">chăm sóc & tỷ lệ tái gia hạn</span>.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const TrainingTab = ({ courseSlug, lectureSlug, lectureData }: { courseSlug?: string | null, lectureSlug?: string | null, lectureData?: any }) => {
   const navigate = useNavigate();
@@ -2127,6 +2020,25 @@ function AppContent() {
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [rolePermissions, setRolePermissions] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPerms = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/role-permissions`);
+        if (res.ok) {
+          const data = await res.json();
+          // Ensure allowed_tabs is parsed if it comes as a string from MySQL
+          const normalized = data.map((p: any) => ({
+            ...p,
+            allowed_tabs: typeof p.allowed_tabs === 'string' ? JSON.parse(p.allowed_tabs) : p.allowed_tabs
+          }));
+          setRolePermissions(normalized);
+        }
+      } catch (e) { console.error(e); }
+    };
+    fetchPerms();
+  }, []);
 
   // ── Derive all navigation state from URL ────────────────────────────────
   // /model              → model tab, no dept
@@ -2144,6 +2056,7 @@ function AppContent() {
   const PATH_TO_TAB: Record<string, TabType> = {
     model: 'model', hr: 'hr', salary: 'salary', cost: 'cost', training: 'training',
     business: 'business', 'action-plan': 'action-plan', products: 'products',
+    users: 'users', tasks: 'tasks'
   };
   const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
 
@@ -2193,12 +2106,22 @@ function AppContent() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const userPerms = rolePermissions.find(p => p.role === user.role);
+  const allowedTabs = userPerms ? (Array.isArray(userPerms.allowed_tabs) ? userPerms.allowed_tabs : []) : [];
+  
+  // Admin has all permissions by default or if role is 'Quản trị'
+  const isSystemAdmin = user.role === 'Quản trị';
+  const hasPermission = (tab: TabType) => {
+    if (isSystemAdmin) return true;
+    return allowedTabs.includes(tab);
+  };
+
   const canAccessSensitive = isAdmin;
   const restrictedView = !isAdmin;
 
   // Navigate helpers that enforce RBAC
   const goToTab = (tab: TabType) => {
-    if (!canAccessSensitive && (tab === 'salary' || tab === 'cost')) {
+    if (!hasPermission(tab)) {
       alert('Bạn không có quyền truy cập mục này.');
       return;
     }
@@ -2922,13 +2845,15 @@ function AppContent() {
         hrSubTab={hrSubTab}
         onLogout={handleLogout}
         user={user}
+        allowedTabs={allowedTabs}
+        isSystemAdmin={isSystemAdmin}
       />
 
       <main 
         ref={scrollContainerRef}
-        className="flex-1 p-4 md:p-12 overflow-y-auto"
+        className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto"
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full max-w-[1800px] mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
@@ -2937,36 +2862,55 @@ function AppContent() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
             >
-              {activeTab === 'model' && <ModelTab />}
-              {activeTab === 'hr' && (
-                <HRTab
-                  selectedRole={restrictedView ? internalRoleId : activeRole}
-                  setSelectedRole={restrictedView ? () => { } : setActiveRole}
-                  setActiveTab={goToTab}
-                  restricted={restrictedView}
-                  hrSubTab={hrSubTab}
-                  user={user}
-                />
+              {/* Permission check for current tab */}
+              {!hasPermission(activeTab) ? (
+                <div className="flex flex-col items-center justify-center py-40 space-y-6">
+                  <div className="p-6 bg-rose-100 text-rose-600 rounded-full shadow-lg shadow-rose-100">
+                    <ShieldAlert className="w-16 h-16" />
+                  </div>
+                  <div className="text-center">
+                    <h2 className="text-3xl font-bold text-slate-900">Truy cập bị từ chối</h2>
+                    <p className="text-slate-500 mt-2 max-w-md mx-auto">Tài khoản của bạn không có quyền truy cập vào mục này. Vui lòng liên hệ quản trị viên để yêu cầu cấp quyền.</p>
+                  </div>
+                  <button onClick={() => navigate('/model')} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all">
+                    Quay lại Trang chủ
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {activeTab === 'model' && <ModelTab />}
+                  {activeTab === 'hr' && (
+                    <HRTab
+                      selectedRole={restrictedView ? internalRoleId : activeRole}
+                      setSelectedRole={restrictedView ? () => { } : setActiveRole}
+                      setActiveTab={goToTab}
+                      restricted={restrictedView}
+                      hrSubTab={hrSubTab}
+                      user={user}
+                    />
+                  )}
+                  {activeTab === 'salary' && (
+                    <SalaryTab
+                      selectedRole={restrictedView ? internalRoleId : activeRole}
+                      setSelectedRole={restrictedView ? () => { } : setActiveRole}
+                      setActiveTab={goToTab}
+                      restricted={restrictedView}
+                    />
+                  )}
+                  {activeTab === 'training' && (
+                    <TrainingTab 
+                      courseSlug={subSeg === 'course' ? teamSeg : null}
+                      lectureSlug={subSeg === 'lecture' ? teamSeg : null}
+                      lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null}
+                    />
+                  )}
+                  {activeTab === 'business' && <BusinessPlanTab initialSubTab="finance" />}
+                  {activeTab === 'action-plan' && <BusinessPlanTab initialSubTab="action" />}
+                  {activeTab === 'tasks' && <TaskManagementTab currentUser={user} />}
+                  {activeTab === 'products' && <ProductsTab />}
+                  {activeTab === 'users' && <UserManagementTab />}
+                </>
               )}
-              {activeTab === 'salary' && (
-                <SalaryTab
-                  selectedRole={restrictedView ? internalRoleId : activeRole}
-                  setSelectedRole={restrictedView ? () => { } : setActiveRole}
-                  setActiveTab={goToTab}
-                  restricted={restrictedView}
-                />
-              )}
-              {activeTab === 'cost' && (isAdmin ? <CostTab /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
-              {activeTab === 'training' && (
-                <TrainingTab 
-                  courseSlug={subSeg === 'course' ? teamSeg : null}
-                  lectureSlug={subSeg === 'lecture' ? teamSeg : null}
-                  lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null}
-                />
-              )}
-              {activeTab === 'business' && (isAdmin ? <BusinessPlanTab initialSubTab="finance" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
-              {activeTab === 'action-plan' && (isAdmin ? <BusinessPlanTab initialSubTab="action" /> : <div className="text-center py-20 text-slate-400">Bạn không có quyền truy cập mục này.</div>)}
-              {activeTab === 'products' && <ProductsTab />}
             </motion.div>
 
           </AnimatePresence>

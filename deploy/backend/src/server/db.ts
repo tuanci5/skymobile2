@@ -133,8 +133,47 @@ export async function initDBUtils() {
         email VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255),
         role VARCHAR(100),
+        permissions JSON,
         picture TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Migration to add permissions and manager_email
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN permissions JSON AFTER role');
+    } catch (e) {}
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN manager_email VARCHAR(255) AFTER email');
+    } catch (e) {}
+
+    // Seed DEV_ACCOUNTS so they exist in DB for testing
+    const devAccounts = [
+      { email: 'admin@skymobile.dev', name: 'System Administrator', role: 'Quản trị', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AD&backgroundColor=3b82f6&textColor=ffffff' },
+      { email: 'mkt_lead@skymobile.dev', name: 'Marketing Lead', role: 'Trưởng nhóm Marketing', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=ML&backgroundColor=8b5cf6&textColor=ffffff' },
+      { email: 'sale_lead@skymobile.dev', name: 'Sale Lead', role: 'Trưởng nhóm Sale', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=SL&backgroundColor=10b981&textColor=ffffff' },
+      { email: 'cskh_lead@skymobile.dev', name: 'CSKH Lead', role: 'Trưởng nhóm CSKH', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=CL&backgroundColor=f59e0b&textColor=ffffff' },
+      { email: 'ads@skymobile.dev', name: 'Ads Specialist', role: 'Nhân viên Quảng cáo', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AS&backgroundColor=ef4444&textColor=ffffff' },
+      { email: 'content@skymobile.dev', name: 'Content Creator', role: 'Nhân viên Content', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=CC&backgroundColor=ec4899&textColor=ffffff' },
+      { email: 'sale@skymobile.dev', name: 'Sale Executive', role: 'Nhân viên Sale', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=SE&backgroundColor=06b6d4&textColor=ffffff' },
+      { email: 'accountant@skymobile.dev', name: 'Accountant', role: 'Nhân viên kế toán tổng hợp', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=AC&backgroundColor=6366f1&textColor=ffffff' },
+      { email: 'hr@skymobile.dev', name: 'HR Admin', role: 'Nhân viên Hành chính & Nhân sự', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=HR&backgroundColor=f97316&textColor=ffffff' },
+      { email: 'telesale@skymobile.dev', name: 'Telesale Staff', role: 'Telesale', picture: 'https://api.dicebear.com/9.x/initials/svg?seed=TS&backgroundColor=84cc16&textColor=ffffff' },
+    ];
+    
+    for (const acc of devAccounts) {
+      await connection.execute(
+        'INSERT IGNORE INTO users (email, name, role, picture) VALUES (?, ?, ?, ?)',
+        [acc.email, acc.name, acc.role, acc.picture]
+      );
+    }
+
+    // Ensure role_permissions table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        role VARCHAR(100) PRIMARY KEY,
+        allowed_tabs JSON,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
 
@@ -157,6 +196,114 @@ export async function initDBUtils() {
       await connection.execute('ALTER TABLE recruitment_plans ADD COLUMN start_date VARCHAR(50) AFTER target_quantity');
       await connection.execute('ALTER TABLE recruitment_plans ADD COLUMN end_date VARCHAR(50) AFTER start_date');
     } catch (e) {}
+
+    // Ensure tasks table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        assigner_email VARCHAR(255) NOT NULL,
+        assignee_email VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Cần làm',
+        due_date VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (assigner_email) REFERENCES users(email) ON DELETE CASCADE,
+        FOREIGN KEY (assignee_email) REFERENCES users(email) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure task_comments table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS task_comments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        task_id INT NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure task_assignees table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS task_assignees (
+        task_id INT NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        PRIMARY KEY (task_id, user_email),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
+      )
+    `);
+
+    // Migration for existing tasks table
+    try {
+      await connection.execute('ALTER TABLE tasks ADD COLUMN result_handover TEXT');
+    } catch (e) {}
+    try {
+      await connection.execute('ALTER TABLE tasks ADD COLUMN report_url VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.execute('ALTER TABLE tasks ADD COLUMN task_group VARCHAR(255) AFTER title');
+    } catch (e) {}
+    try {
+      await connection.execute('ALTER TABLE tasks ADD COLUMN progress INT DEFAULT 0');
+    } catch (e) {}
+    try {
+      await connection.execute('ALTER TABLE tasks ADD COLUMN parent_task_id INT NULL');
+    } catch (e) {}
+
+    // Ensure task_subtasks table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS task_subtasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        task_id INT NOT NULL,
+        title VARCHAR(500) NOT NULL,
+        is_completed TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Ensure teams table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        owner_email VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner_email) REFERENCES users(email) ON DELETE CASCADE
+      )
+    `);
+
+    // Migration for existing teams table to add owner_email if missing
+    try {
+      await connection.execute('ALTER TABLE teams ADD COLUMN owner_email VARCHAR(255) NOT NULL DEFAULT "tuanci5@gmail.com" AFTER name');
+      await connection.execute('ALTER TABLE teams ADD FOREIGN KEY (owner_email) REFERENCES users(email) ON DELETE CASCADE');
+    } catch (e) {}
+
+    // Ensure team_members table exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        team_id INT NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        PRIMARY KEY (team_id, user_email),
+        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
+      )
+    `);
+
+    // Migrate existing assignee_email to task_assignees
+    try {
+      await connection.execute(`
+        INSERT IGNORE INTO task_assignees (task_id, user_email)
+        SELECT id, assignee_email FROM tasks WHERE assignee_email IS NOT NULL AND assignee_email != ''
+      `);
+    } catch (e) {
+      console.warn('Could not migrate assignees:', e.message);
+    }
 
     console.log('✅ MySQL schema verified.');
   } catch (err) {
