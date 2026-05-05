@@ -212,7 +212,6 @@ export const UserManagementTab = () => {
     { id: 'cost', label: 'Cơ cấu chi phí' },
     { id: 'training', label: 'Đào tạo & Văn hóa' },
     { id: 'business', label: 'Kế hoạch kinh doanh' },
-    { id: 'action-plan', label: 'Kế hoạch 4 tháng' },
     { id: 'products', label: 'Sản phẩm & Dịch vụ' },
     { id: 'users', label: 'Quản lý người dùng' },
     { id: 'tasks', label: 'Quản lý công việc' },

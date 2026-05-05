@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 import { 
   CheckSquare, Plus, Clock, AlertCircle, 
   CheckCircle2, ArrowRight, X, User as UserIcon,
-  Calendar, GripVertical, Trash2, Send, MessageSquare, Users, Edit2, RotateCcw, Check
+  Calendar, GripVertical, Trash2, Send, MessageSquare, Users, Edit2, RotateCcw, Check,
+  UserPlus, FileText, LayoutList
 } from 'lucide-react';
 
 interface Task {
@@ -20,6 +24,7 @@ interface Task {
   report_url?: string;
   task_group?: string;
   progress?: number;
+  parent_task_id?: number | null;
 }
 
 interface Team {
@@ -38,9 +43,6 @@ interface User {
   manager_email?: string;
 }
 
-let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
-if (API_BASE_URL === '/') API_BASE_URL = '';
-else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 const COLUMNS = [
   { id: 'Cần làm', label: 'Cần làm', color: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
@@ -60,6 +62,7 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({});
+  const [hideSubtasks, setHideSubtasks] = useState(true);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -84,7 +87,10 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
   const [subtasks, setSubtasks] = useState<any[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [parentTaskId, setParentTaskId] = useState<number | null>(null);
-  const [taskHistory, setTaskHistory] = useState<Task[]>([]); // navigation stack for subtask drill-down
+  const [taskHistory, setTaskHistory] = useState<Task[]>([]);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [isEditingAssignees, setIsEditingAssignees] = useState(false); // navigation stack for subtask drill-down
 
   const fetchData = async () => {
     if (!currentUser?.email) return;
@@ -350,8 +356,8 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
     }
   };
 
-  const getUserName = (email: string) => users.find(u => u.email === email)?.name || email;
-  const getUserPic = (email: string) => users.find(u => u.email === email)?.picture;
+  const getUserName = (email: string) => users.find(u => u.email.toLowerCase() === email.toLowerCase())?.name || email;
+  const getUserPic = (email: string) => users.find(u => u.email.toLowerCase() === email.toLowerCase())?.picture;
 
   const filteredTasks = tasks.filter(task => {
     if (employeeFilter !== 'all') {
@@ -382,6 +388,8 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
       }
       return true;
     }
+    if (hideSubtasks && task.parent_task_id) return false;
+
     return true;
   });
 
@@ -472,6 +480,19 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
             ))}
           </select>
         )}
+        
+        <button
+          onClick={() => setHideSubtasks(!hideSubtasks)}
+          className={`px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-sm shrink-0 border ${
+            hideSubtasks 
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
+              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <LayoutList className="w-4 h-4" />
+          {hideSubtasks ? 'Chỉ việc chính' : 'Tất cả việc'}
+        </button>
+
         {/* Desktop-only team button */}
         <button
           onClick={() => setIsTeamModalOpen(true)}
@@ -582,6 +603,27 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
                     {task.description && (
                       <p className="text-sm text-slate-500 mb-4 line-clamp-3">{task.description}</p>
                     )}
+
+                    {/* Subtask progress on card */}
+                    {(() => {
+                      const taskSubtasks = tasks.filter(t => t.parent_task_id === task.id);
+                      if (taskSubtasks.length === 0) return null;
+                      const done = taskSubtasks.filter(t => t.status === 'Hoàn thành').length;
+                      return (
+                        <div className="flex items-center gap-1.5 mb-3 px-2 py-1 bg-slate-50 rounded-lg w-fit border border-slate-100">
+                          <LayoutList className="w-3 h-3 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {done}/{taskSubtasks.length} việc con
+                          </span>
+                          <div className="w-12 h-1 bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 transition-all" 
+                              style={{ width: `${(done / taskSubtasks.length) * 100}%` }} 
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                     
                     <div className="mt-4 space-y-2">
                       {/* Avatars row */}
@@ -888,7 +930,64 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
                 {/* Left side: Task Details */}
                 <div className="w-full md:w-1/2 p-6 overflow-y-auto border-r border-slate-100 space-y-6 bg-slate-50/30">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedTask.title}</h2>
+                    {selectedTask.parent_task_id && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">Phần việc con của</span>
+                        <button 
+                          onClick={() => {
+                            const parent = tasks.find(t => t.id === selectedTask.parent_task_id);
+                            if (parent) {
+                              setTaskHistory(h => [...h, selectedTask]);
+                              setSelectedTask(parent);
+                              setSubtasks([]);
+                              fetchComments(parent.id);
+                              fetchSubtasks(parent.id);
+                            } else {
+                              alert('Không tìm thấy công việc cha hoặc bạn không có quyền xem.');
+                            }
+                          }}
+                          className="text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 transition-all"
+                        >
+                          <ArrowRight className="w-4 h-4 rotate-180" />
+                          {tasks.find(t => t.id === selectedTask.parent_task_id)?.title || 'Công việc cha'}
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Editable Title */}
+                    {(() => {
+                      const isAssigner = selectedTask.assigner_email === currentUser?.email || ['Quản trị', 'Quản lý'].includes(currentUser?.role);
+                      return isEditingTitle ? (
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            autoFocus
+                            className="flex-1 text-2xl font-bold text-slate-900 border-b-2 border-indigo-500 outline-none bg-transparent"
+                            value={selectedTask.title}
+                            onChange={(e) => setSelectedTask({ ...selectedTask, title: e.target.value })}
+                            onBlur={() => {
+                              setIsEditingTitle(false);
+                              updateTaskDetails(selectedTask.id, { title: selectedTask.title });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setIsEditingTitle(false);
+                                updateTaskDetails(selectedTask.id, { title: selectedTask.title });
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 group mb-2">
+                          <h2 className="text-2xl font-bold text-slate-900">{selectedTask.title}</h2>
+                          {isAssigner && (
+                            <button onClick={() => setIsEditingTitle(true)} className="p-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-all">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Unified Status + Progress dropdown */}
                       {(() => {
@@ -946,14 +1045,38 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
                     </div>
                   </div>
                   
-                  {selectedTask.description && (
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 mb-2">Mô tả</h4>
-                      <div className="bg-white p-4 rounded-2xl border border-slate-200 text-slate-600 text-sm whitespace-pre-wrap">
-                        {selectedTask.description}
-                      </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-400" />
+                        Mô tả công việc
+                      </h4>
+                      {(selectedTask.assigner_email === currentUser?.email || ['Quản trị', 'Quản lý'].includes(currentUser?.role)) && (
+                        <button 
+                          onClick={() => setIsEditingDesc(!isEditingDesc)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
+                        >
+                          {isEditingDesc ? 'Xong' : 'Chỉnh sửa'}
+                        </button>
+                      )}
                     </div>
-                  )}
+                    
+                    {isEditingDesc ? (
+                      <textarea
+                        className="w-full h-32 p-4 rounded-2xl border-2 border-indigo-100 focus:border-indigo-500 outline-none text-sm text-slate-700 resize-none transition-all"
+                        value={selectedTask.description}
+                        onChange={(e) => setSelectedTask({ ...selectedTask, description: e.target.value })}
+                        onBlur={() => {
+                          updateTaskDetails(selectedTask.id, { description: selectedTask.description });
+                        }}
+                        placeholder="Thêm mô tả chi tiết cho công việc này..."
+                      />
+                    ) : (
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 text-slate-600 text-sm whitespace-pre-wrap min-h-[100px] hover:border-slate-300 transition-colors cursor-text" onClick={() => (selectedTask.assigner_email === currentUser?.email || ['Quản trị', 'Quản lý'].includes(currentUser?.role)) && setIsEditingDesc(true)}>
+                        {selectedTask.description || <span className="text-slate-400 italic">Chưa có mô tả công việc.</span>}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white p-4 rounded-2xl border border-slate-200">
@@ -972,11 +1095,50 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
                     </div>
 
                     <div className="bg-white p-4 rounded-2xl border border-slate-200">
-                      <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Người nhận ({selectedTask.assignees?.length || 0})</h4>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Người nhận ({selectedTask.assignees?.length || 0})</h4>
+                        {(selectedTask.assigner_email === currentUser?.email || ['Quản trị', 'Quản lý'].includes(currentUser?.role)) && (
+                          <div className="relative">
+                            <button 
+                              onClick={() => setIsEditingAssignees(!isEditingAssignees)}
+                              className="p-1 hover:bg-slate-100 rounded-lg text-indigo-600 transition-colors"
+                              title="Quản lý người nhận"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                            </button>
+                            {isEditingAssignees && (
+                              <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase px-3 py-2 border-b border-slate-50 mb-1">Thêm người nhận</p>
+                                <div className="max-h-48 overflow-y-auto">
+                                  {users.filter(u => !selectedTask.assignees?.includes(u.email)).map(u => (
+                                    <button
+                                      key={u.email}
+                                      onClick={() => {
+                                        const newAssignees = [...(selectedTask.assignees || []), u.email];
+                                        setSelectedTask({ ...selectedTask, assignees: newAssignees });
+                                        updateTaskDetails(selectedTask.id, { assignees: newAssignees });
+                                      }}
+                                      className="w-full flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl text-left transition-colors"
+                                    >
+                                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">
+                                        {u.picture ? <img src={u.picture} className="w-full h-full rounded-full object-cover" /> : u.name.charAt(0)}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-700 truncate">{u.name}</p>
+                                        <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex flex-col gap-2 max-h-24 overflow-y-auto pr-2">
                         {selectedTask.assignees?.map(email => (
-                          <div key={email} className="flex items-center gap-3">
-                            <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600 overflow-hidden shrink-0">
+                          <div key={email} className="flex items-center gap-3 group/assignee">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600 overflow-hidden shrink-0">
                               {getUserPic(email) ? (
                                 <img src={getUserPic(email)} alt="" className="w-full h-full object-cover" />
                               ) : getUserName(email).charAt(0).toUpperCase()}
@@ -984,8 +1146,23 @@ export const TaskManagementTab = ({ currentUser }: { currentUser: any }) => {
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-slate-900 truncate">{getUserName(email)}</p>
                             </div>
+                            {(selectedTask.assigner_email === currentUser?.email || ['Quản trị', 'Quản lý'].includes(currentUser?.role)) && (
+                              <button 
+                                onClick={() => {
+                                  const newAssignees = selectedTask.assignees?.filter(e => e !== email) || [];
+                                  setSelectedTask({ ...selectedTask, assignees: newAssignees });
+                                  updateTaskDetails(selectedTask.id, { assignees: newAssignees });
+                                }}
+                                className="opacity-0 group-hover/assignee:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         ))}
+                        {(!selectedTask.assignees || selectedTask.assignees.length === 0) && (
+                          <p className="text-xs text-slate-400 italic py-2 text-center">Chưa có người nhận</p>
+                        )}
                       </div>
                     </div>
                   </div>

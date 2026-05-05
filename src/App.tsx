@@ -69,12 +69,14 @@ import { ProductsTab } from './components/ProductsTab';
 import { RecruitmentPlanTab } from './components/RecruitmentPlanTab';
 import { UserManagementTab } from './components/UserManagementTab';
 import { TaskManagementTab } from './components/TaskManagementTab';
+import { MessengerTab } from './components/MessengerTab';
+import { RevenueReportTab } from './components/RevenueReportTab';
 
 const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.googleusercontent.com';
 
 // --- Types ---
 
-type TabType = 'model' | 'hr' | 'salary' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks';
+type TabType = 'model' | 'hr' | 'salary' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks' | 'messenger' | 'revenue';
 
 // --- Components ---
 
@@ -375,13 +377,14 @@ const TAB_TO_PATH: Record<TabType, string> = {
   model: '/model',
   hr: '/hr',
   salary: '/salary',
-  cost: '/cost',
   training: '/training',
   business: '/business',
   'action-plan': '/action-plan',
   products: '/products',
   users: '/users',
   tasks: '/tasks',
+  messenger: '/messenger',
+  revenue: '/revenue',
 };
 
 const Sidebar = ({
@@ -411,8 +414,9 @@ const Sidebar = ({
     { id: 'salary', label: 'Lương & KPI', icon: <Wallet className="w-5 h-5" /> },
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'business', label: 'Kế hoạch kinh doanh', icon: <TrendingUp className="w-5 h-5" />, adminOnly: true },
-    { id: 'action-plan', label: 'Kế hoạch 4 tháng', icon: <Calendar className="w-5 h-5" />, adminOnly: true },
     { id: 'tasks', label: 'Quản lý công việc', icon: <CheckCircle2 className="w-5 h-5" /> },
+    { id: 'messenger', label: 'CSKH Messenger', icon: <MessageSquare className="w-5 h-5" /> },
+    { id: 'revenue', label: 'Báo cáo doanh thu', icon: <PieChart className="w-5 h-5" /> },
     { id: 'users', label: 'Quản lý người dùng', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
   ];
@@ -2058,9 +2062,9 @@ function AppContent() {
   const teamSeg = pathParts[2] || '';
 
   const PATH_TO_TAB: Record<string, TabType> = {
-    model: 'model', hr: 'hr', salary: 'salary', cost: 'cost', training: 'training',
+    model: 'model', hr: 'hr', salary: 'salary', training: 'training',
     business: 'business', 'action-plan': 'action-plan', products: 'products',
-    users: 'users', tasks: 'tasks'
+    users: 'users', tasks: 'tasks', messenger: 'messenger', revenue: 'revenue'
   };
   const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
 
@@ -2117,6 +2121,7 @@ function AppContent() {
   const isSystemAdmin = user.role === 'Quản trị';
   const hasPermission = (tab: TabType) => {
     if (isSystemAdmin) return true;
+    if (tab === 'action-plan') return allowedTabs.includes('business');
     return allowedTabs.includes(tab);
   };
 
@@ -2913,6 +2918,8 @@ function AppContent() {
                   {activeTab === 'tasks' && <TaskManagementTab currentUser={user} />}
                   {activeTab === 'products' && <ProductsTab />}
                   {activeTab === 'users' && <UserManagementTab />}
+                  {activeTab === 'messenger' && <MessengerTab user={user} />}
+                  {activeTab === 'revenue' && <RevenueReportTab />}
                 </>
               )}
             </motion.div>

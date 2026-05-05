@@ -21,6 +21,14 @@ Tất cả các file cần thiết đã được chuẩn bị sẵn trong thư m
     - Domain: `skymobile.movads.vn`.
     - Document Root: Trỏ vào thư mục trang web mới tạo.
 2.  Upload và giải nén `frontend.zip` vào thư mục gốc của Website này.
+3.  **Cấu hình URL Rewrite (Pseudo-static)** để tránh lỗi 404 khi f5 (dành cho React):
+    - Vào cài đặt của Website -> **URL rewrite** (hoặc **Pseudo-static**).
+    - Dán đoạn mã sau vào và lưu lại:
+      ```nginx
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+      ```
 3.  **Cấu hình Reverse Proxy**:
     - Vào cài đặt của Website `skymobile.movads.vn` -> **Reverse Proxy**.
     - Nhấn **Add reverse proxy**.

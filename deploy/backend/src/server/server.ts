@@ -1,10 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { pool, initDBUtils } from './db';
+import fbMessengerRouter from './fbMessenger';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/fb', fbMessengerRouter);
 
 // Database initialization state
 let isDbInitialized = false;
@@ -25,7 +28,8 @@ app.use(async (req, res, next) => {
 // ─── DEBUG API ────────────────────────────────────────────────────────────────
 app.get('/api/debug', (req, res) => {
   res.json({
-    status: 'online',
+    status: 'online-v3-final',
+    version: 'v2-with-delete-fix',
     timestamp: new Date().toISOString(),
     env: {
       has_host: !!process.env.DB_HOST,
@@ -42,36 +46,22 @@ app.get('/api/debug', (req, res) => {
 
 app.get('/api/candidates', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
-    
-    // Normalize snake_case/different casing from DB to camelCase for Frontend
-    const normalizedRows = (rows as any[]).map(row => {
-      // Create a case-insensitive row getter
-      const get = (key: string) => {
-        const lowerKey = key.toLowerCase().replace(/_/g, '');
-        const foundKey = Object.keys(row).find(k => k.toLowerCase().replace(/_/g, '') === lowerKey);
-        return foundKey ? row[foundKey] : undefined;
-      };
-
-      return {
-        id: get('id'),
-        name: get('name'),
-        position: get('position'),
-        interviewDate: get('interviewdate'),
-        interviewTime: get('interviewtime'),
-        interviewer: get('interviewer'),
-        status: get('status'),
-        cvLink: get('cvlink'),
-        phone: get('phone'),
-        source: get('source'),
-        createdAt: get('createdat')
-      };
-    });
-    
-    console.log(`GET /api/candidates - Returned ${normalizedRows.length} candidates`);
-    res.json(normalizedRows);
-  } catch (error) {
-    console.error('❌ Error fetching candidates:', error);
+    const { rows } = await pool.query('SELECT * FROM candidates ORDER BY created_at DESC');
+    const formatted = rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      position: row.position,
+      interviewDate: row.interview_date,
+      interviewer: row.interviewer,
+      status: row.status,
+      cvLink: row.cv_link,
+      phone: row.phone,
+      source: row.source,
+      interviewTime: row.interview_time
+    }));
+    res.json(formatted);
+  } catch (error: any) {
+    console.error('Error fetching candidates:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch candidates' });
   }
 });
@@ -82,7 +72,7 @@ app.post('/api/candidates', async (req, res) => {
     
     await pool.query(
       `INSERT INTO candidates (id, name, position, interview_date, interview_time, interviewer, status, cv_link, phone, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [id, name, position, interviewDate, interviewTime, interviewer, status, cvLink, phone, source]
     );
     res.json({ success: true, message: 'Candidate added' });
@@ -97,7 +87,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    await pool.query('UPDATE candidates SET status = ? WHERE id = ?', [status, id]);
+    await pool.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id]);
     res.json({ success: true, message: 'Status updated' });
   } catch (error) {
     console.error('Error updating status:', error);
@@ -108,7 +98,7 @@ app.put('/api/candidates/:id/status', async (req, res) => {
 app.delete('/api/candidates/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM candidates WHERE id = ?', [id]);
+    await pool.query('DELETE FROM candidates WHERE id = $1', [id]);
     res.json({ success: true, message: 'Candidate deleted' });
   } catch (error) {
     console.error('Error deleting candidate:', error);
@@ -120,22 +110,22 @@ app.delete('/api/candidates/:id', async (req, res) => {
 
 app.get('/api/evaluations', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM evaluations');
+    const { rows } = await pool.query('SELECT * FROM evaluations');
     const evaluationsData: any = {};
-    (rows as any[]).forEach(row => {
-      evaluationsData[row.candidateId] = {
+    rows.forEach(row => {
+      evaluationsData[row.candidateid] = {
         scores: typeof row.scores === 'string' ? JSON.parse(row.scores) : row.scores,
         notes: typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes,
-        totalScore: row.totalScore,
+        totalScore: row.totalscore,
         strengths: row.strengths,
         weaknesses: row.weaknesses,
         decision: row.decision,
-        salaryNote: row.salaryNote,
-        submittedAt: row.submittedAt
+        salaryNote: row.salarynote,
+        submittedAt: row.submittedat
       };
     });
     res.json(evaluationsData);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching evaluations:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch evaluations' });
   }
@@ -146,12 +136,12 @@ app.post('/api/evaluations', async (req, res) => {
     const { candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt } = req.body;
     
     await pool.query(
-      `INSERT INTO evaluations (candidateId, scores, notes, totalScore, strengths, weaknesses, decision, salaryNote, submittedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-       scores = VALUES(scores), notes = VALUES(notes), totalScore = VALUES(totalScore),
-       strengths = VALUES(strengths), weaknesses = VALUES(weaknesses), decision = VALUES(decision),
-       salaryNote = VALUES(salaryNote), submittedAt = VALUES(submittedAt)`,
+      `INSERT INTO evaluations (candidateid, scores, notes, totalscore, strengths, weaknesses, decision, salarynote, submittedat)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (candidateid) DO UPDATE SET
+       scores = EXCLUDED.scores, notes = EXCLUDED.notes, totalscore = EXCLUDED.totalscore,
+       strengths = EXCLUDED.strengths, weaknesses = EXCLUDED.weaknesses, decision = EXCLUDED.decision,
+       salarynote = EXCLUDED.salarynote, submittedat = EXCLUDED.submittedat`,
       [candidateId, JSON.stringify(scores), JSON.stringify(notes), totalScore, strengths, weaknesses, decision, salaryNote, submittedAt]
     );
     res.json({ success: true, message: 'Evaluation saved' });
@@ -165,146 +155,63 @@ app.post('/api/evaluations', async (req, res) => {
 
 app.get('/api/cvs', async (req, res) => {
   try {
-    console.log('GET /api/cvs - Fetching CV data...');
-    const [rows] = await pool.query('SELECT * FROM cv_data');
+    const { rows } = await pool.query('SELECT * FROM cv_data');
     const cvDetails: any = {};
-    
-    (rows as any[]).forEach(row => {
-      // Normalize row keys to camelCase to match frontend CVData interface
-      const normalizedRow: any = {};
-      Object.keys(row).forEach(key => {
-        // Simple mapping for common fields
-        let normalizedKey = key;
-        const lKey = key.toLowerCase();
-        if (lKey === 'candidateid') normalizedKey = 'candidateId';
-        else if (lKey === 'fullname') normalizedKey = 'fullName';
-        else if (lKey === 'dateofbirth') normalizedKey = 'dateOfBirth';
-        else if (lKey === 'cvlink') normalizedKey = 'cvLink';
-        else if (lKey === 'interviewdate') normalizedKey = 'interviewDate';
-        else if (lKey === 'interviewtime') normalizedKey = 'interviewTime';
-        else if (lKey === 'hrnotes') normalizedKey = 'hrNotes';
-        else if (lKey === 'submittedat') normalizedKey = 'submittedAt';
-        
-        normalizedRow[normalizedKey] = row[key];
-      });
-
-      if (normalizedRow.candidateId) {
-        cvDetails[normalizedRow.candidateId] = normalizedRow;
-      }
+    rows.forEach(row => {
+      cvDetails[row.candidateid] = {
+        candidateId: row.candidateid,
+        fullName: row.fullname,
+        email: row.email,
+        phone: row.phone,
+        dateOfBirth: row.dateofbirth,
+        address: row.address,
+        education: row.education,
+        experience: row.experience,
+        skills: row.skills,
+        certifications: row.certifications,
+        languages: row.languages,
+        cvLink: row.cvlink,
+        notes: row.notes,
+        interviewDate: row.interviewdate,
+        interviewTime: row.interviewtime,
+        interviewer: row.interviewer,
+        submittedAt: row.submittedat
+      };
     });
-    
-    console.log(`GET /api/cvs - Found ${Object.keys(cvDetails).length} CVs`);
     res.json(cvDetails);
-  } catch (error) {
-    console.error('❌ Error fetching CVs:', error);
+  } catch (error: any) {
+    console.error('Error fetching CVs:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch CVs' });
   }
 });
 
 app.post('/api/cvs', async (req, res) => {
   try {
-    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, submittedAt } = req.body;
+    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt } = req.body;
     
-    console.log(`POST /api/cvs - Saving CV for candidate ${candidateId} (${fullName})`);
-    
-    // 1. Ensure candidate exists in candidates table (for foreign key constraint)
-    const [candidates] = await pool.query('SELECT id FROM candidates WHERE id = ?', [candidateId]);
-    if ((candidates as any[]).length === 0) {
-      console.log(`POST /api/cvs - Candidate ${candidateId} not in DB. Creating dummy record...`);
-      await pool.query(
-        'INSERT INTO candidates (id, name, position, status, interview_date, interview_time, interviewer, cv_link, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [candidateId, fullName, position || 'N/A', status || 'Chờ phỏng vấn', interviewDate || null, interviewTime || null, interviewer || 'N/A', cvLink || null, phone || null]
-      );
-    }
-
-    // 2. Update cv_data table
     await pool.query(
-      `INSERT INTO cv_data (candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, submittedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-       fullName = VALUES(fullName), email = VALUES(email), phone = VALUES(phone), dateOfBirth = VALUES(dateOfBirth),
-       address = VALUES(address), education = VALUES(education), experience = VALUES(experience), skills = VALUES(skills),
-       certifications = VALUES(certifications), languages = VALUES(languages), cvLink = VALUES(cvLink), notes = VALUES(notes),
-       interviewDate = VALUES(interviewDate), interviewTime = VALUES(interviewTime), interviewer = VALUES(interviewer),
-       position = VALUES(position), status = VALUES(status), hrNotes = VALUES(hrNotes), submittedAt = VALUES(submittedAt)`,
-      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, JSON.stringify(hrNotes || []), submittedAt]
+      `INSERT INTO cv_data (candidateid, fullname, email, phone, dateofbirth, address, education, experience, skills, certifications, languages, cvlink, notes, interviewdate, interviewtime, interviewer, submittedat)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       ON CONFLICT (candidateid) DO UPDATE SET
+       fullname = EXCLUDED.fullname, email = EXCLUDED.email, phone = EXCLUDED.phone, dateofbirth = EXCLUDED.dateofbirth,
+       address = EXCLUDED.address, education = EXCLUDED.education, experience = EXCLUDED.experience, skills = EXCLUDED.skills,
+       certifications = EXCLUDED.certifications, languages = EXCLUDED.languages, cvlink = EXCLUDED.cvlink, notes = EXCLUDED.notes,
+       interviewdate = EXCLUDED.interviewdate, interviewtime = EXCLUDED.interviewtime, interviewer = EXCLUDED.interviewer,
+       submittedat = EXCLUDED.submittedat`,
+      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt]
     );
-
-    // 3. Update basic candidate info in candidates table
-    await pool.query(
-      `UPDATE candidates SET name = ?, phone = ?, position = ?, status = ?, interview_date = ?, interview_time = ?, interviewer = ?, cv_link = ? WHERE id = ?`,
-      [fullName, phone, position, status, interviewDate, interviewTime, interviewer, cvLink, candidateId]
-    );
-
-    console.log(`POST /api/cvs - Success for ${candidateId}`);
-    res.json({ success: true, message: 'CV saved and candidate updated' });
+    res.json({ success: true, message: 'CV saved' });
   } catch (error) {
-    console.error('❌ Error saving CV:', error);
-    res.status(500).json({ error: 'Failed to save CV: ' + error.message });
+    console.error('Error saving CV:', error);
+    res.status(500).json({ error: 'Failed to save CV' });
   }
 });
 
-// --- Authentication Endpoints ---
+// ─── USERS API ────────────────────────────────────────────────────────────
 
-// 1. Verify user from database
-app.get('/api/auth/verify', async (req: express.Request, res: express.Response) => {
-  const email = (req.query.email as string)?.toLowerCase();
-  if (!email) return res.status(400).json({ error: 'Email is required' });
-
-  try {
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-    const users = rows as any[];
-
-    if (users.length > 0) {
-      res.json({ authorized: true, user: users[0] });
-    } else {
-      res.json({ authorized: false });
-    }
-  } catch (error) {
-    console.error('❌ Error verifying user:', error);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-// 2. Sync users from Google Sheet CSV to Database
-// This is an admin-only tool (could be triggered manually or via cron)
-app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
-  const { csvUrl } = req.body;
-  if (!csvUrl) return res.status(400).json({ error: 'csvUrl is required' });
-
-  try {
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(csvUrl);
-    const csvData = await response.text();
-
-    const lines = csvData.split('\n')
-      .map(line => line.split(','))
-      .filter(row => row[0] && row[0].includes('@'));
-
-    let count = 0;
-    for (const row of lines) {
-      const email = row[0].trim().toLowerCase();
-      const role = row[1]?.trim() || 'Thành viên';
-      const name = email.split('@')[0]; // Default name from email
-
-      await pool.query(
-        'INSERT INTO users (email, name, role) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE role = VALUES(role)',
-        [email, name, role]
-      );
-      count++;
-    }
-
-    res.json({ success: true, message: `Synced ${count} users to database` });
-  } catch (error) {
-    console.error('❌ Error syncing users:', error);
-    res.status(500).json({ error: 'Sync failed: ' + error.message });
-  }
-});
-
-// 3. User CRUD for Management
 app.get('/api/users', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
     res.json(rows);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -314,12 +221,12 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { email, name, role, permissions, manager_email } = req.body;
+    const { email, name, role, permissions, manager_email, picture } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     
     await pool.query(
-      'INSERT INTO users (email, name, role, permissions, manager_email) VALUES (?, ?, ?, ?, ?)',
-      [email.toLowerCase(), name || email.split('@')[0], role || 'Thành viên', JSON.stringify(permissions || []), manager_email || null]
+      'INSERT INTO users (email, name, role, permissions, manager_email, picture) VALUES ($1, $2, $3, $4, $5, $6)',
+      [email.toLowerCase(), name || email.split('@')[0], role || 'Thành viên', JSON.stringify(permissions || []), manager_email || null, picture || null]
     );
     res.json({ success: true, message: 'User added' });
   } catch (error) {
@@ -331,10 +238,10 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    const { name, role, permissions, manager_email } = req.body;
+    const { name, role, permissions, manager_email, picture } = req.body;
     await pool.query(
-      'UPDATE users SET name = ?, role = ?, permissions = ?, manager_email = ? WHERE email = ?',
-      [name, role, JSON.stringify(permissions || []), manager_email || null, email.toLowerCase()]
+      'UPDATE users SET name = $1, role = $2, permissions = $3, manager_email = $4, picture = $5 WHERE email = $6',
+      [name, role, JSON.stringify(permissions || []), manager_email || null, picture || null, email.toLowerCase()]
     );
     res.json({ success: true, message: 'User updated' });
   } catch (error) {
@@ -346,7 +253,7 @@ app.put('/api/users/:email', async (req, res) => {
 app.delete('/api/users/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    await pool.query('DELETE FROM users WHERE email = ?', [email.toLowerCase()]);
+    await pool.query('DELETE FROM users WHERE email = $1', [email.toLowerCase()]);
     res.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -357,7 +264,7 @@ app.delete('/api/users/:email', async (req, res) => {
 // 4. Role Permissions API
 app.get('/api/role-permissions', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM role_permissions');
+    const { rows } = await pool.query('SELECT * FROM role_permissions');
     res.json(rows);
   } catch (error) {
     console.error('Error fetching role permissions:', error);
@@ -369,8 +276,8 @@ app.post('/api/role-permissions', async (req, res) => {
   try {
     const { role, allowed_tabs } = req.body;
     await pool.query(
-      'INSERT INTO role_permissions (role, allowed_tabs) VALUES (?, ?) ON DUPLICATE KEY UPDATE allowed_tabs = ?',
-      [role, JSON.stringify(allowed_tabs), JSON.stringify(allowed_tabs)]
+      'INSERT INTO role_permissions (role, allowed_tabs) VALUES ($1, $2) ON CONFLICT (role) DO UPDATE SET allowed_tabs = EXCLUDED.allowed_tabs',
+      [role, JSON.stringify(allowed_tabs)]
     );
     res.json({ success: true });
   } catch (error) {
@@ -382,7 +289,7 @@ app.post('/api/role-permissions', async (req, res) => {
 // ─── RECRUITMENT PLANS API ────────────────────────────────────────────────────────
 app.get('/api/recruitment-plans', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM recruitment_plans ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT * FROM recruitment_plans ORDER BY created_at DESC');
     res.json(rows);
   } catch (error) {
     console.error('Error fetching recruitment plans:', error);
@@ -394,7 +301,7 @@ app.post('/api/recruitment-plans', async (req, res) => {
   try {
     const { position, target_quantity, note, start_date, end_date } = req.body;
     await pool.query(
-      'INSERT INTO recruitment_plans (position, target_quantity, note, start_date, end_date) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO recruitment_plans (position, target_quantity, note, start_date, end_date) VALUES ($1, $2, $3, $4, $5)',
       [position, target_quantity, note, start_date, end_date]
     );
     res.json({ success: true, message: 'Plan added' });
@@ -409,7 +316,7 @@ app.put('/api/recruitment-plans/:id', async (req, res) => {
     const { id } = req.params;
     const { position, target_quantity, note, status, start_date, end_date } = req.body;
     await pool.query(
-      'UPDATE recruitment_plans SET position = ?, target_quantity = ?, note = ?, status = ?, start_date = ?, end_date = ? WHERE id = ?',
+      'UPDATE recruitment_plans SET position = $1, target_quantity = $2, note = $3, status = $4, start_date = $5, end_date = $6 WHERE id = $7',
       [position, target_quantity, note, status, start_date, end_date, id]
     );
     res.json({ success: true, message: 'Plan updated' });
@@ -422,7 +329,7 @@ app.put('/api/recruitment-plans/:id', async (req, res) => {
 app.delete('/api/recruitment-plans/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM recruitment_plans WHERE id = ?', [id]);
+    await pool.query('DELETE FROM recruitment_plans WHERE id = $1', [id]);
     res.json({ success: true, message: 'Plan deleted' });
   } catch (error) {
     console.error('Error deleting recruitment plan:', error);
@@ -442,20 +349,21 @@ app.get('/api/tasks', async (req, res) => {
 
     if (role === 'Quản trị') {
       query = `SELECT t.*, 
-        (SELECT GROUP_CONCAT(user_email) FROM task_assignees WHERE task_id = t.id) as assignees_str 
+        (SELECT string_agg(user_email, ',') FROM task_assignees WHERE task_id = t.id) as assignees_str 
        FROM tasks t 
        ORDER BY t.created_at DESC`;
     } else {
+      const searchEmail = email.toString().toLowerCase();
       query = `SELECT t.*, 
-        (SELECT GROUP_CONCAT(user_email) FROM task_assignees WHERE task_id = t.id) as assignees_str 
+        (SELECT string_agg(user_email, ',') FROM task_assignees WHERE task_id = t.id) as assignees_str 
        FROM tasks t 
-       WHERE t.assigner_email = ? 
-       OR t.id IN (SELECT task_id FROM task_assignees WHERE user_email = ?)
+       WHERE LOWER(t.assigner_email) = $1 
+       OR t.id IN (SELECT task_id FROM task_assignees WHERE LOWER(user_email) = $2)
        ORDER BY t.created_at DESC`;
-      params = [email, email];
+      params = [searchEmail, searchEmail];
     }
 
-    const [rows] = await pool.query(query, params);
+    const { rows } = await pool.query(query, params);
     
     const tasks = (rows as any[]).map(row => ({
       ...row,
@@ -474,23 +382,26 @@ app.post('/api/tasks', async (req, res) => {
     const { title, description, assigner_email, assignees, status, due_date, task_group, parent_task_id } = req.body;
     
     // Support old API calls that only send assignee_email
-    const finalAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
+    const rawAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
+    const finalAssignees = rawAssignees.map((e: string) => e.toLowerCase().trim());
+    const finalAssignerEmail = assigner_email.toLowerCase().trim();
     
-    if (!title || !assigner_email || !finalAssignees.length) {
+    if (!title || !finalAssignerEmail || !finalAssignees.length) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
     const assignee_email = finalAssignees[0];
     
-    const [result] = await pool.query(
-      'INSERT INTO tasks (title, description, assigner_email, assignee_email, status, due_date, task_group, parent_task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description || '', assigner_email, assignee_email, status || 'Cần làm', due_date || null, task_group || null, parent_task_id || null]
+    const { rows } = await pool.query(
+      'INSERT INTO tasks (title, description, assigner_email, assignee_email, status, due_date, task_group, parent_task_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+      [title, description || '', finalAssignerEmail, assignee_email, status || 'Cần làm', due_date || null, task_group || null, parent_task_id || null]
     );
-    const taskId = (result as any).insertId;
+    const taskId = rows[0].id;
     
     if (finalAssignees.length > 0) {
-      const values = finalAssignees.map((email: string) => [taskId, email]);
-      await pool.query('INSERT IGNORE INTO task_assignees (task_id, user_email) VALUES ?', [values]);
+      for (const email of finalAssignees) {
+        await pool.query('INSERT INTO task_assignees (task_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [taskId, email]);
+      }
     }
     
     res.json({ success: true, message: 'Task created', id: taskId });
@@ -505,18 +416,20 @@ app.put('/api/tasks/:id', async (req, res) => {
     const { id } = req.params;
     const { title, description, assignees, status, due_date, result_handover, report_url, task_group, progress } = req.body;
     
-    const finalAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
+    const rawAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
+    const finalAssignees = rawAssignees.map((e: string) => e.toLowerCase().trim());
     const assignee_email = finalAssignees.length > 0 ? finalAssignees[0] : null;
 
     await pool.query(
-      'UPDATE tasks SET title = ?, description = ?, assignee_email = COALESCE(?, assignee_email), status = ?, due_date = ?, result_handover = ?, report_url = ?, task_group = ?, progress = COALESCE(?, progress) WHERE id = ?',
+      'UPDATE tasks SET title = $1, description = $2, assignee_email = COALESCE($3, assignee_email), status = $4, due_date = $5, result_handover = $6, report_url = $7, task_group = $8, progress = COALESCE($9, progress) WHERE id = $10',
       [title, description, assignee_email, status, due_date, result_handover || null, report_url || null, task_group || null, progress !== undefined ? progress : null, id]
     );
 
     if (finalAssignees && finalAssignees.length > 0) {
-      await pool.query('DELETE FROM task_assignees WHERE task_id = ?', [id]);
-      const values = finalAssignees.map((email: string) => [id, email]);
-      await pool.query('INSERT IGNORE INTO task_assignees (task_id, user_email) VALUES ?', [values]);
+      await pool.query('DELETE FROM task_assignees WHERE task_id = $1', [id]);
+      for (const email of finalAssignees) {
+        await pool.query('INSERT INTO task_assignees (task_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, email]);
+      }
     }
 
     res.json({ success: true, message: 'Task updated' });
@@ -529,7 +442,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM tasks WHERE id = ?', [id]);
+    await pool.query('DELETE FROM tasks WHERE id = $1', [id]);
     res.json({ success: true, message: 'Task deleted' });
   } catch (error) {
     console.error('Error deleting task:', error);
@@ -543,11 +456,11 @@ app.get('/api/tasks/:id/subtasks', async (req, res) => {
   try {
     const { id } = req.params;
     // Get child tasks (full tasks linked via parent_task_id)
-    const [childTasks] = await pool.query(
-      `SELECT t.*, GROUP_CONCAT(ta.user_email ORDER BY ta.user_email SEPARATOR ',') as assignees_str
+    const { rows: childTasks } = await pool.query(
+      `SELECT t.*, string_agg(ta.user_email, ',' ORDER BY ta.user_email) as assignees_str
        FROM tasks t
        LEFT JOIN task_assignees ta ON t.id = ta.task_id
-       WHERE t.parent_task_id = ?
+       WHERE t.parent_task_id = $1
        GROUP BY t.id
        ORDER BY t.created_at DESC`,
       [id]
@@ -568,9 +481,9 @@ app.post('/api/tasks/:id/subtasks', async (req, res) => {
     const { id } = req.params;
     const { title } = req.body;
     if (!title) return res.status(400).json({ error: 'Missing title' });
-    const [result] = await pool.query('INSERT INTO task_subtasks (task_id, title) VALUES (?, ?)', [id, title]);
-    const [rows] = await pool.query('SELECT * FROM task_subtasks WHERE id = ?', [(result as any).insertId]);
-    res.json({ success: true, subtask: (rows as any[])[0] });
+    const { rows: resultRows } = await pool.query('INSERT INTO task_subtasks (task_id, title) VALUES ($1, $2) RETURNING id', [id, title]);
+    const { rows } = await pool.query('SELECT * FROM task_subtasks WHERE id = $1', [resultRows[0].id]);
+    res.json({ success: true, subtask: rows[0] });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create subtask' });
   }
@@ -580,7 +493,7 @@ app.put('/api/tasks/subtasks/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { is_completed, title } = req.body;
-    await pool.query('UPDATE task_subtasks SET is_completed = COALESCE(?, is_completed), title = COALESCE(?, title) WHERE id = ?', [is_completed !== undefined ? is_completed : null, title || null, id]);
+    await pool.query('UPDATE task_subtasks SET is_completed = COALESCE($1, is_completed), title = COALESCE($2, title) WHERE id = $3', [is_completed !== undefined ? is_completed : null, title || null, id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update subtask' });
@@ -590,7 +503,7 @@ app.put('/api/tasks/subtasks/:id', async (req, res) => {
 app.delete('/api/tasks/subtasks/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM task_subtasks WHERE id = ?', [id]);
+    await pool.query('DELETE FROM task_subtasks WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete subtask' });
@@ -600,11 +513,11 @@ app.delete('/api/tasks/subtasks/:id', async (req, res) => {
 app.get('/api/tasks/:id/comments', async (req, res) => {
   try {
     const { id } = req.params;
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT c.*, u.name as user_name, u.picture as user_picture 
        FROM task_comments c 
        JOIN users u ON c.user_email = u.email 
-       WHERE c.task_id = ? 
+       WHERE c.task_id = $1 
        ORDER BY c.created_at ASC`,
       [id]
     );
@@ -622,22 +535,23 @@ app.post('/api/tasks/:id/comments', async (req, res) => {
     if (!user_email || !content) {
       return res.status(400).json({ error: 'Missing user_email or content' });
     }
-
-    const [result] = await pool.query(
-      'INSERT INTO task_comments (task_id, user_email, content) VALUES (?, ?, ?)',
-      [id, user_email, content]
+    const finalEmail = user_email.toLowerCase().trim();
+    const { rows: resultRows } = await pool.query(
+      'INSERT INTO task_comments (task_id, user_email, content) VALUES ($1, $2, $3) RETURNING id',
+      [id, finalEmail, content]
     );
+
     
     // Fetch the newly created comment with user details
-    const [newCommentRows] = await pool.query(
+    const { rows: newCommentRows } = await pool.query(
       `SELECT c.*, u.name as user_name, u.picture as user_picture 
        FROM task_comments c 
        JOIN users u ON c.user_email = u.email 
-       WHERE c.id = ?`,
-      [(result as any).insertId]
+       WHERE c.id = $1`,
+      [resultRows[0].id]
     );
     
-    res.json({ success: true, comment: (newCommentRows as any[])[0] });
+    res.json({ success: true, comment: newCommentRows[0] });
   } catch (error) {
     console.error('Error adding task comment:', error);
     res.status(500).json({ error: 'Failed to add task comment' });
@@ -653,16 +567,16 @@ app.get('/api/teams', async (req, res) => {
     let params: any[] = [];
     
     if (email) {
-      query = 'SELECT * FROM teams WHERE owner_email = ? ORDER BY created_at DESC';
+      query = 'SELECT * FROM teams WHERE owner_email = $1 ORDER BY created_at DESC';
       params.push(email);
     }
     
-    const [teams] = await pool.query(query, params);
-    const [members] = await pool.query('SELECT * FROM team_members');
+    const { rows: teams } = await pool.query(query, params);
+    const { rows: members } = await pool.query('SELECT * FROM team_members');
     
-    const teamsData = (teams as any[]).map(team => ({
+    const teamsData = teams.map(team => ({
       ...team,
-      members: (members as any[]).filter(m => m.team_id === team.id).map(m => m.user_email)
+      members: members.filter(m => m.team_id === team.id).map(m => m.user_email)
     }));
     
     res.json(teamsData);
@@ -678,12 +592,13 @@ app.post('/api/teams', async (req, res) => {
     if (!name) return res.status(400).json({ error: 'Name is required' });
     if (!owner_email) return res.status(400).json({ error: 'Owner email is required' });
 
-    const [result] = await pool.query('INSERT INTO teams (name, owner_email) VALUES (?, ?)', [name, owner_email]);
-    const teamId = (result as any).insertId;
+    const { rows: resultRows } = await pool.query('INSERT INTO teams (name, owner_email) VALUES ($1, $2) RETURNING id', [name, owner_email]);
+    const teamId = resultRows[0].id;
 
     if (members && members.length > 0) {
-      const values = members.map((email: string) => [teamId, email]);
-      await pool.query('INSERT INTO team_members (team_id, user_email) VALUES ?', [values]);
+      for (const email of members) {
+        await pool.query('INSERT INTO team_members (team_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [teamId, email]);
+      }
     }
 
     res.json({ success: true, message: 'Team created', id: teamId });
@@ -699,14 +614,15 @@ app.put('/api/teams/:id', async (req, res) => {
     const { name, members } = req.body;
     
     if (name) {
-      await pool.query('UPDATE teams SET name = ? WHERE id = ?', [name, id]);
+      await pool.query('UPDATE teams SET name = $1 WHERE id = $2', [name, id]);
     }
     
     if (members) {
-      await pool.query('DELETE FROM team_members WHERE team_id = ?', [id]);
+      await pool.query('DELETE FROM team_members WHERE team_id = $1', [id]);
       if (members.length > 0) {
-        const values = members.map((email: string) => [id, email]);
-        await pool.query('INSERT INTO team_members (team_id, user_email) VALUES ?', [values]);
+        for (const email of members) {
+          await pool.query('INSERT INTO team_members (team_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, email]);
+        }
       }
     }
     
@@ -720,11 +636,200 @@ app.put('/api/teams/:id', async (req, res) => {
 app.delete('/api/teams/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM teams WHERE id = ?', [id]);
+    await pool.query('DELETE FROM teams WHERE id = $1', [id]);
     res.json({ success: true, message: 'Team deleted' });
   } catch (error) {
     console.error('Error deleting team:', error);
     res.status(500).json({ error: 'Failed to delete team' });
+  }
+});
+
+// ─── PRODUCTS API ────────────────────────────────────────────────────────
+app.get('/api/products', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
+app.post('/api/products', async (req, res) => {
+  try {
+    const { name, sale_price, import_price, import_date, seller, category, description } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    
+    await pool.query(
+      'INSERT INTO products (name, sale_price, import_price, import_date, seller, category, description) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [name, sale_price || 0, import_price || 0, import_date || null, seller || null, category || null, description || '']
+    );
+    res.json({ success: true, message: 'Product added' });
+  } catch (error) {
+    console.error('Error adding product:', error);
+    res.status(500).json({ error: 'Failed to add product' });
+  }
+});
+
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, sale_price, import_price, import_date, seller, category, description } = req.body;
+    
+    await pool.query(
+      'UPDATE products SET name = $1, sale_price = $2, import_price = $3, import_date = $4, seller = $5, category = $6, description = $7 WHERE id = $8',
+      [name, sale_price, import_price, import_date, seller, category, description, id]
+    );
+    res.json({ success: true, message: 'Product updated' });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Product deleted' });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
+
+// ─── ORDERS API ──────────────────────────────────────────────────────────
+
+app.get('/api/orders', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { 
+      customer_name, customer_id, page_id, phone, 
+      address, product_name, amount, note, assigned_to 
+    } = req.body;
+    
+    await pool.query(
+      `INSERT INTO orders (customer_name, customer_id, page_id, phone, address, product_name, amount, note, assigned_to)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [customer_name, customer_id, page_id, phone, address, product_name, amount, note, assigned_to]
+    );
+    res.json({ success: true, message: 'Order created' });
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+app.get('/api/orders/stats', async (req, res) => {
+  try {
+    const { range } = req.query; // 'Hôm nay', 'Tuần này', 'Tháng này', 'Năm nay'
+    
+    let dateFilter = '';
+    let prevDateFilter = '';
+    
+    if (range === 'Hôm nay') {
+      dateFilter = "AND created_at >= CURRENT_DATE";
+      prevDateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE";
+    } else if (range === 'Tuần này') {
+      dateFilter = "AND created_at >= date_trunc('week', CURRENT_DATE)";
+      prevDateFilter = "AND created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '1 week' AND created_at < date_trunc('week', CURRENT_DATE)";
+    } else if (range === 'Tháng này') {
+      dateFilter = "AND created_at >= date_trunc('month', CURRENT_DATE)";
+      prevDateFilter = "AND created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month' AND created_at < date_trunc('month', CURRENT_DATE)";
+    } else if (range === 'Năm nay') {
+      dateFilter = "AND created_at >= date_trunc('year', CURRENT_DATE)";
+      prevDateFilter = "AND created_at >= date_trunc('year', CURRENT_DATE) - INTERVAL '1 year' AND created_at < date_trunc('year', CURRENT_DATE)";
+    }
+
+    // Current period stats
+    const statsQuery = `
+      SELECT 
+        COALESCE(SUM(amount), 0) as total_revenue,
+        COUNT(*) as order_count,
+        COUNT(DISTINCT customer_id) as customer_count
+      FROM orders
+      WHERE 1=1 ${dateFilter}
+    `;
+    const { rows: statsRows } = await pool.query(statsQuery);
+    const currentStats = statsRows[0];
+
+    // Previous period stats
+    const prevStatsQuery = `
+      SELECT 
+        COALESCE(SUM(amount), 0) as total_revenue,
+        COUNT(*) as order_count,
+        COUNT(DISTINCT customer_id) as customer_count
+      FROM orders
+      WHERE 1=1 ${prevDateFilter}
+    `;
+    const { rows: prevStatsRows } = await pool.query(prevStatsQuery);
+    const prevStats = prevStatsRows[0];
+    
+    // Top products
+    const productsQuery = `
+      SELECT 
+        product_name as name,
+        COUNT(*) as sales,
+        SUM(amount) as revenue
+      FROM orders
+      WHERE 1=1 ${dateFilter}
+      GROUP BY product_name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `;
+    const { rows: productRows } = await pool.query(productsQuery);
+    
+    // Helper function to calculate growth
+    const calculateGrowth = (current: number | string, prev: number | string) => {
+      const curVal = parseFloat(current.toString());
+      const preVal = parseFloat(prev.toString());
+      if (preVal === 0) return curVal > 0 ? 100 : 0;
+      return ((curVal - preVal) / preVal) * 100;
+    };
+
+    res.json({
+      stats: {
+        ...currentStats,
+        revenue_growth: calculateGrowth(currentStats.total_revenue, prevStats.total_revenue),
+        orders_growth: calculateGrowth(currentStats.order_count, prevStats.order_count),
+        customers_growth: calculateGrowth(currentStats.customer_count, prevStats.customer_count),
+      },
+      topProducts: productRows
+    });
+  } catch (error) {
+    console.error('Error fetching order stats:', error);
+    res.status(500).json({ error: 'Failed to fetch order stats' });
+  }
+});
+
+
+// ─── AUTH API ────────────────────────────────────────────────────────────
+
+app.get('/api/auth/verify', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    const { rows } = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [email.toString().toLowerCase()]);
+    
+    if (rows.length > 0) {
+      res.json({ authorized: true, user: rows[0] });
+    } else {
+      res.json({ authorized: false });
+    }
+  } catch (error) {
+    console.error('Verify error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -739,9 +844,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // ─── EXPORT/START ──────────────────────────────────────────────────────────────
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 // Chỉ chạy app.listen nếu không phải môi trường Vercel
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  console.log(`DEBUG: process.env.PORT is ${process.env.PORT}`);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
   });
