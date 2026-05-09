@@ -80,6 +80,19 @@ interface Message {
   created_at: string;
 }
 
+const OPTIMISTIC_MESSAGE_ID_BASE = 1_000_000_000_000;
+const isOptimisticMessage = (id: number) => id >= OPTIMISTIC_MESSAGE_ID_BASE;
+
+const isSameOutgoingMessage = (a: Message, b: Message) => {
+  if (a.sender_type !== 'human' || b.sender_type !== 'human') return false;
+  if (a.message_text !== b.message_text) return false;
+
+  const aTime = new Date(a.created_at).getTime();
+  const bTime = new Date(b.created_at).getTime();
+  if (Number.isNaN(aTime) || Number.isNaN(bTime)) return false;
+
+  return Math.abs(aTime - bTime) < 15000;
+};
 interface ConversationNote {
   id: number;
   conversation_id: number;
@@ -225,6 +238,57 @@ export const MessengerTab = ({ user }: { user?: any }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Poll for new messages in the current conversation
+  useEffect(() => {
+    if (!selectedConv) return;
+
+    const pollMessages = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/fb/conversations/${selectedConv.id}/messages?limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(prev => {
+            if (data.length === 0) return prev;
+            if (prev.length === 0) return data;
+            
+            const lastPrev = prev[prev.length - 1];
+            const lastNew = data[data.length - 1];
+            
+            // Nếu có tin nhắn mới (so sánh ID)
+            if (lastNew.id !== lastPrev.id) {
+              // Nếu đang ở trang đầu (số lượng tin <= 10), lấy data mới nhất
+              if (prev.length <= 10) {
+                setIsInitialLoad(true); // Tự động scroll xuống cho tin mới
+                return data;
+              }
+              
+              // Nếu đã load more, chỉ append những tin chưa có và không trùng optimistic message
+              const newItems = data.filter(newMsg => !prev.some(existingMsg => {
+                if (existingMsg.id === newMsg.id) return true;
+                return isOptimisticMessage(existingMsg.id) && isSameOutgoingMessage(existingMsg, newMsg);
+              }));
+              if (newItems.length > 0) {
+                // Kiểm tra xem có nên tự động scroll không (nếu đang ở gần đáy)
+                const container = chatContainerRef.current;
+                if (container) {
+                  const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+                  if (isNearBottom) setIsInitialLoad(true);
+                }
+                return [...prev, ...newItems];
+              }
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('Error polling messages:', err);
+      }
+    };
+
+    const interval = setInterval(pollMessages, 3000);
+    return () => clearInterval(interval);
+  }, [selectedConv?.id]);
+
   // Fetch products for order modal
   useEffect(() => {
     const fetchProducts = async () => {
@@ -346,8 +410,9 @@ export const MessengerTab = ({ user }: { user?: any }) => {
     setReplyText('');
 
     // Optimistic UI update
+    const optimisticId = OPTIMISTIC_MESSAGE_ID_BASE + Date.now();
     const newMessage: Message = {
-      id: Date.now(),
+      id: optimisticId,
       sender_type: 'human',
       message_text: textToSend,
       created_at: new Date().toISOString()
@@ -359,7 +424,7 @@ export const MessengerTab = ({ user }: { user?: any }) => {
     setSelectedConv(prev => prev ? { ...prev, is_human_intervened: true, last_message: textToSend, last_message_at: new Date().toISOString() } : null);
 
     try {
-      await fetch(`${API_BASE_URL}/api/fb/messages/send`, {
+      const res = await fetch(`${API_BASE_URL}/api/fb/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -367,8 +432,18 @@ export const MessengerTab = ({ user }: { user?: any }) => {
           text: textToSend
         })
       });
+
+      if (!res.ok) throw new Error(`Failed to send message: ${res.status}`);
+
+      const data = await res.json();
+      if (data.message) {
+        setMessages(prev => prev.map(msg => msg.id === optimisticId ? data.message : msg));
+      }
     } catch (err) {
       console.error('Error sending message:', err);
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+      setReplyText(textToSend);
+      alert('Không thể gửi tin nhắn. Vui lòng thử lại.');
     }
   };
 

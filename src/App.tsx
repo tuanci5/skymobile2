@@ -27,7 +27,6 @@ import {
   Headphones,
   LayoutDashboard,
   UserCog,
-  Wallet,
   Menu,
   X,
   FileText,
@@ -76,7 +75,7 @@ const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.goo
 
 // --- Types ---
 
-type TabType = 'model' | 'hr' | 'salary' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks' | 'messenger' | 'revenue';
+type TabType = 'model' | 'hr' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks' | 'messenger' | 'revenue';
 
 // --- Components ---
 
@@ -376,7 +375,6 @@ const ValueSection = () => (
 const TAB_TO_PATH: Record<TabType, string> = {
   model: '/model',
   hr: '/hr',
-  salary: '/salary',
   training: '/training',
   business: '/business',
   'action-plan': '/action-plan',
@@ -411,7 +409,6 @@ const Sidebar = ({
   const baseMenuItems = [
     { id: 'model', label: 'Mô hình Vận hành', icon: <Users className="w-5 h-5" /> },
     { id: 'hr', label: 'Nhân sự & JD', icon: <UserCog className="w-5 h-5" /> },
-    { id: 'salary', label: 'Lương & KPI', icon: <Wallet className="w-5 h-5" /> },
     { id: 'training', label: 'Đào tạo & Văn hóa', icon: <GraduationCap className="w-5 h-5" /> },
     { id: 'business', label: 'Kế hoạch kinh doanh', icon: <TrendingUp className="w-5 h-5" />, adminOnly: true },
     { id: 'tasks', label: 'Quản lý công việc', icon: <CheckCircle2 className="w-5 h-5" /> },
@@ -812,13 +809,6 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => setActiveTab('salary')}
-                          className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 shrink-0 mt-2 md:mt-0"
-                        >
-                          <DollarSign className="w-5 h-5" />
-                          <span>Xem Lương & KPI</span>
-                        </button>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -879,6 +869,73 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
                           </div>
                         </div>
                       </div>
+
+                      <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <section className="xl:col-span-2 overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-blue-50 p-6 shadow-sm">
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-600">
+                              <DollarSign className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-bold text-slate-900">Cơ cấu Thu nhập</h4>
+                              <p className="text-sm text-slate-500">Thông tin lương được gắn trực tiếp với vị trí JD.</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-5 bg-white/80 rounded-2xl border border-white shadow-sm">
+                              <span className="text-xs text-slate-500 font-bold uppercase tracking-wide">Mức lương khoảng</span>
+                              <p className="mt-2 text-xl font-black text-slate-900">{JD_DATA[selectedRole].salaryRange}</p>
+                            </div>
+                            <div className="p-5 bg-white/80 rounded-2xl border border-white shadow-sm">
+                              <span className="text-xs text-slate-500 font-bold uppercase tracking-wide">Lương cứng / Base</span>
+                              <p className="mt-2 text-xl font-black text-emerald-600">{JD_DATA[selectedRole].baseSalary || 'Theo thỏa thuận'}</p>
+                            </div>
+                            <div className="md:col-span-2 p-5 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
+                              <span className="text-xs text-blue-100 font-bold uppercase tracking-wide">Cách thức tính</span>
+                              <p className="mt-2 text-sm leading-relaxed font-medium">{JD_DATA[selectedRole].salaryCalculation}</p>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
+                          <h4 className="flex items-center gap-2 font-bold text-slate-900 mb-5">
+                            <BarChart3 className="w-5 h-5 text-indigo-500" />
+                            Trọng số KPI thưởng
+                          </h4>
+                          <div className="space-y-5">
+                            {[
+                              ['Chuyên môn / Hiệu suất', '40%', 'bg-blue-600', 'w-[40%]'],
+                              ['Sale / Doanh thu mới', '40%', 'bg-emerald-600', 'w-[40%]'],
+                              ['CSKH / Tỷ lệ gia hạn', '20%', 'bg-rose-600', 'w-[20%]']
+                            ].map(([label, value, color, width]) => (
+                              <div key={label}>
+                                <div className="flex justify-between mb-2 text-sm">
+                                  <span className="font-medium text-slate-700">{label}</span>
+                                  <span className="font-black text-slate-900">{value}</span>
+                                </div>
+                                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full ${color} ${width}`} />
+                                </div>
+                              </div>
+                            ))}
+                            <p className="text-xs text-slate-400 italic pt-1">
+                              * Trọng số có thể điều chỉnh theo chiến lược từng tháng.
+                            </p>
+                          </div>
+                        </section>
+                      </div>
+
+                      <div className="mt-6 p-6 bg-slate-900 rounded-3xl text-white">
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
+                          <PieChart className="w-5 h-5 text-blue-400" />
+                          Công thức tính thu nhập
+                        </h4>
+                        <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                          <p className="text-blue-400 font-mono text-xs mb-2">THU NHẬP TỔNG =</p>
+                          <p className="text-sm md:text-base font-bold leading-relaxed">Lương cứng + Doanh số mới × %HH + Doanh số gia hạn × %Thưởng + Thưởng KPI</p>
+                        </div>
+                      </div>
                     </>
                   )}
                 </motion.div>
@@ -886,258 +943,11 @@ const HRTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted, hrSubT
             </div>
           </div>
 
-          {/* Staffing Scale Section */}
-          <section className="mt-16 p-8 bg-blue-50 border border-blue-100 rounded-3xl">
-            <h3 className="text-2xl font-bold text-blue-900 mb-8 flex items-center gap-2">
-              <Users className="w-6 h-6" />
-              Gợi ý cơ cấu nhân sự theo quy mô
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                {
-                  title: 'Quy mô nhỏ',
-                  staff: ['1 Trưởng phòng', '1 Marketing Ads/Content', '1–2 Sale/Chat tư vấn', '1 CSKH kiêm xử lý đơn']
-                },
-                {
-                  title: 'Quy mô vừa',
-                  staff: ['1 Trưởng phòng', '1 Trưởng nhóm Marketing (1 Ads, 1 Content)', '2–4 Sale/Chat tư vấn', '1 Trưởng nhóm CSKH (1–2 NV)', '1 Xử lý đơn/CRM']
-                },
-                {
-                  title: 'Quy mô lớn',
-                  staff: ['1 Trưởng phòng', '1 Trưởng nhóm MKT (2-3 NV)', '1 Trưởng nhóm Sale (4-8 NV)', '1 Trưởng nhóm CSKH (2-4 NV)', '1 CRM + 1-2 Vận hành đơn']
-                }
-              ].map((scale, i) => (
-                <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100">
-                  <h4 className="font-bold text-blue-800 mb-4 pb-2 border-b border-blue-50">{scale.title}</h4>
-                  <ul className="space-y-2">
-                    {scale.staff.map((s, idx) => (
-                      <li key={idx} className="text-sm text-slate-600 flex items-center gap-2">
-                        <div className="w-1 h-1 rounded-full bg-blue-400" />
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </section>
         </motion.div>
       )}
     </div>
   );
 };
-
-const SalaryTab = ({ selectedRole, setSelectedRole, setActiveTab, restricted }: { selectedRole: string, setSelectedRole: (role: string) => void, setActiveTab: (tab: TabType) => void, restricted?: boolean }) => {
-  return (
-    <div className="max-w-6xl mx-auto">
-      <header className="mb-10">
-        <h2 className="text-3xl font-bold text-slate-900">Cơ chế Lương & Thưởng</h2>
-        <p className="text-slate-600 mt-2">Hệ thống đãi ngộ dựa trên hiệu suất và giá trị đóng góp dài hạn.</p>
-      </header>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Role Selector */}
-        {!restricted && (
-          <div className="lg:col-span-1 space-y-2">
-            {Object.entries(JD_DATA).map(([id, jd]) => (
-              <button
-                key={id}
-                onClick={() => setSelectedRole(id)}
-                className={`w-full text-left px-4 py-3 rounded-xl transition-all ${selectedRole === id
-                  ? 'bg-white border-2 border-blue-600 shadow-sm text-blue-700 font-bold'
-                  : 'bg-transparent border-2 border-transparent text-slate-600 hover:bg-slate-100'
-                  }`}
-              >
-                {jd.title}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Salary Details */}
-        <div className={restricted ? "lg:col-span-4" : "lg:col-span-3"}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={selectedRole}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm"
-            >
-              {!JD_DATA[selectedRole] ? (
-                <div className="py-20 text-center text-slate-400">
-                  <div className="p-4 bg-slate-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                    <Wallet className="w-8 h-8 text-slate-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-700 mb-2">Đang tải dữ liệu...</h3>
-                  <p className="text-sm">Thông tin cơ chế (vị trí: {selectedRole}) đang được cập nhật hoặc không tồn tại.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
-                      <DollarSign className="w-8 h-8" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-2xl font-bold text-slate-900">{JD_DATA[selectedRole].title}</h3>
-                      <p className="text-slate-500 italic">Cơ chế đãi ngộ</p>
-                    </div>
-                    <button
-                      onClick={() => setActiveTab('hr')}
-                      className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-2"
-                    >
-                      <Briefcase className="w-4 h-4" />
-                      Xem lại JD
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <section className="bg-slate-50 p-6 rounded-2xl border border-slate-100 h-full">
-                        <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-6">
-                          <DollarSign className="w-5 h-5 text-emerald-500" />
-                          Cơ cấu Thu nhập
-                        </h4>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200">
-                            <span className="text-sm text-slate-500">Mức lương (Khoảng)</span>
-                            <span className="font-bold text-slate-900">{JD_DATA[selectedRole].salaryRange}</span>
-                          </div>
-                          <div className="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200">
-                            <span className="text-sm text-slate-500">Lương cứng (Base)</span>
-                            <span className="font-bold text-emerald-600">{JD_DATA[selectedRole].baseSalary}</span>
-                          </div>
-                          <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                            <span className="text-xs text-blue-600 font-bold uppercase block mb-2">Cách thức tính</span>
-                            <p className="text-sm text-blue-900 font-medium leading-relaxed">
-                              {JD_DATA[selectedRole].salaryCalculation}
-                            </p>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-
-                    <div className="space-y-6">
-                      <section className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 h-full">
-                        <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-6">
-                          <TrendingUp className="w-5 h-5 text-indigo-500" />
-                          Trọng số KPI thưởng
-                        </h4>
-                        <div className="space-y-6">
-                          {/* Progressive weights based on role */}
-                          <div>
-                            <div className="flex justify-between mb-2">
-                              <span className="font-medium text-slate-700">Chuyên môn / Hiệu suất</span>
-                              <span className="text-blue-600 font-bold">40%</span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-600 w-[40%]" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex justify-between mb-2">
-                              <span className="font-medium text-slate-700">Sale (Doanh thu mới)</span>
-                              <span className="text-emerald-600 font-bold">40%</span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-600 w-[40%]" />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex justify-between mb-2">
-                              <span className="font-medium text-slate-700">CSKH (Tỷ lệ gia hạn)</span>
-                              <span className="text-rose-600 font-bold">20%</span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-rose-600 w-[20%]" />
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-4 italic">
-                            * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
-                          </p>
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
-
-      <div className="mt-12 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-slate-900 rounded-3xl p-8 text-white">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <PieChart className="w-6 h-6 text-blue-400" />
-            Công thức tính thu nhập
-          </h3>
-          <div className="space-y-6">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <p className="text-blue-400 font-mono text-sm mb-2">THU NHẬP TỔNG =</p>
-              <p className="text-lg font-bold">Lương cứng + (Doanh số mới × %HH) + (Doanh số gia hạn × %Thưởng) + Thưởng KPI</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex justify-between items-center p-4 border-b border-white/10">
-                <span className="text-slate-400">Đạt 80% KPI</span>
-                <span className="font-bold">Nhận 100% Lương cứng</span>
-              </div>
-              <div className="flex justify-between items-center p-4 border-b border-white/10">
-                <span className="text-slate-400">Đạt 100% KPI</span>
-                <span className="font-bold text-emerald-400">+ Thưởng 2M - 5M</span>
-              </div>
-              <div className="flex justify-between items-center p-4">
-                <span className="text-slate-400">Vượt 120% KPI</span>
-                <span className="font-bold text-amber-400">Thưởng nóng + Vinh danh</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-3xl p-8">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-            Trọng số KPI theo bộ phận
-          </h3>
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">Marketing (Lead & Cost)</span>
-                <span className="text-blue-600 font-bold">40%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 w-[40%]" />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">Sale (Doanh thu mới)</span>
-                <span className="text-emerald-600 font-bold">40%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-600 w-[40%]" />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="font-medium text-slate-700">CSKH (Tỷ lệ gia hạn)</span>
-                <span className="text-rose-600 font-bold">20%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-rose-600 w-[20%]" />
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 mt-4 italic">
-              * Trọng số có thể điều chỉnh theo chiến lược từng tháng (Ưu tiên tìm khách mới hay giữ khách cũ).
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 
 const TrainingTab = ({ courseSlug, lectureSlug, lectureData }: { courseSlug?: string | null, lectureSlug?: string | null, lectureData?: any }) => {
   const navigate = useNavigate();
@@ -2054,7 +1864,7 @@ function AppContent() {
   // /model/sales-mkt/marketing → model, dept='sales-mkt', team='marketing'
   // /hr                 → hr, sub='jd'
   // /hr/interview       → hr, sub='interview'
-  // /salary /cost /training → respective tabs
+  // /training          → training tab
 
   const pathParts = pathname.replace(/^\//, '').split('/');
   const rootSeg = pathParts[0] || 'model';
@@ -2062,7 +1872,7 @@ function AppContent() {
   const teamSeg = pathParts[2] || '';
 
   const PATH_TO_TAB: Record<string, TabType> = {
-    model: 'model', hr: 'hr', salary: 'salary', training: 'training',
+    model: 'model', hr: 'hr', training: 'training',
     business: 'business', 'action-plan': 'action-plan', products: 'products',
     users: 'users', tasks: 'tasks', messenger: 'messenger', revenue: 'revenue'
   };
@@ -2896,14 +2706,6 @@ function AppContent() {
                       restricted={restrictedView}
                       hrSubTab={hrSubTab}
                       user={user}
-                    />
-                  )}
-                  {activeTab === 'salary' && (
-                    <SalaryTab
-                      selectedRole={restrictedView ? internalRoleId : activeRole}
-                      setSelectedRole={restrictedView ? () => { } : setActiveRole}
-                      setActiveTab={goToTab}
-                      restricted={restrictedView}
                     />
                   )}
                   {activeTab === 'training' && (

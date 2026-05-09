@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   TrendingUp, 
@@ -13,80 +13,85 @@ import {
   Filter
 } from 'lucide-react';
 
-let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
-if (API_BASE_URL === '/') API_BASE_URL = '';
-else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
+const PERIOD_DATA: Record<string, any> = {
+  'Hôm nay': {
+    revenue: { current: 150000, previous: 120000 },
+    orders: { current: 24, previous: 20 },
+    customers: { current: 12, previous: 15 },
+    conversion: { current: 4.2, previous: 3.8 }
+  },
+  'Tuần này': {
+    revenue: { current: 1250000, previous: 1100000 },
+    orders: { current: 185, previous: 160 },
+    customers: { current: 85, previous: 70 },
+    conversion: { current: 4.5, previous: 4.2 }
+  },
+  'Tháng này': {
+    revenue: { current: 2450000, previous: 2100000 },
+    orders: { current: 342, previous: 310 },
+    customers: { current: 128, previous: 140 },
+    conversion: { current: 4.8, previous: 4.6 }
+  },
+  'Năm nay': {
+    revenue: { current: 28450000, previous: 25000000 },
+    orders: { current: 4200, previous: 3800 },
+    customers: { current: 1540, previous: 1400 },
+    conversion: { current: 5.1, previous: 4.9 }
+  }
+};
 
 export const RevenueReportTab: React.FC = () => {
   const [dateRange, setDateRange] = useState('Tháng này');
-  const [statsData, setStatsData] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [statsRes, ordersRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/orders/stats?range=${encodeURIComponent(dateRange)}`),
-          fetch(`${API_BASE_URL}/api/orders`)
-        ]);
-
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStatsData(data);
-        }
-
-        if (ordersRes.ok) {
-          const data = await ordersRes.json();
-          setOrders(data);
-        }
-      } catch (err) {
-        console.error('Error fetching revenue data:', err);
-      } finally {
-        setIsLoading(false);
-      }
+  const calculateGrowth = (current: number, previous: number) => {
+    const growth = ((current - previous) / previous) * 100;
+    return {
+      change: `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`,
+      isPositive: growth >= 0
     };
+  };
 
-    fetchData();
-  }, [dateRange]);
+  const currentData = PERIOD_DATA[dateRange] || PERIOD_DATA['Tháng này'];
 
   const stats = [
     {
       title: 'Tổng doanh thu',
-      value: statsData ? `${parseFloat(statsData.stats.total_revenue).toLocaleString()} ¥` : '0 ¥',
-      change: '+12.5%',
-      isPositive: true,
+      value: `${currentData.revenue.current.toLocaleString()} ¥`,
+      ...calculateGrowth(currentData.revenue.current, currentData.revenue.previous),
       icon: <DollarSign className="w-6 h-6 text-emerald-600" />,
       color: 'bg-emerald-100'
     },
     {
       title: 'Đơn hàng mới',
-      value: statsData ? statsData.stats.order_count : '0',
-      change: '+8.2%',
-      isPositive: true,
+      value: currentData.orders.current.toLocaleString(),
+      ...calculateGrowth(currentData.orders.current, currentData.orders.previous),
       icon: <ShoppingCart className="w-6 h-6 text-blue-600" />,
       color: 'bg-blue-100'
     },
     {
       title: 'Khách hàng mới',
-      value: statsData ? statsData.stats.customer_count : '0',
-      change: '-2.4%',
-      isPositive: false,
+      value: currentData.customers.current.toLocaleString(),
+      ...calculateGrowth(currentData.customers.current, currentData.customers.previous),
       icon: <Users className="w-6 h-6 text-rose-600" />,
       color: 'bg-rose-100'
     },
     {
       title: 'Tỷ lệ chuyển đổi',
-      value: '4.8%',
-      change: '+1.2%',
-      isPositive: true,
+      value: `${currentData.conversion.current}%`,
+      ...calculateGrowth(currentData.conversion.current, currentData.conversion.previous),
       icon: <Activity className="w-6 h-6 text-amber-600" />,
       color: 'bg-amber-100'
     }
   ];
 
-  const topProducts = statsData?.topProducts || [];
+  const recentOrders = [
+    { id: 'ORD-001', customer: 'Nguyễn Văn A', product: 'Sim Data SoftBank', amount: '3500 ¥', status: 'Hoàn thành', date: '04/05/2026' },
+    { id: 'ORD-002', customer: 'Trần Thị B', product: 'Pocket Wifi', amount: '4200 ¥', status: 'Đang xử lý', date: '04/05/2026' },
+    { id: 'ORD-003', customer: 'Lê Văn C', product: 'Wifi Cố Định', amount: '5000 ¥', status: 'Hoàn thành', date: '03/05/2026' },
+    { id: 'ORD-004', customer: 'Phạm Thị D', product: 'Combo Sim + Điện Thoại', amount: '12000 ¥', status: 'Đã hủy', date: '02/05/2026' },
+    { id: 'ORD-005', customer: 'Hoàng Văn E', product: 'Sim Data SoftBank', amount: '3500 ¥', status: 'Hoàn thành', date: '01/05/2026' },
+  ];
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -149,9 +154,10 @@ export const RevenueReportTab: React.FC = () => {
                 {stat.change}
               </div>
             </div>
+
             <div>
               <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
-              <h3 className="text-2xl font-black text-slate-800">{isLoading ? '...' : stat.value}</h3>
+              <h3 className="text-2xl font-black text-slate-800">{stat.value}</h3>
             </div>
           </motion.div>
         ))}
@@ -181,31 +187,28 @@ export const RevenueReportTab: React.FC = () => {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="font-bold text-slate-800 text-lg mb-6">Sản phẩm bán chạy</h3>
           <div className="space-y-6">
-            {isLoading ? (
-              <div className="py-8 text-center text-slate-400 text-sm">Đang tải...</div>
-            ) : topProducts.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-sm italic">Chưa có dữ liệu sản phẩm</div>
-            ) : topProducts.map((prod: any, i: number) => {
-              const maxRevenue = Math.max(...topProducts.map((p: any) => parseFloat(p.revenue)));
-              const percent = (parseFloat(prod.revenue) / maxRevenue) * 100;
-              return (
-                <div key={i}>
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <p className="font-bold text-slate-700 text-sm">{prod.name}</p>
-                      <p className="text-xs text-slate-500">{prod.sales} đơn hàng</p>
-                    </div>
-                    <p className="font-bold text-slate-900 text-sm">{parseFloat(prod.revenue).toLocaleString()} ¥</p>
+            {[
+              { name: 'Sim Data SoftBank', sales: '156', revenue: '546.000 ¥', percent: 85 },
+              { name: 'Pocket Wifi', sales: '89', revenue: '373.800 ¥', percent: 60 },
+              { name: 'Wifi Cố Định', sales: '45', revenue: '225.000 ¥', percent: 35 },
+              { name: 'Combo Sim + ĐT', sales: '24', revenue: '288.000 ¥', percent: 20 },
+            ].map((prod, i) => (
+              <div key={i}>
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <p className="font-bold text-slate-700 text-sm">{prod.name}</p>
+                    <p className="text-xs text-slate-500">{prod.sales} đơn hàng</p>
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-emerald-500 h-full rounded-full"
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
+                  <p className="font-bold text-slate-900 text-sm">{prod.revenue}</p>
                 </div>
-              );
-            })}
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-emerald-500 h-full rounded-full"
+                    style={{ width: `${prod.percent}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -232,28 +235,20 @@ export const RevenueReportTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">Đang tải dữ liệu đơn hàng...</td>
-                </tr>
-              ) : orders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">Chưa có đơn hàng nào được tạo.</td>
-                </tr>
-              ) : orders.map((order, i) => (
+              {recentOrders.map((order, i) => (
                 <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-800">ORD-{order.id.toString().padStart(3, '0')}</td>
+                  <td className="px-6 py-4 font-bold text-slate-800">{order.id}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 overflow-hidden">
-                        {order.customer_name?.charAt(0) || 'K'}
+                        {order.customer.charAt(0)}
                       </div>
-                      <span className="text-slate-600">{order.customer_name}</span>
+                      <span className="text-slate-600">{order.customer}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-600">{order.product_name}</td>
-                  <td className="px-6 py-4 text-slate-600">{new Date(order.created_at).toLocaleDateString('vi-VN')}</td>
-                  <td className="px-6 py-4 font-bold text-emerald-600">{parseFloat(order.amount).toLocaleString()} ¥</td>
+                  <td className="px-6 py-4 text-slate-600">{order.product}</td>
+                  <td className="px-6 py-4 text-slate-600">{order.date}</td>
+                  <td className="px-6 py-4 font-bold text-emerald-600">{order.amount}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
                       order.status === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-700' :

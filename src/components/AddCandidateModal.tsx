@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, FileText, Phone, Briefcase, Calendar, Link as LinkIcon, Usb, Clock } from 'lucide-react';
+import { X, UserPlus, FileText, Phone, Briefcase, Calendar, Link as LinkIcon, Users, Clock } from 'lucide-react';
 import { Candidate } from './CandidateEvalModal';
 import { crmJD } from '../data/positions/crm/jd';
 import { cskhLeadJD } from '../data/positions/cskh_lead/jd';
@@ -25,10 +25,14 @@ interface Props {
   appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
-if (API_BASE_URL && API_BASE_URL.endsWith('/')) {
-  // Ensure no trailing slash
-  // But since we are using relative path in prod, '' is better.
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
+
+interface InterviewerAccount {
+  email: string;
+  name: string;
+  role?: string;
 }
 
 
@@ -52,6 +56,8 @@ const POSITION_OPTIONS = [
 
 export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSuccess, appsScriptUrl }) => {
   const [loading, setLoading] = useState(false);
+  const [interviewerAccounts, setInterviewerAccounts] = useState<InterviewerAccount[]>([]);
+  const [loadingInterviewers, setLoadingInterviewers] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -62,6 +68,27 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
     interviewTime: '',
     interviewer: '',
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchInterviewers = async () => {
+      setLoadingInterviewers(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/users`);
+        if (!res.ok) throw new Error('Failed to fetch users');
+        const data: InterviewerAccount[] = await res.json();
+        setInterviewerAccounts(data.filter(account => account.name && account.email));
+      } catch (error) {
+        console.error('Failed to load interviewer accounts:', error);
+        setInterviewerAccounts([]);
+      } finally {
+        setLoadingInterviewers(false);
+      }
+    };
+
+    fetchInterviewers();
+  }, [isOpen]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -264,13 +291,27 @@ export const AddCandidateModal: React.FC<Props> = ({ isOpen, onClose, onSubmitSu
                 </div>
                 <div className="mt-5">
                   <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-slate-400" /> Người PV
+                    <Users className="w-4 h-4 text-slate-400" /> Người PV xác nhận lịch <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    required name="interviewer" value={formData.interviewer} onChange={handleChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Tên ND"
-                  />
+                  <select
+                    required
+                    name="interviewer"
+                    value={formData.interviewer}
+                    onChange={handleChange}
+                    disabled={loadingInterviewers}
+                    title="Chọn tài khoản người phỏng vấn"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none disabled:opacity-60"
+                  >
+                    <option value="">{loadingInterviewers ? 'Đang tải tài khoản...' : '-- Chọn người phỏng vấn --'}</option>
+                    {interviewerAccounts.map(account => (
+                      <option key={account.email} value={account.name}>
+                        {account.name} ({account.email}){account.role ? ` - ${account.role}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    Người được chọn sẽ xác nhận lịch phỏng vấn trên tài khoản của mình.
+                  </p>
                 </div>
               </div>
             </div>

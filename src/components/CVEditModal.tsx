@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Loader2, Calendar, Mail, Phone, BookOpen, Briefcase, Code, AlertCircle, CheckCircle, Award, FileText, User, MessageSquare, Clock, Plus, Trash2, History } from 'lucide-react';
+import { X, Save, Loader2, Calendar, Mail, Phone, Briefcase, AlertCircle, CheckCircle, FileText, User, MessageSquare, Clock, Plus, Trash2, History } from 'lucide-react';
 import { Candidate } from './CandidateEvalModal';
 
 import { crmJD } from '../data/positions/crm/jd';
@@ -40,6 +40,7 @@ export interface CVData {
   position?: string;
   status?: string;
   hrNotes?: Array<{ id: string; date: string; content: string }>;
+  source?: string;
   submittedAt?: string;
 }
 
@@ -61,6 +62,12 @@ const POSITION_OPTIONS = [
   jpSupportAfterSalesJD.title
 ];
 
+interface InterviewerAccount {
+  email: string;
+  name: string;
+  role?: string;
+}
+
 interface Props {
   candidate: Candidate | null;
   onClose: () => void;
@@ -69,7 +76,9 @@ interface Props {
   appsScriptUrl?: string; // Deprecated, kept for backward compatibility
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+if (API_BASE_URL === '/') API_BASE_URL = '';
+else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -101,12 +110,14 @@ export const CVEditModal: React.FC<Props> = ({
   const [interviewer, setInterviewer] = useState('');
   const [position, setPosition] = useState('');
   const [status, setStatus] = useState('');
+  const [source, setSource] = useState('');
   const [hrNotes, setHrNotes] = useState<Array<{ id: string; date: string; content: string }>>([]);
 
   const STATUS_OPTIONS = [
     'Chờ phỏng vấn',
     'Đang phỏng vấn',
     'Đã phỏng vấn',
+    'Không PV',
     'Cân nhắc (Vòng 2)',
     'Đạt',
     'Không đạt',
@@ -120,6 +131,27 @@ export const CVEditModal: React.FC<Props> = ({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [interviewerAccounts, setInterviewerAccounts] = useState<InterviewerAccount[]>([]);
+  const [loadingInterviewers, setLoadingInterviewers] = useState(false);
+
+  useEffect(() => {
+    const fetchInterviewers = async () => {
+      setLoadingInterviewers(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/users`);
+        if (!res.ok) throw new Error('Failed to fetch users');
+        const data: InterviewerAccount[] = await res.json();
+        setInterviewerAccounts(data.filter(account => account.name && account.email));
+      } catch (error) {
+        console.error('Failed to load interviewer accounts:', error);
+        setInterviewerAccounts([]);
+      } finally {
+        setLoadingInterviewers(false);
+      }
+    };
+
+    fetchInterviewers();
+  }, []);
 
   // Load initial CV data
   useEffect(() => {
@@ -135,6 +167,7 @@ export const CVEditModal: React.FC<Props> = ({
     const fallbackDate = candidate?.interviewDate || '';
     const fallbackTime = candidate?.interviewTime || '';
     const fallbackInterviewer = candidate?.interviewer || '';
+    const fallbackSource = candidate?.source || '';
 
     if (initialCVData && (initialCVData.fullName || initialCVData.position || initialCVData.cvLink)) {
       setFullName(initialCVData.fullName || candidate?.name || '');
@@ -154,6 +187,7 @@ export const CVEditModal: React.FC<Props> = ({
       setInterviewer(initialCVData.interviewer || fallbackInterviewer || '');
       setPosition((initialCVData.position || fallbackPos || '').trim());
       setStatus(initialCVData.status || candidate?.status || '');
+      setSource(initialCVData.source || fallbackSource || '');
       
       // Handle hrNotes which might be a JSON string from the database
       let notes = initialCVData.hrNotes || [];
@@ -189,6 +223,7 @@ export const CVEditModal: React.FC<Props> = ({
           setInterviewer(parsed.interviewer || '');
           setPosition(parsed.position || '');
           setStatus(parsed.status || '');
+          setSource(parsed.source || fallbackSource || '');
           setHrNotes(parsed.hrNotes || []);
         } catch (e) {
           console.error('Failed to parse CV draft:', e);
@@ -202,11 +237,12 @@ export const CVEditModal: React.FC<Props> = ({
         setInterviewer(candidate.interviewer || '');
         setPosition((candidate.position || '').trim());
         setStatus(candidate.status || '');
+        setSource(candidate.source || '');
         setCvLink((candidate.cvLink || '').trim());
         setHrNotes([]);
       }
     }
-  }, [initialCVData, candidate?.id, candidate?.name, candidate?.phone, candidate?.interviewDate, candidate?.interviewTime, candidate?.interviewer, candidate?.position, candidate?.status, candidate?.cvLink]);
+  }, [initialCVData, candidate?.id, candidate?.name, candidate?.phone, candidate?.interviewDate, candidate?.interviewTime, candidate?.interviewer, candidate?.position, candidate?.status, candidate?.cvLink, candidate?.source]);
 
   // Auto-save to localStorage every 30 seconds
   useEffect(() => {
@@ -230,6 +266,7 @@ export const CVEditModal: React.FC<Props> = ({
         interviewer,
         position,
         status,
+        source,
         hrNotes,
       };
       try {
@@ -241,7 +278,7 @@ export const CVEditModal: React.FC<Props> = ({
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, hrNotes, candidate]);
+  }, [fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, position, status, source, hrNotes, candidate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,6 +304,7 @@ export const CVEditModal: React.FC<Props> = ({
         interviewer,
         position,
         status,
+        source,
         hrNotes,
         submittedAt: new Date().toISOString(),
       };
@@ -332,6 +370,7 @@ export const CVEditModal: React.FC<Props> = ({
     interviewer !== (initialCVData?.interviewer || candidate?.interviewer || '') ||
     position !== (initialCVData?.position || candidate?.position || '') ||
     status !== (initialCVData?.status || candidate?.status || '') ||
+    source !== (initialCVData?.source || candidate?.source || '') ||
     JSON.stringify(hrNotes) !== JSON.stringify(initialCVData?.hrNotes || []);
 
   // Field component
@@ -505,6 +544,27 @@ export const CVEditModal: React.FC<Props> = ({
                     </select>
                   </div>
                 </div>
+                <div className="flex gap-3 items-start">
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0 text-slate-400 mt-2.5">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Nguồn ứng viên</label>
+                    <select
+                      value={source}
+                      onChange={(e) => setSource(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm text-slate-700 transition-all appearance-none bg-white"
+                    >
+                      <option value="">-- Chọn nguồn --</option>
+                      <option value="TopCV">TopCV</option>
+                      <option value="VietnamWorks">VietnamWorks</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Tự nộp">Tự nộp</option>
+                      <option value="Giới thiệu nội bộ">Giới thiệu nội bộ</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <Field
                 icon={<Briefcase className="w-4 h-4" />}
@@ -533,66 +593,33 @@ export const CVEditModal: React.FC<Props> = ({
                   type="time"
                 />
               </div>
-              <Field
-                icon={<User className="w-4 h-4" />}
-                label="Người phỏng vấn"
-                value={interviewer}
-                onChange={setInterviewer}
-                placeholder="Nhập tên người phỏng vấn"
-              />
-            </div>
-
-            {/* Education & Experience Section */}
-            <div className="space-y-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">🎓 Học vấn & Kinh nghiệm</h3>
-              <Field
-                icon={<BookOpen className="w-4 h-4" />}
-                label="Học vấn"
-                value={education}
-                onChange={setEducation}
-                multiline
-                rows={3}
-                placeholder="VD: Đại học FPT, Chuyên ngành CNTT, 2018-2022"
-              />
-              <Field
-                icon={<Briefcase className="w-4 h-4" />}
-                label="Kinh nghiệm làm việc"
-                value={experience}
-                onChange={setExperience}
-                multiline
-                rows={4}
-                placeholder="VD: Công ty ABC, Vị trí XYZ, 2022-2024\n- Mô tả công việc\n- Thành tích đạt được"
-              />
-            </div>
-
-            {/* Skills Section */}
-            <div className="space-y-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">💡 Kỹ năng & Chứng chỉ</h3>
-              <Field
-                icon={<Code className="w-4 h-4" />}
-                label="Kỹ năng"
-                value={skills}
-                onChange={setSkills}
-                multiline
-                rows={3}
-                placeholder="VD: • Excel\n• SQL\n• JavaScript"
-              />
-              <Field
-                icon={<Award className="w-4 h-4" />}
-                label="Chứng chỉ & Giải thưởng"
-                value={certifications}
-                onChange={setCertifications}
-                multiline
-                rows={2}
-                placeholder="VD: Chứng chỉ IELTS 7.0, Giải thưởng nhân viên xuất sắc 2023"
-              />
-              <Field
-                icon={<Briefcase className="w-4 h-4" />}
-                label="Ngôn ngữ"
-                value={languages}
-                onChange={setLanguages}
-                placeholder="VD: Tiếng Anh (Thành thạo), Tiếng Pháp (Cơ bản)"
-              />
+              <div className="flex gap-3 items-start">
+                <div className="w-5 h-5 flex items-center justify-center shrink-0 text-slate-400 mt-2.5">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Người phỏng vấn xác nhận lịch</label>
+                  <select
+                    value={interviewer}
+                    onChange={(e) => setInterviewer(e.target.value)}
+                    disabled={loadingInterviewers}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm text-slate-700 transition-all appearance-none bg-white disabled:opacity-60"
+                  >
+                    <option value="">{loadingInterviewers ? 'Đang tải tài khoản...' : '-- Chọn người phỏng vấn --'}</option>
+                    {interviewer && !interviewerAccounts.some(account => account.name === interviewer) && (
+                      <option value={interviewer}>{interviewer} (hiện tại)</option>
+                    )}
+                    {interviewerAccounts.map(account => (
+                      <option key={account.email} value={account.name}>
+                        {account.name} ({account.email}){account.role ? ` - ${account.role}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    Người được chọn sẽ xác nhận lịch phỏng vấn trên tài khoản của mình.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* CV Link & Notes */}

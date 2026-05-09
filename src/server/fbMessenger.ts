@@ -3,6 +3,39 @@ import { pool } from './db';
 
 const router = express.Router();
 
+// Avatar Proxy to bypass Facebook hotlinking/CORS restrictions for profile/ad images.
+router.get('/avatar-proxy', async (req, res) => {
+  try {
+    const url = req.query.url as string;
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+      }
+    });
+
+    if (!response.ok) {
+      console.warn(`[AVATAR_PROXY] Fetch failed: ${response.status} for ${url}`);
+      return res.status(response.status).json({ error: `Failed to fetch image: ${response.status}` });
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const buffer = await response.arrayBuffer();
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(Buffer.from(buffer));
+  } catch (err: any) {
+    console.error('[AVATAR_PROXY_ERROR]', err);
+    res.status(500).json({ error: 'Error proxying image', message: err.message });
+  }
+});
+
 const GRAPH_API_VERSION = 'v25.0';
 
 const normalizeConversation = (row: any) => ({

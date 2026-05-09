@@ -170,22 +170,61 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
     return d.getUTCFullYear() === year && weekNo === week;
   };
 
-  // Report calculations
-  const filteredCandidates = candidates.filter(c => {
+  const isDateInActiveFilter = (dateStr?: string) => {
     if (filterType === 'all') return true;
-    if (!c.createdAt) return false;
-    
-    const candidateDate = c.createdAt.slice(0, 10);
+    if (!dateStr) return false;
+
+    const normalizedDate = dateStr.slice(0, 10);
 
     if (filterType === 'month') {
-      return c.createdAt.startsWith(filterMonth);
-    } else if (filterType === 'week') {
-      return isDateInWeek(candidateDate, filterWeek);
-    } else if (filterType === 'range') {
-      return candidateDate >= filterRange.start && candidateDate <= filterRange.end;
+      return normalizedDate.startsWith(filterMonth);
     }
+
+    if (filterType === 'week') {
+      return isDateInWeek(normalizedDate, filterWeek);
+    }
+
+    if (filterType === 'range') {
+      return normalizedDate >= filterRange.start && normalizedDate <= filterRange.end;
+    }
+
     return true;
+  };
+
+  const doesPlanOverlapActiveFilter = (plan: RecruitmentPlan) => {
+    if (filterType === 'all') return true;
+
+    const planStart = plan.start_date?.slice(0, 10);
+    const planEnd = plan.end_date?.slice(0, 10) || planStart;
+
+    if (!planStart || !planEnd) return false;
+
+    if (filterType === 'month') {
+      const monthStart = `${filterMonth}-01`;
+      const monthEnd = new Date(Number(filterMonth.slice(0, 4)), Number(filterMonth.slice(5, 7)), 0)
+        .toISOString()
+        .slice(0, 10);
+      return planStart <= monthEnd && planEnd >= monthStart;
+    }
+
+    if (filterType === 'week') {
+      return isDateInWeek(planStart, filterWeek) || isDateInWeek(planEnd, filterWeek);
+    }
+
+    if (filterType === 'range') {
+      return planStart <= filterRange.end && planEnd >= filterRange.start;
+    }
+
+    return true;
+  };
+
+  // Report calculations
+  const filteredCandidates = candidates.filter(c => {
+    const candidateDate = c.interviewDate || c.createdAt;
+    return isDateInActiveFilter(candidateDate);
   });
+
+  const filteredPlans = plans.filter(doesPlanOverlapActiveFilter);
 
   const reportData = Object.keys(JD_DATA).map(posId => {
     const posTitle = JD_DATA[posId].title;
@@ -198,7 +237,7 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
       rejected: posCandidates.filter(c => c.status === 'Không đạt' || c.status === 'Không nhận việc').length
     };
     
-    const plan = plans.find(p => p.position === posTitle || p.position === posId);
+    const plan = filteredPlans.find(p => p.position === posTitle || p.position === posId);
     const target = plan ? plan.target_quantity : 0;
     const progress = target > 0 ? Math.min(100, (stats.hired / target) * 100) : 0;
 
@@ -393,7 +432,7 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
               <tbody className="divide-y divide-slate-100">
                 <AnimatePresence>
                   {reportData.map(item => {
-                    const plan = plans.find(p => p.position === item.title || p.position === item.id);
+                    const plan = filteredPlans.find(p => p.position === item.title || p.position === item.id);
                     return (
                       <motion.tr 
                         key={item.id} 
@@ -553,23 +592,31 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
                     isHired ? 'border-emerald-200 bg-emerald-50/10' : 'border-slate-100'
                   }`}
                 >
-                  <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr_1fr_150px] gap-6 items-start">
                     {/* Column 1: Basic Info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       <h4 className="text-xl font-black text-slate-900 truncate mb-3">{candidate.name}</h4>
-                      <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-slate-500">
-                        <span className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
-                          <Briefcase className="w-3.5 h-3.5 text-blue-500" />
-                          <span className="font-bold text-slate-700">{candidate.position}</span>
-                        </span>
-                        
-                        <span className="flex items-center gap-2">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="flex items-center gap-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                      
+                      <div className="space-y-2.5 text-xs text-slate-500">
+                        <div className="flex">
+                          <span className="inline-flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 max-w-full">
+                            <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <span className="font-bold text-slate-700 truncate">{candidate.position}</span>
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="font-medium text-slate-600 truncate">{formatPhone(candidate.phone)}</span>
+                          </span>
+
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter shrink-0">
                               Thời gian PV:
                             </span>
-                            <span className="font-medium text-slate-600">
+                            <span className="font-medium text-slate-600 truncate">
                               {candidate.interviewDate 
                                 ? `${new Date(candidate.interviewDate).toLocaleDateString('vi-VN')}${candidate.interviewTime ? ` (${candidate.interviewTime})` : ''}`
                                 : candidate.createdAt && candidate.createdAt !== 'Invalid Date'
@@ -577,20 +624,15 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
                                   : '—'}
                             </span>
                           </span>
-                        </span>
-                        
-                        <span className="flex items-center gap-2">
-                          <Users className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="font-medium text-slate-600">{formatPhone(candidate.phone)}</span>
-                        </span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Column 2: Evaluation Notes */}
-                    <div className="flex-1 border-l border-slate-100 pl-6">
+                    <div className="min-w-0 lg:border-l lg:border-slate-100 lg:pl-6">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Đánh giá chuyên môn</span>
                       {evaluation ? (
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-h-[44px]">
                           {evaluation.strengths && (
                             <p className="text-xs text-slate-600 line-clamp-2">
                               <span className="font-bold text-emerald-600">Ưu điểm:</span> {evaluation.strengths}
@@ -606,32 +648,32 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-300 italic">Chưa có dữ liệu phỏng vấn</p>
+                        <p className="text-xs text-slate-300 italic min-h-[44px]">Chưa có dữ liệu phỏng vấn</p>
                       )}
                     </div>
 
                     {/* Column 3: HR Notes */}
-                    <div className="flex-1 border-l border-slate-100 pl-6">
+                    <div className="min-w-0 lg:border-l lg:border-slate-100 lg:pl-6">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Ghi chú nhân sự</span>
                       {hrInfo?.hrNotes ? (
-                        <div className="space-y-1">
+                        <div className="space-y-1 min-h-[44px]">
                           {Array.isArray(hrInfo.hrNotes) ? (
                             hrInfo.hrNotes.map((note: any, i: number) => (
-                              <p key={i} className="text-xs text-slate-600 flex gap-2">
+                              <p key={i} className="text-xs text-slate-600 flex gap-2 line-clamp-2">
                                 <span className="text-slate-300">•</span> {note.content || note}
                               </p>
                             ))
                           ) : (
-                            <p className="text-xs text-slate-600">{hrInfo.hrNotes}</p>
+                            <p className="text-xs text-slate-600 line-clamp-2">{hrInfo.hrNotes}</p>
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-300 italic">Không có ghi chú HR</p>
+                        <p className="text-xs text-slate-300 italic min-h-[44px]">Không có ghi chú HR</p>
                       )}
                     </div>
 
                     {/* Column 4: Status & Salary (Far Right) */}
-                    <div className="flex flex-col items-center justify-start min-w-[140px] gap-3">
+                    <div className="flex flex-col items-stretch justify-start w-full lg:w-[150px] gap-3 lg:justify-self-end">
                       <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm text-center w-full ${
                         candidate.status === 'Đã nhận việc' ? 'bg-emerald-500 text-white' :
                         candidate.status === 'Đạt' ? 'bg-emerald-100 text-emerald-600' :

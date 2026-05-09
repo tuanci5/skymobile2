@@ -61,6 +61,7 @@ export const UserManagementTab = () => {
     permissions: [] as string[],
     manager_email: ''
   });
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -113,11 +114,13 @@ export const UserManagementTab = () => {
         manager_email: ''
       });
     }
+    setModalError(null);
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     try {
       const url = editingUser
         ? `${API_BASE_URL}/api/users/${editingUser.email}`
@@ -131,12 +134,15 @@ export const UserManagementTab = () => {
         body: JSON.stringify(formData)
       });
 
-      if (!response.ok) throw new Error('Failed to save user');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save user');
+      }
 
       await fetchUsers();
       setIsModalOpen(false);
     } catch (err: any) {
-      alert(err.message);
+      setModalError(err.message);
     }
   };
 
@@ -208,7 +214,6 @@ export const UserManagementTab = () => {
   const TABS_TO_MANAGE = [
     { id: 'model', label: 'Mô hình Vận hành' },
     { id: 'hr', label: 'Nhân sự & JD' },
-    { id: 'salary', label: 'Lương & KPI' },
     { id: 'cost', label: 'Cơ cấu chi phí' },
     { id: 'training', label: 'Đào tạo & Văn hóa' },
     { id: 'business', label: 'Kế hoạch kinh doanh' },
@@ -487,6 +492,20 @@ export const UserManagementTab = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <AnimatePresence mode="wait">
+                  {modalError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600"
+                    >
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span className="text-sm font-bold">{modalError}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Email đăng nhập</label>
                   <input type="email" required disabled={!!editingUser} className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all disabled:bg-slate-50" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />

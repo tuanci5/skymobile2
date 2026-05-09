@@ -81,10 +81,16 @@ export async function initDBUtils() {
         interviewDate VARCHAR(50),
         interviewTime VARCHAR(50),
         interviewer VARCHAR(255),
+        source VARCHAR(255),
         submittedAt VARCHAR(100),
         FOREIGN KEY (candidateId) REFERENCES candidates(id) ON DELETE CASCADE
       )
     `);
+
+    // Add source column if it doesn't exist (for existing cv_data tables)
+    try {
+      await client.query('ALTER TABLE cv_data ADD COLUMN source VARCHAR(255)');
+    } catch (e) {}
 
     // FB Messenger Integration Tables
     await client.query(`

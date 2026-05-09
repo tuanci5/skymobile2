@@ -127,19 +127,40 @@ router.get('/webhook', (req, res) => {
   }
 });
 
+const processedMessageIds = new Set<string>();
+const difyBatchQueues = new Map<string, { messages: string[], timer: NodeJS.Timeout }>();
+
 // Receive Messages
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', (req, res) => {
   console.log('--- WEBHOOK RECEIVED ---');
-  console.log(JSON.stringify(req.body, null, 2));
+  // console.log(JSON.stringify(req.body, null, 2)); // Giảm log rác
   const body = req.body;
 
   if (body.object === 'page') {
-    for (const entry of body.entry) {
-      const page_id = entry.id;
-      const webhook_event = entry.messaging[0];
-      console.log('Webhook Event:', webhook_event);
+    // 1. TRẢ VỀ 200 OK NGAY LẬP TỨC ĐỂ FACEBOOK KHÔNG GỬI LẠI (TRÁNH DUPLICATE)
+    res.status(200).send('EVENT_RECEIVED');
 
-      const sender_psid = webhook_event.sender.id;
+    // 2. XỬ LÝ BACKGROUND
+    (async () => {
+      try {
+        for (const entry of body.entry) {
+          const page_id = entry.id;
+          const webhook_event = entry.messaging[0];
+          console.log('Webhook Event:', JSON.stringify(webhook_event));
+
+          // 3. KIỂM TRA TRÙNG LẶP (DEDUPLICATION)
+          if (webhook_event.message && webhook_event.message.mid) {
+            const mid = webhook_event.message.mid;
+            if (processedMessageIds.has(mid)) {
+              console.log(`[DEDUPE] Bỏ qua tin nhắn trùng lặp (mid): ${mid}`);
+              continue;
+            }
+            processedMessageIds.add(mid);
+            // Xóa khỏi cache sau 5 phút để tránh tràn bộ nhớ
+            setTimeout(() => processedMessageIds.delete(mid), 5 * 60 * 1000);
+          }
+
+          const sender_psid = webhook_event.sender.id;
 
       // Look up page to get Dify key and access token
       const { rows: pages } = await pool.query('SELECT * FROM fb_pages WHERE page_id = $1', [page_id]);
@@ -272,61 +293,94 @@ router.post('/webhook', async (req, res) => {
           [convId, 'user', messageText]
         );
 
-        // Forward to Dify if not human intervened
+        // --- DIFY AI BATCHING LOGIC (5s delay to group messages) ---
         if (!is_human_intervened && page.dify_api_key) {
-          try {
-            const difyRes = await fetch('https://dify.movads.vn/v1/chat-messages', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${page.dify_api_key}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                inputs: {},
-                query: messageText,
-                response_mode: 'blocking',
-                conversation_id: dify_conversation_id || '',
-                user: sender_psid
-              })
+          const queueKey = `${page_id}_${sender_psid}`;
+          const existing = difyBatchQueues.get(queueKey);
+
+          if (existing) {
+            clearTimeout(existing.timer);
+            existing.messages.push(messageText);
+          } else {
+            difyBatchQueues.set(queueKey, {
+              messages: [messageText],
+              timer: null as any
             });
+          }
 
-            const difyData = await difyRes.json();
+          const currentQueue = difyBatchQueues.get(queueKey)!;
+          currentQueue.timer = setTimeout(async () => {
+            try {
+              const combinedMessage = currentQueue.messages.join('\n');
+              difyBatchQueues.delete(queueKey);
 
-            if (difyData.answer) {
-              const aiReply = difyData.answer;
-              const newDifyConvId = difyData.conversation_id;
+              // Re-check human intervention from DB before calling AI
+              const { rows: checkConv } = await pool.query('SELECT is_human_intervened, dify_conversation_id FROM fb_conversations WHERE id = $1', [convId]);
+              if (checkConv.length > 0 && checkConv[0].is_human_intervened) {
+                console.log(`[DIFY_BATCH] Human intervened, cancelling AI response for ${sender_psid}`);
+                return;
+              }
 
-              // Save AI Message
-              await pool.query(
-                `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
-                [convId, 'ai', aiReply]
-              );
+              const currentDifyConvId = checkConv[0]?.dify_conversation_id;
 
-              // Update conversation_id
-              await pool.query(
-                `UPDATE fb_conversations SET dify_conversation_id = $1, last_message = $2, last_message_at = CURRENT_TIMESTAMP WHERE id = $3`,
-                [newDifyConvId, aiReply, convId]
-              );
+              console.log(`[DIFY_BATCH] Sending combined message for ${sender_psid}: ${combinedMessage}`);
 
-              // Send back to FB
-              const fbSendRes = await fetch(`https://graph.facebook.com/v25.0/${page_id}/messages?access_token=${page.access_token}`, {
+              const difyRes = await fetch('https://dify.movads.vn/v1/chat-messages', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Authorization': `Bearer ${page.dify_api_key}`,
+                  'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                  recipient: { id: sender_psid },
-                  message: { text: aiReply }
+                  inputs: {},
+                  query: combinedMessage,
+                  response_mode: 'blocking',
+                  conversation_id: currentDifyConvId || '',
+                  user: sender_psid
                 })
               });
-              const fbSendData = await fbSendRes.json();
-              console.log('FB AI Send Response:', JSON.stringify(fbSendData));
+
+              const difyData = await difyRes.json();
+
+              if (difyData.answer) {
+                const aiReply = difyData.answer;
+                const newDifyConvId = difyData.conversation_id;
+
+                // Save AI Message
+                await pool.query(
+                  `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
+                  [convId, 'ai', aiReply]
+                );
+
+                // Update conversation_id and last message
+                await pool.query(
+                  `UPDATE fb_conversations SET dify_conversation_id = $1, last_message = $2, last_message_at = CURRENT_TIMESTAMP WHERE id = $3`,
+                  [newDifyConvId, aiReply, convId]
+                );
+
+                // Send back to FB
+                const fbSendRes = await fetch(`https://graph.facebook.com/v25.0/${page_id}/messages?access_token=${page.access_token}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    recipient: { id: sender_psid },
+                    message: { text: aiReply }
+                  })
+                });
+                const fbSendData = await fbSendRes.json();
+                console.log('FB AI Send Response (Batched):', JSON.stringify(fbSendData));
+              }
+            } catch (err) {
+              console.error('Dify Batch Processing Error:', err);
             }
-          } catch (err) {
-            console.error('Dify API Error:', err);
-          }
+          }, 5000);
         }
       }
     }
-    res.status(200).send('EVENT_RECEIVED');
+      } catch (error) {
+        console.error('Error processing webhook:', error);
+      }
+    })();
   } else {
     res.sendStatus(404);
   }
@@ -593,8 +647,8 @@ router.post('/messages/send', async (req, res) => {
     console.log('FB Human Send Response:', JSON.stringify(fbSendData));
 
     // Save Message and Intervene
-    await pool.query(
-      `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
+    const { rows: msgRows } = await pool.query(
+      `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3) RETURNING *`,
       [conversation_id, 'human', text]
     );
 
@@ -603,7 +657,7 @@ router.post('/messages/send', async (req, res) => {
       [text, conversation_id]
     );
 
-    res.json({ success: true });
+    res.json({ success: true, message: msgRows[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

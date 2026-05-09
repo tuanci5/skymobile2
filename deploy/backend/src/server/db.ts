@@ -4,8 +4,7 @@ import path from 'path';
 
 // Only load dotenv in non-Vercel environments
 if (!process.env.VERCEL) {
-  dotenv.config();
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 }
 
 export const pool = new pg.Pool({
@@ -82,10 +81,16 @@ export async function initDBUtils() {
         interviewDate VARCHAR(50),
         interviewTime VARCHAR(50),
         interviewer VARCHAR(255),
+        source VARCHAR(255),
         submittedAt VARCHAR(100),
         FOREIGN KEY (candidateId) REFERENCES candidates(id) ON DELETE CASCADE
       )
     `);
+
+    // Add source column if it doesn't exist (for existing cv_data tables)
+    try {
+      await client.query('ALTER TABLE cv_data ADD COLUMN source VARCHAR(255)');
+    } catch (e) {}
 
     // FB Messenger Integration Tables
     await client.query(`
@@ -113,6 +118,7 @@ export async function initDBUtils() {
         customer_id VARCHAR(100) NOT NULL,
         customer_name VARCHAR(255),
         customer_avatar TEXT,
+        avatar_url TEXT,
         ad_id VARCHAR(100),
         campaign_name VARCHAR(255),
         ad_cost DECIMAL(10,2),
@@ -132,14 +138,15 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN profile_link TEXT");
     } catch (e) {}
 
+    // Add avatar_url if missing. customer_avatar is kept for backward compatibility.
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN avatar_url TEXT");
+    } catch (e) {}
+    await client.query("UPDATE fb_conversations SET avatar_url = customer_avatar WHERE avatar_url IS NULL AND customer_avatar IS NOT NULL");
+
     // Add assigned_to if missing
     try {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN assigned_to VARCHAR(255)");
-    } catch (e) {}
-
-    // Add customer_note if missing
-    try {
-      await client.query("ALTER TABLE fb_conversations ADD COLUMN customer_note TEXT");
     } catch (e) {}
 
     await client.query(`
@@ -162,6 +169,29 @@ export async function initDBUtils() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    const { rows: noteColumnRows } = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'fb_conversations'
+        AND column_name = 'customer_note'
+    `);
+
+    if (noteColumnRows.length > 0) {
+      await client.query(`
+        INSERT INTO fb_conversation_notes (conversation_id, note_text, author_name, created_at)
+        SELECT id, customer_note, 'Hệ thống', COALESCE(last_message_at, CURRENT_TIMESTAMP)
+        FROM fb_conversations c
+        WHERE customer_note IS NOT NULL
+          AND btrim(customer_note) <> ''
+          AND NOT EXISTS (
+            SELECT 1
+            FROM fb_conversation_notes n
+            WHERE n.conversation_id = c.id
+              AND n.note_text = c.customer_note
+          )
+      `);
+    }
 
     // Ensure users table exists for authentication
     await client.query(`
@@ -266,39 +296,6 @@ export async function initDBUtils() {
         team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
         user_email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
         PRIMARY KEY (team_id, user_email)
-      )
-    `);
-
-    // Ensure products table exists
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        sale_price DECIMAL(15,2),
-        import_price DECIMAL(15,2),
-        import_date VARCHAR(50),
-        seller VARCHAR(255),
-        category VARCHAR(100),
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Ensure orders table exists
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        customer_name VARCHAR(255),
-        customer_id VARCHAR(100),
-        page_id VARCHAR(100),
-        phone VARCHAR(50),
-        address TEXT,
-        product_name VARCHAR(255),
-        amount DECIMAL(15,2),
-        status VARCHAR(50) DEFAULT 'Đang xử lý',
-        note TEXT,
-        assigned_to VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 

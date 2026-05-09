@@ -28,8 +28,7 @@ app.use(async (req, res, next) => {
 // ─── DEBUG API ────────────────────────────────────────────────────────────────
 app.get('/api/debug', (req, res) => {
   res.json({
-    status: 'online-v3-final',
-    version: 'v2-with-delete-fix',
+    status: 'online',
     timestamp: new Date().toISOString(),
     env: {
       has_host: !!process.env.DB_HOST,
@@ -175,6 +174,7 @@ app.get('/api/cvs', async (req, res) => {
         interviewDate: row.interviewdate,
         interviewTime: row.interviewtime,
         interviewer: row.interviewer,
+        source: row.source,
         submittedAt: row.submittedat
       };
     });
@@ -187,18 +187,27 @@ app.get('/api/cvs', async (req, res) => {
 
 app.post('/api/cvs', async (req, res) => {
   try {
-    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt } = req.body;
+    const { candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, source, submittedAt } = req.body;
     
     await pool.query(
-      `INSERT INTO cv_data (candidateid, fullname, email, phone, dateofbirth, address, education, experience, skills, certifications, languages, cvlink, notes, interviewdate, interviewtime, interviewer, submittedat)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      `INSERT INTO cv_data (candidateid, fullname, email, phone, dateofbirth, address, education, experience, skills, certifications, languages, cvlink, notes, interviewdate, interviewtime, interviewer, source, submittedat)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        ON CONFLICT (candidateid) DO UPDATE SET
        fullname = EXCLUDED.fullname, email = EXCLUDED.email, phone = EXCLUDED.phone, dateofbirth = EXCLUDED.dateofbirth,
        address = EXCLUDED.address, education = EXCLUDED.education, experience = EXCLUDED.experience, skills = EXCLUDED.skills,
        certifications = EXCLUDED.certifications, languages = EXCLUDED.languages, cvlink = EXCLUDED.cvlink, notes = EXCLUDED.notes,
        interviewdate = EXCLUDED.interviewdate, interviewtime = EXCLUDED.interviewtime, interviewer = EXCLUDED.interviewer,
-       submittedat = EXCLUDED.submittedat`,
-      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, submittedAt]
+       source = EXCLUDED.source, submittedat = EXCLUDED.submittedat`,
+      [candidateId, fullName, email, phone, dateOfBirth, address, education, experience, skills, certifications, languages, cvLink, notes, interviewDate, interviewTime, interviewer, source, submittedAt]
+    );
+
+    await pool.query(
+      `UPDATE candidates
+       SET source = COALESCE($1, source), phone = COALESCE($2, phone), cv_link = COALESCE($3, cv_link),
+           interview_date = COALESCE($4, interview_date), interview_time = COALESCE($5, interview_time),
+           interviewer = COALESCE($6, interviewer), position = COALESCE($7, position), status = COALESCE($8, status)
+       WHERE id = $9`,
+      [source || null, phone || null, cvLink || null, interviewDate || null, interviewTime || null, interviewer || null, req.body.position || null, req.body.status || null, candidateId]
     );
     res.json({ success: true, message: 'CV saved' });
   } catch (error) {
@@ -207,7 +216,27 @@ app.post('/api/cvs', async (req, res) => {
   }
 });
 
-// ─── USERS API ────────────────────────────────────────────────────────────
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('💥 Unhandled Error:', err);
+  res.status(500).json({ 
+    error: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
+// ─── EXPORT/START ──────────────────────────────────────────────────────────────
+
+const PORT = 3001;
+// Chỉ chạy app.listen nếu không phải môi trường Vercel
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 API Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
+
 
 app.get('/api/users', async (req, res) => {
   try {
@@ -644,213 +673,3 @@ app.delete('/api/teams/:id', async (req, res) => {
   }
 });
 
-// ─── PRODUCTS API ────────────────────────────────────────────────────────
-app.get('/api/products', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({ error: 'Failed to fetch products' });
-  }
-});
-
-app.post('/api/products', async (req, res) => {
-  try {
-    const { name, sale_price, import_price, import_date, seller, category, description } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
-    
-    await pool.query(
-      'INSERT INTO products (name, sale_price, import_price, import_date, seller, category, description) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [name, sale_price || 0, import_price || 0, import_date || null, seller || null, category || null, description || '']
-    );
-    res.json({ success: true, message: 'Product added' });
-  } catch (error) {
-    console.error('Error adding product:', error);
-    res.status(500).json({ error: 'Failed to add product' });
-  }
-});
-
-app.put('/api/products/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, sale_price, import_price, import_date, seller, category, description } = req.body;
-    
-    await pool.query(
-      'UPDATE products SET name = $1, sale_price = $2, import_price = $3, import_date = $4, seller = $5, category = $6, description = $7 WHERE id = $8',
-      [name, sale_price, import_price, import_date, seller, category, description, id]
-    );
-    res.json({ success: true, message: 'Product updated' });
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500).json({ error: 'Failed to update product' });
-  }
-});
-
-app.delete('/api/products/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM products WHERE id = $1', [id]);
-    res.json({ success: true, message: 'Product deleted' });
-  } catch (error) {
-    console.error('Error deleting product:', error);
-    res.status(500).json({ error: 'Failed to delete product' });
-  }
-});
-
-
-// ─── ORDERS API ──────────────────────────────────────────────────────────
-
-app.get('/api/orders', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching orders:', error);
-    res.status(500).json({ error: 'Failed to fetch orders' });
-  }
-});
-
-app.post('/api/orders', async (req, res) => {
-  try {
-    const { 
-      customer_name, customer_id, page_id, phone, 
-      address, product_name, amount, note, assigned_to 
-    } = req.body;
-    
-    await pool.query(
-      `INSERT INTO orders (customer_name, customer_id, page_id, phone, address, product_name, amount, note, assigned_to)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [customer_name, customer_id, page_id, phone, address, product_name, amount, note, assigned_to]
-    );
-    res.json({ success: true, message: 'Order created' });
-  } catch (error) {
-    console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
-  }
-});
-
-app.get('/api/orders/stats', async (req, res) => {
-  try {
-    const { range } = req.query; // 'Hôm nay', 'Tuần này', 'Tháng này', 'Năm nay'
-    
-    let dateFilter = '';
-    let prevDateFilter = '';
-    
-    if (range === 'Hôm nay') {
-      dateFilter = "AND created_at >= CURRENT_DATE";
-      prevDateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE";
-    } else if (range === 'Tuần này') {
-      dateFilter = "AND created_at >= date_trunc('week', CURRENT_DATE)";
-      prevDateFilter = "AND created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '1 week' AND created_at < date_trunc('week', CURRENT_DATE)";
-    } else if (range === 'Tháng này') {
-      dateFilter = "AND created_at >= date_trunc('month', CURRENT_DATE)";
-      prevDateFilter = "AND created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month' AND created_at < date_trunc('month', CURRENT_DATE)";
-    } else if (range === 'Năm nay') {
-      dateFilter = "AND created_at >= date_trunc('year', CURRENT_DATE)";
-      prevDateFilter = "AND created_at >= date_trunc('year', CURRENT_DATE) - INTERVAL '1 year' AND created_at < date_trunc('year', CURRENT_DATE)";
-    }
-
-    // Current period stats
-    const statsQuery = `
-      SELECT 
-        COALESCE(SUM(amount), 0) as total_revenue,
-        COUNT(*) as order_count,
-        COUNT(DISTINCT customer_id) as customer_count
-      FROM orders
-      WHERE 1=1 ${dateFilter}
-    `;
-    const { rows: statsRows } = await pool.query(statsQuery);
-    const currentStats = statsRows[0];
-
-    // Previous period stats
-    const prevStatsQuery = `
-      SELECT 
-        COALESCE(SUM(amount), 0) as total_revenue,
-        COUNT(*) as order_count,
-        COUNT(DISTINCT customer_id) as customer_count
-      FROM orders
-      WHERE 1=1 ${prevDateFilter}
-    `;
-    const { rows: prevStatsRows } = await pool.query(prevStatsQuery);
-    const prevStats = prevStatsRows[0];
-    
-    // Top products
-    const productsQuery = `
-      SELECT 
-        product_name as name,
-        COUNT(*) as sales,
-        SUM(amount) as revenue
-      FROM orders
-      WHERE 1=1 ${dateFilter}
-      GROUP BY product_name
-      ORDER BY revenue DESC
-      LIMIT 5
-    `;
-    const { rows: productRows } = await pool.query(productsQuery);
-    
-    // Helper function to calculate growth
-    const calculateGrowth = (current: number | string, prev: number | string) => {
-      const curVal = parseFloat(current.toString());
-      const preVal = parseFloat(prev.toString());
-      if (preVal === 0) return curVal > 0 ? 100 : 0;
-      return ((curVal - preVal) / preVal) * 100;
-    };
-
-    res.json({
-      stats: {
-        ...currentStats,
-        revenue_growth: calculateGrowth(currentStats.total_revenue, prevStats.total_revenue),
-        orders_growth: calculateGrowth(currentStats.order_count, prevStats.order_count),
-        customers_growth: calculateGrowth(currentStats.customer_count, prevStats.customer_count),
-      },
-      topProducts: productRows
-    });
-  } catch (error) {
-    console.error('Error fetching order stats:', error);
-    res.status(500).json({ error: 'Failed to fetch order stats' });
-  }
-});
-
-
-// ─── AUTH API ────────────────────────────────────────────────────────────
-
-app.get('/api/auth/verify', async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    
-    const { rows } = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [email.toString().toLowerCase()]);
-    
-    if (rows.length > 0) {
-      res.json({ authorized: true, user: rows[0] });
-    } else {
-      res.json({ authorized: false });
-    }
-  } catch (error) {
-    console.error('Verify error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Global Error Handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('💥 Unhandled Error:', err);
-  res.status(500).json({ 
-    error: err.message || 'Internal Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
-});
-
-// ─── EXPORT/START ──────────────────────────────────────────────────────────────
-
-const PORT = process.env.PORT || 3001;
-// Chỉ chạy app.listen nếu không phải môi trường Vercel
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  console.log(`DEBUG: process.env.PORT is ${process.env.PORT}`);
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 API Server running on http://localhost:${PORT}`);
-  });
-}
-
-export default app;
