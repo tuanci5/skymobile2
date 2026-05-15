@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { TabType } from '../types';
 import { ScrollToTop } from './ScrollToTop';
@@ -58,11 +58,7 @@ export const AppShell = ({
             </motion.div>
           </AnimatePresence>
 
-          <footer className="mt-20 py-12 border-t border-slate-200 text-center">
-            <p className="mt-8 text-slate-400 text-sm">
-              © 2026 Hệ thống Quản trị Doanh nghiệp Online. Thiết kế chuyên biệt cho ngành Viễn thông tại Nhật.
-            </p>
-          </footer>
+
         </div>
       </main>
 

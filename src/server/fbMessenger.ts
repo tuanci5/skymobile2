@@ -153,7 +153,7 @@ async function prepareDifyQueryWithMissingContext(convId: number, messageText: s
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, distribution_mode, assigned_users FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -236,50 +236,41 @@ router.post('/webhook', async (req, res) => {
         const messageText = message.text;
         if (!messageText) continue;
 
-          // --- HANDLE ECHOES (Messages sent by Page) ---
         if (message.is_echo) {
-          console.log('[ECHO] Message sent by Page:', messageText);
-          
-          // Check if message was sent by our AI using metadata or app_id
+          const customer_psid = webhook_event.recipient.id;
+          const messageText = message.text;
+          if (!messageText) continue;
+
+          // Check if sent by our AI using metadata or app_id
           const isFromAI = (message.metadata === 'SENT_BY_AI') || 
                            (message.app_id && process.env.FB_APP_ID && message.app_id.toString() === process.env.FB_APP_ID);
           
-          console.log(`[ECHO] isFromAI: ${isFromAI} (metadata: ${message.metadata}, app_id: ${message.app_id})`);
+          console.log(`[ECHO] Received echo. isFromAI: ${isFromAI}, customer: ${customer_psid}`);
 
-          await pool.query(
-            `UPDATE fb_conversations SET 
-             last_message = $1, 
-             last_message_at = CURRENT_TIMESTAMP,
-             is_human_intervened = $2
-             WHERE page_id = $3 AND customer_id = $4`,
-            [messageText, !isFromAI, page_id, sender_psid]
-          );
-
-          // Save to messages table ONLY if not already saved (to avoid duplicates)
-          const { rows: convs } = await pool.query('SELECT id FROM fb_conversations WHERE page_id = $1 AND customer_id = $2', [page_id, sender_psid]);
+          const { rows: convs } = await pool.query('SELECT id FROM fb_conversations WHERE page_id = $1 AND customer_id = $2', [page_id, customer_psid]);
           if (convs.length > 0) {
             const convId = convs[0].id;
-            // Check if this message text was recently saved (within 5 seconds) to avoid duplicates from echoes
-            const { rows: recentMsgs } = await pool.query(
-              `SELECT id FROM fb_messages 
-               WHERE conversation_id = $1 
-               AND message_text = $2 
-               AND created_at > NOW() - INTERVAL '5 seconds'
-               LIMIT 1`,
+
+            // Deduplicate: check if this message was recently saved (to avoid duplicate with AI send logic)
+            const { rows: existing } = await pool.query(
+              'SELECT id FROM fb_messages WHERE conversation_id = $1 AND message_text = $2 AND created_at > NOW() - INTERVAL \'10 seconds\' LIMIT 1',
               [convId, messageText]
             );
 
-            if (recentMsgs.length === 0) {
+            if (existing.length === 0) {
               await pool.query(
-                `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
+                'INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)',
                 [convId, isFromAI ? 'ai' : 'human', messageText]
               );
-              console.log(`[ECHO] Saved new ${isFromAI ? 'AI' : 'human'} message to DB`);
-            } else {
-              console.log(`[ECHO] Message already exists in DB, skipping duplicate save`);
+
+              await pool.query(
+                'UPDATE fb_conversations SET last_message = $1, last_message_at = CURRENT_TIMESTAMP, is_human_intervened = $2, unread_count = 0 WHERE id = $3',
+                [messageText, !isFromAI, convId]
+              );
+              console.log(`[ECHO] Synced ${isFromAI ? 'AI' : 'human'} reply for conversation ${convId}`);
             }
           }
-          continue; // End processing for this echo event
+          continue;
         }
 
         // --- NORMAL USER MESSAGE ---

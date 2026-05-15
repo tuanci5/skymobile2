@@ -102,6 +102,9 @@ export async function initDBUtils() {
         dify_api_key TEXT,
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
         assigned_users JSONB DEFAULT '[]'::jsonb,
+        ai_reply_delay INT DEFAULT 5,
+        ai_start_hour INT DEFAULT 0,
+        ai_end_hour INT DEFAULT 24,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -115,6 +118,17 @@ export async function initDBUtils() {
     // Add assigned_users if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN assigned_users JSONB DEFAULT '[]'::jsonb");
+    } catch (e) {}
+
+    // Add ai_reply_delay if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN ai_reply_delay INT DEFAULT 5");
+    } catch (e) {}
+
+    // Add AI schedule if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN ai_start_hour INT DEFAULT 0");
+      await client.query("ALTER TABLE fb_pages ADD COLUMN ai_end_hour INT DEFAULT 24");
     } catch (e) {}
 
     await client.query(`

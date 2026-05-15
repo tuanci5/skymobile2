@@ -55,7 +55,7 @@ router.get('/avatar-proxy', async (req, res) => {
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, distribution_mode, assigned_users FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -81,17 +81,30 @@ router.post('/pages', async (req, res) => {
 router.put('/pages/:page_id', async (req, res) => {
   try {
     const { page_id } = req.params;
-    const { access_token, dify_api_key } = req.body;
+    const { access_token, dify_api_key, ai_reply_delay, ai_start_hour, ai_end_hour } = req.body;
     
     if (access_token && access_token.trim() !== '') {
       await pool.query(
-        'UPDATE fb_pages SET access_token = $1, dify_api_key = $2 WHERE page_id = $3',
-        [access_token, dify_api_key, page_id]
+        'UPDATE fb_pages SET access_token = $1, dify_api_key = $2, ai_reply_delay = $3, ai_start_hour = $4, ai_end_hour = $5 WHERE page_id = $6',
+        [
+          access_token, 
+          dify_api_key, 
+          ai_reply_delay !== undefined ? ai_reply_delay : 5, 
+          ai_start_hour !== undefined ? ai_start_hour : 0, 
+          ai_end_hour !== undefined ? ai_end_hour : 24, 
+          page_id
+        ]
       );
     } else {
       await pool.query(
-        'UPDATE fb_pages SET dify_api_key = $1 WHERE page_id = $2',
-        [dify_api_key, page_id]
+        'UPDATE fb_pages SET dify_api_key = $1, ai_reply_delay = $2, ai_start_hour = $3, ai_end_hour = $4 WHERE page_id = $5',
+        [
+          dify_api_key, 
+          ai_reply_delay !== undefined ? ai_reply_delay : 5, 
+          ai_start_hour !== undefined ? ai_start_hour : 0, 
+          ai_end_hour !== undefined ? ai_end_hour : 24, 
+          page_id
+        ]
       );
     }
     
@@ -165,7 +178,7 @@ const difyBatchQueues = new Map<string, { messages: string[], timer: NodeJS.Time
 // Receive Messages
 router.post('/webhook', (req, res) => {
   console.log('--- WEBHOOK RECEIVED ---');
-  // console.log(JSON.stringify(req.body, null, 2)); // Giảm log rác
+  console.log('[RAW_BODY]', JSON.stringify(req.body));
   const body = req.body;
 
   if (body.object === 'page') {
@@ -178,17 +191,16 @@ router.post('/webhook', (req, res) => {
         for (const entry of body.entry) {
           const page_id = entry.id;
           const webhook_event = entry.messaging[0];
-          console.log('Webhook Event:', JSON.stringify(webhook_event));
+          console.log(`[WEBHOOK] Entry ID: ${page_id}, Event Type: ${webhook_event.message ? 'message' : 'other'}`);
 
           // 3. KIỂM TRA TRÙNG LẶP (DEDUPLICATION)
           if (webhook_event.message && webhook_event.message.mid) {
             const mid = webhook_event.message.mid;
             if (processedMessageIds.has(mid)) {
-              console.log(`[DEDUPE] Bỏ qua tin nhắn trùng lặp (mid): ${mid}`);
+              console.log(`[DEDUPE] Skipping duplicate MID: ${mid}`);
               continue;
             }
             processedMessageIds.add(mid);
-            // Xóa khỏi cache sau 5 phút để tránh tràn bộ nhớ
             setTimeout(() => processedMessageIds.delete(mid), 5 * 60 * 1000);
           }
 
@@ -196,13 +208,50 @@ router.post('/webhook', (req, res) => {
 
           // Look up page to get Dify key and access token
           const { rows: pages } = await pool.query('SELECT * FROM fb_pages WHERE page_id = $1', [page_id]);
-          if (pages.length === 0) continue;
+          if (pages.length === 0) {
+            console.log(`[WEBHOOK] Page ${page_id} not found in database.`);
+            continue;
+          }
           const page = pages[0];
 
           if (webhook_event.message) {
             // Skip echo messages (messages sent by the page/app)
             if (webhook_event.message.is_echo) {
-              console.log('[WEBHOOK] Skipping echo message');
+              const customer_psid = webhook_event.recipient.id;
+              const messageText = webhook_event.message.text;
+              if (!messageText) {
+                console.log(`[ECHO] No text in echo message from customer ${customer_psid}`);
+                continue;
+              }
+
+              // Check if sent by AI (using metadata we set when sending)
+              const isFromAI = webhook_event.message.metadata === 'SENT_BY_AI';
+
+              console.log(`[ECHO] Processing echo. text: "${messageText}", isFromAI: ${isFromAI}, customer: ${customer_psid}`);
+
+              const { rows: convs } = await pool.query('SELECT id FROM fb_conversations WHERE page_id = $1 AND customer_id = $2', [page_id, customer_psid]);
+              if (convs.length > 0) {
+                const convId = convs[0].id;
+
+                // Deduplicate: check if this message was recently saved (to avoid duplicate with AI send logic)
+                const { rows: existing } = await pool.query(
+                  'SELECT id FROM fb_messages WHERE conversation_id = $1 AND message_text = $2 AND created_at > NOW() - INTERVAL \'10 seconds\' LIMIT 1',
+                  [convId, messageText]
+                );
+
+                if (existing.length === 0) {
+                  await pool.query(
+                    'INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)',
+                    [convId, isFromAI ? 'ai' : 'human', messageText]
+                  );
+
+                  await pool.query(
+                    'UPDATE fb_conversations SET last_message = $1, last_message_at = CURRENT_TIMESTAMP, is_human_intervened = $2, unread_count = 0 WHERE id = $3',
+                    [messageText, !isFromAI, convId]
+                  );
+                  console.log(`[ECHO] Synced ${isFromAI ? 'AI' : 'human'} reply for conversation ${convId}`);
+                }
+              }
               continue;
             }
 
@@ -325,6 +374,21 @@ router.post('/webhook', (req, res) => {
           dify_conversation_id = convs[0].dify_conversation_id;
           is_human_intervened = convs[0].is_human_intervened;
 
+          // --- AI SCHEDULE CHECK ---
+          let isWithinAISchedule = true;
+          if (page.ai_start_hour !== undefined && page.ai_end_hour !== undefined) {
+            const vnHour = (new Date().getUTCHours() + 7) % 24;
+            const start = page.ai_start_hour;
+            const end = page.ai_end_hour;
+            
+            if (start < end) {
+              isWithinAISchedule = vnHour >= start && vnHour < end;
+            } else {
+              // Midnight overlap (e.g., 17 to 08)
+              isWithinAISchedule = vnHour >= start || vnHour < end;
+            }
+          }
+
           // Insert Message
           await pool.query(
             `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
@@ -332,7 +396,7 @@ router.post('/webhook', (req, res) => {
           );
 
           // --- DIFY AI BATCHING LOGIC (5s delay to group messages) ---
-          if (!is_human_intervened && page.dify_api_key) {
+          if (!is_human_intervened && page.dify_api_key && isWithinAISchedule) {
             const queueKey = `${page_id}_${sender_psid}`;
             const existing = difyBatchQueues.get(queueKey);
 

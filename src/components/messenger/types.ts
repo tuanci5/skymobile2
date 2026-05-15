@@ -6,6 +6,9 @@ export interface FBPage {
   distribution_mode: 'manual' | 'round_robin' | 'ai_first';
   dify_api_key?: string;
   assigned_users?: string[];
+  ai_reply_delay?: number;
+  ai_start_hour?: number;
+  ai_end_hour?: number;
 }
 
 export interface Conversation {

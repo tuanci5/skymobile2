@@ -56,7 +56,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     difyApiKey: ''
   });
 
-  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string } | null>(null);
+  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
@@ -630,14 +630,20 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           access_token: editingPage.token,
-          dify_api_key: editingPage.difyKey
+          dify_api_key: editingPage.difyKey,
+          ai_reply_delay: editingPage.aiReplyDelay,
+          ai_start_hour: editingPage.aiStartHour,
+          ai_end_hour: editingPage.aiEndHour
         })
       });
 
       if (res.ok) {
         setPages(prev => prev.map(p => p.page_id === pageId ? {
           ...p,
-          dify_api_key: editingPage.difyKey
+          dify_api_key: editingPage.difyKey,
+          ai_reply_delay: editingPage.aiReplyDelay,
+          ai_start_hour: editingPage.aiStartHour,
+          ai_end_hour: editingPage.aiEndHour
         } : p));
         alert("Đã cập nhật cài đặt Fanpage thành công!");
       } else {
@@ -1166,7 +1172,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-3xl shadow-2xl z-50 overflow-hidden"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl bg-white rounded-3xl shadow-2xl z-50 overflow-hidden"
             >
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <h2 className="text-xl font-bold text-slate-800">Quản lý Fanpage & Dify</h2>
@@ -1226,7 +1232,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                             className="border-t border-slate-100 bg-slate-50/50"
                           >
                             <div className="p-5">
-                              <div className="grid grid-cols-1 gap-4 mb-5">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                                 <div>
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Page Access Token</p>
                                   <input
@@ -1260,6 +1266,62 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       }));
                                     }}
                                   />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Thời gian AI chờ trả lời (giây)</p>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Mặc định: 5 giây"
+                                    value={editingPage?.id === page.page_id ? (editingPage.aiReplyDelay ?? page.ai_reply_delay ?? 5) : (page.ai_reply_delay ?? 5)}
+                                    onChange={(e) => {
+                                      const newDelay = parseInt(e.target.value) || 5;
+                                      setEditingPage(prev => ({
+                                        ...prev!,
+                                        aiReplyDelay: newDelay
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bật AI từ lúc (Giờ)</p>
+                                  <select
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={editingPage?.id === page.page_id ? (editingPage.aiStartHour ?? page.ai_start_hour ?? 0) : (page.ai_start_hour ?? 0)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setEditingPage(prev => ({
+                                        ...prev!,
+                                        aiStartHour: val
+                                      }));
+                                    }}
+                                  >
+                                    {Array.from({ length: 25 }, (_, i) => (
+                                      <option key={i} value={i}>{i} giờ</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tắt AI lúc (Giờ)</p>
+                                  <select
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={editingPage?.id === page.page_id ? (editingPage.aiEndHour ?? page.ai_end_hour ?? 24) : (page.ai_end_hour ?? 24)}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setEditingPage(prev => ({
+                                        ...prev!,
+                                        aiEndHour: val
+                                      }));
+                                    }}
+                                  >
+                                    {Array.from({ length: 25 }, (_, i) => (
+                                      <option key={i} value={i}>{i} giờ</option>
+                                    ))}
+                                  </select>
                                 </div>
                               </div>
 
