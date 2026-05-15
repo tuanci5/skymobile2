@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "sky-mobile",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,6 +7,9 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
+    "api": "tsx src/server/server.ts",
+    "api:migrate": "tsx src/server/migrate.ts",
+    "api:seed": "tsx src/server/seed.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

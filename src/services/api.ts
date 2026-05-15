@@ -78,5 +78,10 @@ export const settingService = {
 };
 
 export const aiService = {
-  translate: (text: string, messageId?: number) => api.post('/api/ai/translate', { text, messageId }),
+  translate: (text: string, messageId?: number, targetLanguage?: string, sourceLanguage?: string) =>
+    api.post('/api/ai/translate', { text, messageId, targetLanguage, sourceLanguage }),
+  detectConversationLanguage: (conversationId: number) =>
+    api.post('/api/ai/detect-conversation-language', { conversationId }),
+  saveConversationLanguage: (conversationId: number, languageCode: string, languageLabel: string, source: 'manual' | 'detected' | 'fallback' = 'manual') =>
+    api.put(`/api/fb/conversations/${conversationId}/preferred-language`, { languageCode, languageLabel, source }),
 };

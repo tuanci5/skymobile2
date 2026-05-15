@@ -100,6 +100,7 @@ export async function initDBUtils() {
         page_name VARCHAR(255) NOT NULL,
         access_token TEXT NOT NULL,
         dify_api_key TEXT,
+        facebook_ad_account_id VARCHAR(100),
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
         assigned_users JSONB DEFAULT '[]'::jsonb,
         ai_reply_delay INT DEFAULT 5,
@@ -113,6 +114,11 @@ export async function initDBUtils() {
     // Add distribution_mode if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN distribution_mode VARCHAR(50) DEFAULT 'manual'");
+    } catch (e) {}
+
+    // Add Facebook Ad Account ID if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN facebook_ad_account_id VARCHAR(100)");
     } catch (e) {}
 
     // Add assigned_users if missing
@@ -140,24 +146,107 @@ export async function initDBUtils() {
         customer_avatar TEXT,
         avatar_url TEXT,
         ad_id VARCHAR(100),
+        ad_name TEXT,
+        adset_id VARCHAR(100),
+        adset_name TEXT,
+        campaign_id VARCHAR(100),
         campaign_name VARCHAR(255),
+        creative_id VARCHAR(100),
+        ad_image TEXT,
+        ad_message TEXT,
+        ad_permalink_url TEXT,
+        ad_source_status VARCHAR(50) DEFAULT 'unknown',
+        ad_source_error TEXT,
+        ad_referral_raw JSONB,
+        ad_source_updated_at TIMESTAMP,
         ad_cost DECIMAL(10,2),
         dify_conversation_id VARCHAR(100),
         is_human_intervened BOOLEAN DEFAULT false,
-        dify_context_needs_sync BOOLEAN DEFAULT false,
-        dify_context_synced_message_id INT,
         assigned_to VARCHAR(255), -- Email/Name of the assigned staff
         last_message TEXT,
         last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         unread_count INT DEFAULT 0,
         profile_link TEXT,
+        preferred_language_code VARCHAR(50),
+        preferred_language_label VARCHAR(100),
+        preferred_language_source VARCHAR(20),
+        preferred_language_confidence DECIMAL(4,3),
+        preferred_language_updated_at TIMESTAMP,
         UNIQUE(page_id, customer_id)
       )
     `);
 
+    const conversationAdColumns = [
+      "ALTER TABLE fb_conversations ADD COLUMN ad_name TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN adset_id VARCHAR(100)",
+      "ALTER TABLE fb_conversations ADD COLUMN adset_name TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN campaign_id VARCHAR(100)",
+      "ALTER TABLE fb_conversations ADD COLUMN creative_id VARCHAR(100)",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_image TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_message TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_permalink_url TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_source_status VARCHAR(50) DEFAULT 'unknown'",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_source_error TEXT",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_referral_raw JSONB",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_source_updated_at TIMESTAMP"
+    ];
+    for (const alterSql of conversationAdColumns) {
+      try {
+        await client.query(alterSql);
+      } catch (e) {}
+    }
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fb_conversation_ad_sources (
+        id SERIAL PRIMARY KEY,
+        conversation_id INT NOT NULL REFERENCES fb_conversations(id) ON DELETE CASCADE,
+        page_id VARCHAR(100) NOT NULL,
+        customer_id VARCHAR(100) NOT NULL,
+        ad_id VARCHAR(100),
+        ad_name TEXT,
+        adset_id VARCHAR(100),
+        adset_name TEXT,
+        campaign_id VARCHAR(100),
+        campaign_name TEXT,
+        creative_id VARCHAR(100),
+        ad_image TEXT,
+        ad_message TEXT,
+        ad_permalink_url TEXT,
+        source TEXT,
+        ref TEXT,
+        referer_uri TEXT,
+        status VARCHAR(50) NOT NULL DEFAULT 'unknown',
+        error_message TEXT,
+        referral_raw JSONB,
+        first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        click_count INT DEFAULT 1,
+        UNIQUE(conversation_id, ad_id)
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_fb_ad_sources_conversation ON fb_conversation_ad_sources(conversation_id, last_seen_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_fb_ad_sources_customer ON fb_conversation_ad_sources(page_id, customer_id)');
+
     // Add profile_link if missing
     try {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN profile_link TEXT");
+    } catch (e) {}
+
+    // Add preferred language fields for Vietnamese composer translations
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_code VARCHAR(50)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_label VARCHAR(100)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_source VARCHAR(20)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_confidence DECIMAL(4,3)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_updated_at TIMESTAMP");
     } catch (e) {}
 
     // Add avatar_url if missing. customer_avatar is kept for backward compatibility.
@@ -176,14 +265,6 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN manual_profile_url TEXT");
     } catch (e) {}
 
-    // Track Dify context rehydration when AI is re-enabled after human support.
-    try {
-      await client.query("ALTER TABLE fb_conversations ADD COLUMN dify_context_needs_sync BOOLEAN DEFAULT false");
-    } catch (e) {}
-    try {
-      await client.query("ALTER TABLE fb_conversations ADD COLUMN dify_context_synced_message_id INT");
-    } catch (e) {}
-
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_messages (
         id SERIAL PRIMARY KEY,
@@ -197,7 +278,7 @@ export async function initDBUtils() {
       )
     `);
 
-    // Add AI translation cache columns if missing
+    // Add AI translation cache columns and attachment columns if missing
     try {
       await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation TEXT");
     } catch (e) {}
@@ -207,6 +288,34 @@ export async function initDBUtils() {
     try {
       await client.query("ALTER TABLE fb_messages ADD COLUMN translated_at TIMESTAMP");
     } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN attachment_type VARCHAR(50)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN attachment_url TEXT");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN attachment_payload JSONB");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN facebook_attachment_id TEXT");
+    } catch (e) {}
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fb_image_library (
+        id SERIAL PRIMARY KEY,
+        page_id VARCHAR(100) REFERENCES fb_pages(page_id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        image_url TEXT NOT NULL,
+        facebook_attachment_id TEXT,
+        tags JSONB DEFAULT '[]'::jsonb,
+        category VARCHAR(100),
+        created_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_conversation_notes (
@@ -345,6 +454,31 @@ export async function initDBUtils() {
         team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
         user_email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
         PRIMARY KEY (team_id, user_email)
+      )
+    `);
+
+    // Ensure app_settings table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure accounts table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        account_type VARCHAR(100) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        password VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(100),
+        two_factor TEXT,
+        recovery_email VARCHAR(255),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 

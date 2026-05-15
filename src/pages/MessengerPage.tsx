@@ -3,7 +3,7 @@ import {
   MessageCircle, Settings, Search, Send, User, Bot, Clock, Filter,
   ChevronRight, MoreVertical, Plus, CreditCard, Target, ExternalLink, Power, Hand,
   ShoppingCart, Package, MapPin, Phone, StickyNote, RefreshCw, Trash2, Activity,
-  Languages, Loader2
+  Languages, Loader2, Facebook, Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PRODUCTS } from '../data/productData';
@@ -11,12 +11,22 @@ import { AvatarImage } from '../components/AvatarImage';
 import { API_BASE_URL } from '../components/messenger/api';
 import { AvatarFallback } from '../components/messenger/avatar';
 import { OPTIMISTIC_MESSAGE_ID_BASE, isOptimisticMessage, isSameOutgoingMessage } from '../components/messenger/messageUtils';
-import type { Conversation, ConversationNote, DetailedProduct, FBPage, Message } from '../components/messenger/types';
+import type { Conversation, ConversationAdSource, ConversationNote, DetailedProduct, FBPage, Message } from '../components/messenger/types';
 import { useFacebookSdk } from '../components/messenger/useFacebookSdk';
 import { formatNoteTime, getConversationAvatar } from '../components/messenger/utils';
 import { aiService } from '../services/api';
 
 const TRANSLATION_CACHE_LANGUAGE = 'Vietnamese:auto-detect:v2';
+
+type ImageLibraryItem = {
+  id: number;
+  page_id?: string | null;
+  title: string;
+  description?: string | null;
+  image_url: string;
+  category?: string | null;
+  tags?: string[] | null;
+};
 
 // ─── Avatar Helper ─────────────────────────────────────────────────────────
 export const MessengerPage = ({ user }: { user?: any }) => {
@@ -35,11 +45,42 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [newNote, setNewNote] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isImageLibraryOpen, setIsImageLibraryOpen] = useState(false);
+  const [isTemplatePanelOpen, setIsTemplatePanelOpen] = useState(false);
+  const [imageLibrary, setImageLibrary] = useState<ImageLibraryItem[]>([]);
+  const [imageLibrarySearch, setImageLibrarySearch] = useState('');
+  const [quickImageUrl, setQuickImageUrl] = useState('');
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [isSendingImage, setIsSendingImage] = useState(false);
+  const [newLibraryImage, setNewLibraryImage] = useState({ title: '', image_url: '', category: '', description: '' });
   const [expandedPageId, setExpandedPageId] = useState<string | null>(null);
   const [isTestingConn, setIsTestingConn] = useState(false);
+  const [tokenTestResults, setTokenTestResults] = useState<Record<string, any>>({});
+  const [adSources, setAdSources] = useState<ConversationAdSource[]>([]);
+  const [isLoadingAdSources, setIsLoadingAdSources] = useState(false);
+  const [showAdHistory, setShowAdHistory] = useState(true);
   const [warehouseProducts, setWarehouseProducts] = useState<DetailedProduct[]>([]);
   const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'bot'>('all');
   const [conversationSearch, setConversationSearch] = useState('');
+  const replyLanguageOptions = [
+    { code: 'zh-Mandarin', label: 'Tiếng Trung Quan thoại' },
+    { code: 'zh-Cantonese', label: 'Tiếng Quảng Đông' },
+    { code: 'tl', label: 'Tiếng Tagalog' },
+    { code: 'en', label: 'Tiếng Anh' },
+    { code: 'id', label: 'Tiếng Indonesia' },
+    { code: 'ne', label: 'Tiếng Nepal' },
+    { code: 'pt', label: 'Tiếng Bồ Đào Nha' },
+    { code: 'es', label: 'Tiếng Tây Ban Nha' },
+    { code: 'my', label: 'Tiếng Miến Điện / Myanmar' },
+    { code: 'ko', label: 'Tiếng Hàn' }
+  ];
+  const [translationMode, setTranslationMode] = useState(false);
+  const [replyTargetLanguage, setReplyTargetLanguage] = useState(replyLanguageOptions[3]);
+  const [translatedReplyText, setTranslatedReplyText] = useState('');
+  const [translatedFromText, setTranslatedFromText] = useState('');
+  const [isTranslatingReply, setIsTranslatingReply] = useState(false);
+  const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
+  const [replyLanguageSource, setReplyLanguageSource] = useState<'manual' | 'detected' | 'fallback' | null>(null);
 
   const [orderForm, setOrderForm] = useState({
     phone: '',
@@ -53,10 +94,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     pageName: '',
     pageId: '',
     pageAccessToken: '',
-    difyApiKey: ''
+    difyApiKey: '',
+    facebookAdAccountId: ''
   });
 
-  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
+  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, facebookAdAccountId?: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
@@ -66,6 +108,24 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
   const currentUserName = user?.name || user?.email || 'Người dùng hiện tại';
   const currentUserEmail = user?.email || null;
+  const getConversationPageName = (conv?: Conversation | null) => {
+    if (!conv) return '';
+    return conv.page_name || pages.find(page => page.page_id === conv.page_id)?.page_name || '';
+  };
+
+  const formatConversationListTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const now = new Date();
+    const hoursSinceMessage = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+    if (hoursSinceMessage >= 24) {
+      return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    }
+
+    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  };
   
   useFacebookSdk();
 
@@ -292,13 +352,67 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
+  const loadAdSources = async (convId: number) => {
+    setIsLoadingAdSources(true);
+    setAdSources([]);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/conversations/${convId}/ad-sources`);
+      if (res.ok) {
+        const data = await res.json();
+        setAdSources(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error loading ad sources:', err);
+    } finally {
+      setIsLoadingAdSources(false);
+    }
+  };
+
+  const applyConversationLanguage = (conv: Conversation) => {
+    const savedLanguage = replyLanguageOptions.find(opt => opt.code === conv.preferred_language_code);
+    if (savedLanguage) {
+      setReplyTargetLanguage(savedLanguage);
+      setReplyLanguageSource(conv.preferred_language_source || null);
+      return true;
+    }
+    return false;
+  };
+
   const handleSelectConv = async (conv: Conversation) => {
     setSelectedConv({ ...conv, unread_count: 0 });
     setNewNote('');
+    setReplyText('');
+    setTranslatedReplyText('');
+    setTranslatedFromText('');
     setIsEditingProfileUrl(false);
     void markConversationRead(conv.id);
     loadMessages(conv.id);
     loadNotes(conv.id);
+    loadAdSources(conv.id);
+
+    if (!applyConversationLanguage(conv)) {
+      setIsDetectingLanguage(true);
+      try {
+        const detected = await aiService.detectConversationLanguage(conv.id);
+        const detectedLanguage = replyLanguageOptions.find(opt => opt.code === detected.languageCode) || replyLanguageOptions[3];
+        setReplyTargetLanguage(detectedLanguage);
+        setReplyLanguageSource(detected.source || 'detected');
+        const updatedLanguage = {
+          preferred_language_code: detectedLanguage.code,
+          preferred_language_label: detectedLanguage.label,
+          preferred_language_source: detected.source || 'detected',
+          preferred_language_confidence: detected.confidence ?? null
+        };
+        setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, ...updatedLanguage } : c));
+        setSelectedConv(prev => prev?.id === conv.id ? { ...prev, ...updatedLanguage } : prev);
+      } catch (err) {
+        console.error('Failed to detect customer language:', err);
+        setReplyTargetLanguage(replyLanguageOptions[3]);
+        setReplyLanguageSource('fallback');
+      } finally {
+        setIsDetectingLanguage(false);
+      }
+    }
 
     // Refresh profile if name is generic or avatar is missing
     if (conv.customer_name === 'Khách hàng FB' || !getConversationAvatar(conv)) {
@@ -327,10 +441,70 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!replyText.trim() || !selectedConv) return;
+  const handleReplyLanguageChange = async (languageCode: string) => {
+    const language = replyLanguageOptions.find(opt => opt.code === languageCode) || replyLanguageOptions[3];
+    setReplyTargetLanguage(language);
+    setReplyLanguageSource('manual');
+    setTranslatedReplyText('');
+    setTranslatedFromText('');
 
-    const textToSend = replyText;
+    if (!selectedConv) return;
+
+    setSelectedConv(prev => prev ? {
+      ...prev,
+      preferred_language_code: language.code,
+      preferred_language_label: language.label,
+      preferred_language_source: 'manual',
+      preferred_language_confidence: 1
+    } : null);
+    setConversations(prev => prev.map(c => c.id === selectedConv.id ? {
+      ...c,
+      preferred_language_code: language.code,
+      preferred_language_label: language.label,
+      preferred_language_source: 'manual',
+      preferred_language_confidence: 1
+    } : c));
+
+    try {
+      await aiService.saveConversationLanguage(selectedConv.id, language.code, language.label, 'manual');
+    } catch (error: any) {
+      alert(error.message || 'Không thể lưu ngôn ngữ đã chọn.');
+    }
+  };
+
+  const handleTranslateReply = async () => {
+    if (!replyText.trim()) return;
+    setIsTranslatingReply(true);
+    try {
+      const res = await aiService.translate(replyText.trim(), undefined, replyTargetLanguage.code, 'Vietnamese');
+      setTranslatedReplyText(res.translatedText);
+      setTranslatedFromText(replyText.trim());
+    } catch (error: any) {
+      alert(error.message || 'Lỗi khi dịch bản nháp trả lời.');
+    } finally {
+      setIsTranslatingReply(false);
+    }
+  };
+
+  const handleSendTranslatedReply = async () => {
+    if (!translatedReplyText.trim()) return;
+    const originalReplyText = replyText;
+    const originalTranslatedText = translatedReplyText;
+    setReplyText(translatedReplyText);
+    await handleSendMessage(translatedReplyText);
+    setReplyText('');
+    setTranslatedReplyText('');
+    setTranslatedFromText('');
+    if (!selectedConv) {
+      setReplyText(originalReplyText);
+      setTranslatedReplyText(originalTranslatedText);
+    }
+  };
+
+  const handleSendMessage = async (overrideText?: string) => {
+    const textToSend = (overrideText ?? replyText).trim();
+    if (!textToSend || !selectedConv) return;
+
     setReplyText('');
 
     // Optimistic UI update
@@ -374,6 +548,95 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
       setReplyText(textToSend);
       alert(`Không thể gửi tin nhắn:\n\n${err?.message || 'Lỗi không xác định'}`);
+    }
+  };
+
+  const loadImageLibrary = async (search = imageLibrarySearch) => {
+    if (!selectedConv) return;
+    setIsLoadingImages(true);
+    try {
+      const params = new URLSearchParams({ page_id: selectedConv.page_id });
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`${API_BASE_URL}/api/fb/image-library?${params.toString()}`);
+      if (!res.ok) throw new Error('Không thể tải thư viện ảnh.');
+      setImageLibrary(await res.json());
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi tải thư viện ảnh.');
+    } finally {
+      setIsLoadingImages(false);
+    }
+  };
+
+  const openImageLibrary = () => {
+    setIsImageLibraryOpen(true);
+    loadImageLibrary('');
+  };
+
+  const handleAddLibraryImage = async () => {
+    if (!selectedConv || !newLibraryImage.title.trim() || !newLibraryImage.image_url.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/image-library`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          page_id: selectedConv.page_id,
+          title: newLibraryImage.title.trim(),
+          image_url: newLibraryImage.image_url.trim(),
+          category: newLibraryImage.category.trim() || null,
+          description: newLibraryImage.description.trim() || null,
+          created_by: currentUserEmail || currentUserName
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Không thể thêm ảnh vào thư viện.');
+      setNewLibraryImage({ title: '', image_url: '', category: '', description: '' });
+      await loadImageLibrary();
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi thêm ảnh.');
+    }
+  };
+
+  const handleSendImage = async (imageUrl: string, libraryImageId?: number) => {
+    if (!selectedConv || isSendingImage) return;
+    const finalUrl = imageUrl.trim();
+    if (!finalUrl && !libraryImageId) return;
+
+    setIsSendingImage(true);
+    const optimisticId = OPTIMISTIC_MESSAGE_ID_BASE + Date.now();
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      sender_type: 'human',
+      message_text: '[Ảnh]',
+      attachment_type: 'image',
+      attachment_proxy_url: finalUrl ? `/api/fb/message-attachment-proxy/${optimisticId}` : null,
+      attachment_url: finalUrl || null,
+      created_at: new Date().toISOString()
+    };
+    setIsInitialLoad(true);
+    setMessages(prev => [...prev, optimisticMessage]);
+    setSelectedConv(prev => prev ? { ...prev, is_human_intervened: true, last_message: '[Ảnh]', last_message_at: new Date().toISOString() } : null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/messages/send-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: selectedConv.id,
+          image_url: finalUrl || undefined,
+          library_image_id: libraryImageId
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Không thể gửi ảnh. Mã lỗi HTTP: ${res.status}`);
+      if (data.message) setMessages(prev => prev.map(msg => msg.id === optimisticId ? data.message : msg));
+      setQuickImageUrl('');
+      setIsImageLibraryOpen(false);
+    } catch (err: any) {
+      console.error('Error sending image:', err);
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+      alert(`Không thể gửi ảnh:\n\n${err?.message || 'Lỗi không xác định'}`);
+    } finally {
+      setIsSendingImage(false);
     }
   };
 
@@ -592,7 +855,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           page_id: newPageForm.pageId,
           page_name: newPageForm.pageName,
           access_token: newPageForm.pageAccessToken,
-          dify_api_key: newPageForm.difyApiKey || null
+          dify_api_key: newPageForm.difyApiKey || null,
+          facebook_ad_account_id: newPageForm.facebookAdAccountId || null
         })
       });
 
@@ -607,7 +871,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           pageName: '',
           pageId: '',
           pageAccessToken: '',
-          difyApiKey: ''
+          difyApiKey: '',
+          facebookAdAccountId: ''
         });
 
         alert(`Đã thêm Fanpage "${newPageForm.pageName}" thành công!`);
@@ -631,6 +896,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         body: JSON.stringify({
           access_token: editingPage.token,
           dify_api_key: editingPage.difyKey,
+          facebook_ad_account_id: editingPage.facebookAdAccountId,
           ai_reply_delay: editingPage.aiReplyDelay,
           ai_start_hour: editingPage.aiStartHour,
           ai_end_hour: editingPage.aiEndHour
@@ -641,6 +907,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         setPages(prev => prev.map(p => p.page_id === pageId ? {
           ...p,
           dify_api_key: editingPage.difyKey,
+          facebook_ad_account_id: editingPage.facebookAdAccountId,
           ai_reply_delay: editingPage.aiReplyDelay,
           ai_start_hour: editingPage.aiStartHour,
           ai_end_hour: editingPage.aiEndHour
@@ -652,6 +919,31 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     } catch (err) {
       console.error("Error updating page:", err);
       alert("Lỗi kết nối máy chủ!");
+    }
+  };
+
+  const handleTestPageToken = async (page: FBPage) => {
+    const draft = editingPage?.id === page.page_id ? editingPage : null;
+    setIsTestingConn(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/pages/${page.page_id}/test-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: draft?.token || undefined,
+          facebook_ad_account_id: draft?.facebookAdAccountId ?? page.facebook_ad_account_id ?? undefined
+        })
+      });
+      const data = await res.json();
+      setTokenTestResults(prev => ({ ...prev, [page.page_id]: data }));
+      if (!res.ok) throw new Error(data.error || 'Không thể kiểm tra token');
+    } catch (err: any) {
+      setTokenTestResults(prev => ({
+        ...prev,
+        [page.page_id]: { token_alive: false, page_access_ok: false, ads_read_ok: false, errors: [{ message: err.message }] }
+      }));
+    } finally {
+      setIsTestingConn(false);
     }
   };
 
@@ -712,6 +1004,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     if (searchTerm) {
       const searchableText = [
         conv.customer_name,
+        conv.page_name,
+        conv.page_id,
         conv.customer_id,
         conv.last_message,
         conv.assigned_to,
@@ -789,7 +1083,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         {conv.customer_name}
                       </h4>
                       <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">
-                        {new Date(conv.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatConversationListTime(conv.last_message_at)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -934,7 +1228,25 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                             msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm shadow-md' :
                               'bg-blue-600 text-white rounded-tr-sm shadow-md'
                           }`}>
-                          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
+                          {msg.attachment_type === 'image' && msg.attachment_proxy_url && (
+                            <a
+                              href={`${API_BASE_URL}${msg.attachment_proxy_url}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block overflow-hidden rounded-xl bg-slate-100 border border-white/20 shadow-sm mb-2"
+                              title="Mở ảnh trong tab mới"
+                            >
+                              <img
+                                src={`${API_BASE_URL}${msg.attachment_proxy_url}`}
+                                alt="Ảnh trong tin nhắn Messenger"
+                                className="max-h-80 max-w-full object-contain bg-slate-100"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+                          {msg.message_text && msg.message_text !== '[Ảnh]' && (
+                            <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
+                          )}
                           
                           <button 
                             onClick={() => handleTranslate(msg.id, msg.message_text)}
@@ -975,28 +1287,159 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                   AI đang trong chế độ tự động trả lời. Nếu bạn gửi tin nhắn, AI sẽ tự động bị tạm dừng.
                 </div>
               )}
-              <div className="flex items-end gap-3 bg-slate-100 p-2 rounded-2xl border border-slate-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
-                <textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Nhập tin nhắn để trả lời khách hàng..."
-                  className="flex-1 max-h-32 min-h-[44px] bg-transparent resize-none outline-none px-3 py-2.5 text-sm scrollbar-thin"
-                  rows={1}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!replyText.trim()}
-                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shrink-0"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
+
+              <div className="mb-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-sky-50 to-cyan-50 p-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={translationMode}
+                      onChange={(e) => setTranslationMode(e.target.checked)}
+                      className="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Soạn tiếng Việt → dịch trước khi gửi
+                  </label>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-1 rounded-full bg-white/80 border border-indigo-100 text-slate-600 font-bold">
+                      {isDetectingLanguage ? 'AI đang đoán ngôn ngữ...' : replyLanguageSource === 'manual' ? 'Nhân viên chọn' : replyLanguageSource === 'detected' ? 'AI tự đoán' : 'Mặc định'}
+                    </span>
+                    <select
+                      value={replyTargetLanguage.code}
+                      onChange={(e) => handleReplyLanguageChange(e.target.value)}
+                      disabled={isDetectingLanguage}
+                      className="bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      {replyLanguageOptions.map(language => (
+                        <option key={language.code} value={language.code}>{language.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {translationMode && (
+                  <div className="space-y-3">
+                    <div className="flex items-end gap-3 bg-white/90 p-2 rounded-2xl border border-indigo-100 focus-within:ring-2 focus-within:ring-indigo-400 transition-all">
+                      <textarea
+                        value={replyText}
+                        onChange={(e) => {
+                          setReplyText(e.target.value);
+                          if (translatedReplyText && e.target.value.trim() !== translatedFromText) {
+                            setTranslatedReplyText('');
+                          }
+                        }}
+                        placeholder="Soạn tin nhắn bằng tiếng Việt cho nhân viên..."
+                        className="flex-1 max-h-32 min-h-[44px] bg-transparent resize-none outline-none px-3 py-2.5 text-sm scrollbar-thin"
+                        rows={1}
+                      />
+                      <button
+                        onClick={handleTranslateReply}
+                        disabled={!replyText.trim() || isTranslatingReply || isDetectingLanguage}
+                        className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors shrink-0 text-sm font-bold"
+                      >
+                        {isTranslatingReply ? 'Đang dịch...' : 'Dịch'}
+                      </button>
+                    </div>
+
+                    {replyText.trim() && translatedReplyText && replyText.trim() !== translatedFromText && (
+                      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        Nội dung tiếng Việt đã thay đổi. Vui lòng bấm Dịch lại trước khi gửi.
+                      </div>
+                    )}
+
+                    {translatedReplyText && (
+                      <div className="rounded-2xl border border-emerald-200 bg-white p-3 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Bản dịch gửi cho khách ({replyTargetLanguage.label})</p>
+                          <button
+                            onClick={handleSendTranslatedReply}
+                            disabled={!translatedReplyText.trim() || replyText.trim() !== translatedFromText || isTranslatingReply}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-xs font-bold flex items-center gap-1.5"
+                          >
+                            <Send className="w-3.5 h-3.5" /> Gửi bản dịch
+                          </button>
+                        </div>
+                        <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{translatedReplyText}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {!translationMode && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder="Trả lời trong Messenger..."
+                    className="w-full max-h-32 min-h-[44px] bg-transparent resize-none outline-none text-sm scrollbar-thin"
+                    rows={1}
+                  />
+
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <button
+                        onClick={openImageLibrary}
+                        disabled={isSendingImage}
+                        className="p-2 rounded-full hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 transition-colors"
+                        title="Gửi ảnh / mở thư viện ảnh"
+                      >
+                        <ImageIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setIsTemplatePanelOpen(prev => !prev)}
+                        className={`p-2 rounded-full transition-colors ${isTemplatePanelOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-blue-50 hover:text-blue-600'}`}
+                        title="Tin nhắn mẫu"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => handleSendMessage()}
+                      disabled={!replyText.trim()}
+                      className="p-2.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 transition-colors"
+                      title="Gửi tin nhắn"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!translationMode && isTemplatePanelOpen && (
+                <div className="mt-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 shadow-sm">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-black uppercase tracking-wider text-blue-700">Tin nhắn mẫu</p>
+                    <button onClick={() => setIsTemplatePanelOpen(false)} className="text-xs font-bold text-slate-400 hover:text-slate-600">Đóng</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      'Dạ em chào anh/chị, Sky Mobile có thể hỗ trợ mình thông tin gì ạ?',
+                      'Dạ anh/chị cho em xin số điện thoại để CSKH hỗ trợ nhanh hơn ạ.',
+                      'Dạ bên em sẽ kiểm tra và phản hồi lại mình trong ít phút ạ.',
+                      'Dạ anh/chị muốn tham khảo dòng máy hoặc gói cước nào ạ?',
+                      'Dạ cảm ơn anh/chị đã liên hệ Sky Mobile ạ.'
+                    ].map((template) => (
+                      <button
+                        key={template}
+                        onClick={() => {
+                          setReplyText(template);
+                          setIsTemplatePanelOpen(false);
+                        }}
+                        className="max-w-full rounded-full border border-blue-100 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 hover:shadow-sm transition-all"
+                      >
+                        {template}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1025,7 +1468,13 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 />
               </div>
               <h3 className="text-xl font-bold text-slate-900">{selectedConv.customer_name}</h3>
-              <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mt-1">
+              {getConversationPageName(selectedConv) && (
+                <div className="mt-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 max-w-full">
+                  <Facebook className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{getConversationPageName(selectedConv)}</span>
+                </div>
+              )}
+              <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mt-2">
                 <Clock className="w-4 h-4" /> Lần cuối: {new Date(selectedConv.last_message_at).toLocaleDateString('vi-VN')}
               </p>
             </div>
@@ -1066,52 +1515,106 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             </div>
 
             {/* Ads Tracking Panel */}
-            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 mb-6">
-              <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">
-                <Target className="w-5 h-5 text-purple-600" />
-                Nguồn Quảng cáo (Ads)
-              </h4>
+            <div className="bg-gradient-to-br from-purple-50 via-white to-blue-50 rounded-2xl border border-purple-100 p-5 mb-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-purple-100">
+                <h4 className="flex items-center gap-2 font-bold text-slate-800">
+                  <Target className="w-5 h-5 text-purple-600" />
+                  Nguồn Quảng cáo (Ads)
+                </h4>
+                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${selectedConv.ad_id ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                  {selectedConv.ad_id ? 'Có Ads source' : 'Organic'}
+                </span>
+              </div>
 
-              {selectedConv.campaign_name ? (
+              {selectedConv.ad_id ? (
                 <div className="space-y-4">
-                  {selectedConv.ad_image && (
-                    <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900 aspect-video flex items-center justify-center relative group">
-                      <img
-                        src={selectedConv.ad_image}
-                        alt="Ad Preview"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          const parent = (e.target as HTMLImageElement).parentElement;
-                          if (parent) {
-                            parent.innerHTML = '<div class="flex flex-col items-center justify-center gap-2 text-slate-400"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22%3E%3Crect x=%222%22 y=%222%22 width=%2220%22 height=%2220%22 rx=%222%22 ry=%222%22/%3E%3Ccircle cx=%228.5%22 cy=%228.5%22 r=%221.5%22/%3E%3Cpath d=%22M21 15l-5-5L5 21%22/%3E%3C/svg%3E" alt="Error" class="w-12 h-12 opacity-40" /><span class="text-sm">Không thể tải hình ảnh</span></div>';
-                          }
-                        }}
-                      />
+                  <div className="rounded-2xl overflow-hidden border border-white/70 bg-white shadow-sm">
+                    {selectedConv.ad_image && (
+                      <div className="bg-slate-950 aspect-video flex items-center justify-center">
+                        <img src={selectedConv.ad_image} alt="Ad Preview" className="w-full h-full object-contain" />
+                      </div>
+                    )}
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Nguồn mới nhất</p>
+                          <h5 className="text-sm font-black text-slate-900">{selectedConv.ad_name || selectedConv.campaign_name || selectedConv.ad_id}</h5>
+                        </div>
+                        <span className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold ${selectedConv.ad_source_status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : selectedConv.ad_source_status === 'permission_error' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {selectedConv.ad_source_status === 'resolved' ? 'Đã resolve' : selectedConv.ad_source_status || 'detected'}
+                        </span>
+                      </div>
+                      {selectedConv.ad_message && (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 italic text-slate-600 text-[13px] line-clamp-4">
+                          "{selectedConv.ad_message}"
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-slate-50 rounded-xl p-3">
+                          <p className="font-bold text-slate-400 uppercase text-[10px] mb-1">Campaign</p>
+                          <p className="font-semibold text-slate-800 break-words">{selectedConv.campaign_name || '—'}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl p-3">
+                          <p className="font-bold text-slate-400 uppercase text-[10px] mb-1">Ad Set</p>
+                          <p className="font-semibold text-slate-800 break-words">{selectedConv.adset_name || '—'}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl p-3">
+                          <p className="font-bold text-slate-400 uppercase text-[10px] mb-1">Ad ID</p>
+                          <p className="font-mono text-slate-700 break-all">{selectedConv.ad_id}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-xl p-3">
+                          <p className="font-bold text-slate-400 uppercase text-[10px] mb-1">Cập nhật</p>
+                          <p className="font-semibold text-slate-700">{selectedConv.ad_source_updated_at ? new Date(selectedConv.ad_source_updated_at).toLocaleString() : '—'}</p>
+                        </div>
+                      </div>
+                      {selectedConv.ad_source_error && (
+                        <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">
+                          <b>Lỗi lấy Ads:</b> {selectedConv.ad_source_error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    id="toggle-ad-history"
+                    onClick={() => setShowAdHistory(prev => !prev)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-purple-100 text-xs font-bold text-purple-700 hover:bg-purple-50 transition-colors"
+                  >
+                    <span>Lịch sử Ads đã nhấn ({adSources.length})</span>
+                    <ChevronRight className={`w-4 h-4 transition-transform ${showAdHistory ? 'rotate-90' : ''}`} />
+                  </button>
+
+                  {showAdHistory && (
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                      {isLoadingAdSources ? (
+                        <div className="text-center py-4 text-xs text-slate-400">Đang tải lịch sử Ads...</div>
+                      ) : adSources.length > 0 ? adSources.map((source, idx) => (
+                        <div key={source.id} className="relative pl-5">
+                          <div className="absolute left-1 top-2 bottom-0 w-px bg-purple-100" />
+                          <div className="absolute left-0 top-2 w-2.5 h-2.5 rounded-full bg-purple-500 ring-4 ring-purple-100" />
+                          <div className="bg-white rounded-xl border border-slate-100 p-3 shadow-sm">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-xs font-black text-slate-800 line-clamp-1">{source.ad_name || source.campaign_name || source.ad_id}</p>
+                              <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">#{idx + 1}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">Campaign: {source.campaign_name || '—'}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">Ad Set: {source.adset_name || '—'}</p>
+                            <div className="flex items-center justify-between mt-2 text-[10px] text-slate-400">
+                              <span>Nhấn {source.click_count || 1} lần</span>
+                              <span>{source.last_seen_at ? new Date(source.last_seen_at).toLocaleString() : ''}</span>
+                            </div>
+                            {source.error_message && <p className="mt-2 text-[11px] text-rose-600">{source.error_message}</p>}
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="text-center py-4 text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">Chưa có lịch sử Ads.</div>
+                      )}
                     </div>
                   )}
-                  {selectedConv.ad_message && (
-                    <div className="bg-white p-3 rounded-xl border border-slate-100 italic text-slate-600 text-[13px] line-clamp-3">
-                      "{selectedConv.ad_message}"
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Chiến dịch</p>
-                    <p className="text-sm font-semibold text-slate-800">{selectedConv.campaign_name}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ad ID</p>
-                      <p className="text-sm text-slate-700">{selectedConv.ad_id}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Chi phí / Mess</p>
-                      <p className="text-sm font-bold text-rose-600">{selectedConv.ad_cost?.toLocaleString()}đ</p>
-                    </div>
-                  </div>
                 </div>
               ) : (
-                <div className="text-center py-4 text-slate-500 text-sm italic">
-                  Khách tự nhiên (Organic)
+                <div className="text-center py-6 text-slate-500 text-sm italic bg-white/70 rounded-xl border border-dashed border-slate-200">
+                  Khách tự nhiên (Organic) hoặc webhook chưa gửi referral ad_id.
                 </div>
               )}
             </div>
@@ -1245,7 +1748,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: newToken,
-                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || '')
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || '')
                                       }));
                                     }}
                                   />
@@ -1262,7 +1766,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
-                                        difyKey: newKey
+                                        difyKey: newKey,
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || '')
                                       }));
                                     }}
                                   />
@@ -1278,7 +1783,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                     onChange={(e) => {
                                       const newDelay = parseInt(e.target.value) || 5;
                                       setEditingPage(prev => ({
-                                        ...prev!,
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         aiReplyDelay: newDelay
                                       }));
                                     }}
@@ -1288,6 +1796,29 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                                 <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Facebook Ad Account ID</p>
+                                  <input
+                                    id={`fb-ad-account-${page.page_id}`}
+                                    type="text"
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="VD: act_123456789 hoặc 123456789"
+                                    value={editingPage?.id === page.page_id ? (editingPage.facebookAdAccountId ?? '') : (page.facebook_ad_account_id || '')}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setEditingPage(prev => ({
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: value,
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
+                                      }));
+                                    }}
+                                  />
+                                  <p className="mt-1 text-[11px] text-slate-400">Dùng để test quyền <b>ads_read</b> qua Campaigns API.</p>
+                                </div>
+                                <div>
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bật AI từ lúc (Giờ)</p>
                                   <select
                                     className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
@@ -1295,8 +1826,13 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                     onChange={(e) => {
                                       const val = parseInt(e.target.value);
                                       setEditingPage(prev => ({
-                                        ...prev!,
-                                        aiStartHour: val
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: val,
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
                                       }));
                                     }}
                                   >
@@ -1313,7 +1849,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                     onChange={(e) => {
                                       const val = parseInt(e.target.value);
                                       setEditingPage(prev => ({
-                                        ...prev!,
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: val
                                       }));
                                     }}
@@ -1354,15 +1895,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                     Lưu thay đổi
                                   </button>
                                   <button
-                                    onClick={() => {
-                                      setIsTestingConn(true);
-                                      setTimeout(() => setIsTestingConn(false), 1500);
-                                    }}
+                                    onClick={() => handleTestPageToken(page)}
                                     disabled={isTestingConn}
                                     className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-bold rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
                                   >
                                     <RefreshCw className={`w-3.5 h-3.5 ${isTestingConn ? 'animate-spin text-blue-500' : 'text-slate-400'}`} />
-                                    {isTestingConn ? 'Đang kiểm tra...' : 'Test kết nối'}
+                                    {isTestingConn ? 'Đang kiểm tra...' : 'Test token & Ads'}
                                   </button>
                                 </div>
 
@@ -1373,6 +1911,49 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                   <Trash2 className="w-3.5 h-3.5" /> Xóa Trang
                                 </button>
                               </div>
+
+                              {tokenTestResults[page.page_id] && (
+                                <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kết quả kiểm tra Token & Ads</h4>
+                                    <span className="text-[10px] text-slate-400">{tokenTestResults[page.page_id].checked_at ? new Date(tokenTestResults[page.page_id].checked_at).toLocaleString() : 'Vừa kiểm tra'}</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                                    {[
+                                      ['Token còn sống', tokenTestResults[page.page_id].token_alive],
+                                      ['Page access', tokenTestResults[page.page_id].page_access_ok],
+                                      ['ads_read / Ad Account', tokenTestResults[page.page_id].ads_read_ok]
+                                    ].map(([label, ok]) => (
+                                      <div key={String(label)} className={`rounded-xl px-3 py-2 text-xs font-bold border ${ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                                        {ok ? '✓' : '✕'} {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {(tokenTestResults[page.page_id].permissions || []).map((perm: any) => (
+                                      <span key={perm.name} className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${perm.granted ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                        {perm.granted ? '✓' : '–'} {perm.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {(tokenTestResults[page.page_id].errors || []).length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                      {tokenTestResults[page.page_id].errors.map((err: any, idx: number) => (
+                                        <div
+                                          key={idx}
+                                          className={`text-[11px] rounded-xl p-3 border ${err.severity === 'info'
+                                            ? 'text-slate-600 bg-slate-50 border-slate-200'
+                                            : 'text-rose-600 bg-rose-50 border-rose-100'
+                                          }`}
+                                        >
+                                          <b>{err.step || 'error'}:</b> {err.message}
+                                          {err.detail && <span className="block mt-1 opacity-70">Meta detail: {err.detail}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Terminal Log View */}
                               <div className="bg-[#1e1e1e] rounded-xl p-4 shadow-inner border border-slate-800">
@@ -1385,7 +1966,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 <div className="font-mono text-[11px] leading-relaxed space-y-1.5 h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
                                   <p className="text-slate-300"><span className="text-emerald-400">[{new Date(Date.now() - 3600000).toLocaleTimeString()}]</span> [INFO] Khởi tạo kết nối Fanpage ID: {page.page_id}</p>
                                   <p className="text-slate-300"><span className="text-emerald-400">[{new Date(Date.now() - 3595000).toLocaleTimeString()}]</span> [OK] Đã lưu thông tin Access Token thành công.</p>
-                                  <p className="text-slate-300"><span className="text-emerald-400">[{new Date(Date.now() - 3590000).toLocaleTimeString()}]</span> [OK] Xác thực Graph API v19.0: Thành công.</p>
+                                  <p className="text-slate-300"><span className="text-emerald-400">[{new Date(Date.now() - 3590000).toLocaleTimeString()}]</span> [OK] Xác thực Graph API v25.0: Thành công.</p>
                                   {page.dify_api_key ? (
                                     <p className="text-slate-300"><span className="text-emerald-400">[{new Date(Date.now() - 3585000).toLocaleTimeString()}]</span> [OK] Xác thực Dify Chatbot API: Thành công.</p>
                                   ) : (
@@ -1503,11 +2084,157 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         placeholder="app-..."
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1">Facebook Ad Account ID</label>
+                      <input
+                        id="new-facebook-ad-account-id"
+                        type="text"
+                        value={newPageForm.facebookAdAccountId}
+                        onChange={(e) => setNewPageForm({ ...newPageForm, facebookAdAccountId: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-shadow"
+                        placeholder="VD: act_123456789 hoặc 123456789"
+                      />
+                      <p className="mt-1 text-xs text-slate-400">Cần user kết nối Page có quyền xem Ad Account và app đã duyệt ads_read.</p>
+                    </div>
                     <button
                       onClick={handleAddPage}
                       className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl mt-4 hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <Plus className="w-5 h-5" /> Thêm Fanpage
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+
+        {isImageLibraryOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsImageLibraryOpen(false)}
+              className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-[60]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl max-h-[86vh] bg-white rounded-3xl shadow-2xl z-[70] overflow-hidden border border-white/60"
+            >
+              <div className="px-6 py-4 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-sky-600 text-white flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black flex items-center gap-2"><ImageIcon className="w-5 h-5" /> Thư viện ảnh CSKH</h2>
+                  <p className="text-xs text-white/80 mt-1">Chọn ảnh mẫu hoặc thêm URL ảnh mới để gửi qua Facebook Messenger.</p>
+                </div>
+                <button onClick={() => setIsImageLibraryOpen(false)} className="p-2 hover:bg-white/15 rounded-full">
+                  <Plus className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-0 max-h-[calc(86vh-76px)] overflow-hidden">
+                <div className="p-5 overflow-y-auto bg-slate-50">
+                  <div className="flex gap-2 mb-4">
+                    <div className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+                      <Search className="w-4 h-4 text-slate-400" />
+                      <input
+                        id="messenger-image-library-search"
+                        value={imageLibrarySearch}
+                        onChange={(e) => setImageLibrarySearch(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') loadImageLibrary(imageLibrarySearch); }}
+                        placeholder="Tìm theo tên, mô tả, danh mục..."
+                        className="w-full outline-none text-sm bg-transparent"
+                      />
+                    </div>
+                    <button
+                      onClick={() => loadImageLibrary(imageLibrarySearch)}
+                      disabled={isLoadingImages}
+                      className="px-4 py-2.5 bg-slate-900 text-white rounded-2xl font-bold text-sm disabled:opacity-50"
+                    >
+                      {isLoadingImages ? 'Đang tải...' : 'Tìm'}
+                    </button>
+                  </div>
+
+                  {imageLibrary.length === 0 ? (
+                    <div className="h-64 rounded-3xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-center text-slate-400">
+                      <ImageIcon className="w-12 h-12 mb-3 opacity-40" />
+                      <p className="font-bold text-slate-600">Chưa có ảnh trong thư viện</p>
+                      <p className="text-sm">Thêm ảnh bằng form bên phải để dùng lại cho các hội thoại.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {imageLibrary.map(item => (
+                        <div key={item.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden group hover:shadow-xl transition-all">
+                          <div className="aspect-[4/3] bg-slate-100 overflow-hidden relative">
+                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                            {item.category && (
+                              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 text-slate-700 text-[10px] font-black shadow-sm">
+                                {item.category}
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <h3 className="font-black text-slate-900 truncate">{item.title}</h3>
+                            {item.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description}</p>}
+                            <button
+                              onClick={() => handleSendImage('', item.id)}
+                              disabled={isSendingImage}
+                              className="mt-3 w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-sm hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              <Send className="w-4 h-4" /> {isSendingImage ? 'Đang gửi...' : 'Gửi ảnh này'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 bg-white border-l border-slate-200 overflow-y-auto">
+                  <h3 className="font-black text-slate-900 mb-1">Thêm ảnh mới</h3>
+                  <p className="text-xs text-slate-500 mb-4">Dùng URL ảnh công khai HTTPS để Facebook có thể tải và gửi cho khách.</p>
+                  <div className="space-y-3">
+                    <input
+                      value={newLibraryImage.title}
+                      onChange={(e) => setNewLibraryImage(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="Tên ảnh / mục đích sử dụng"
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                    />
+                    <input
+                      value={newLibraryImage.image_url}
+                      onChange={(e) => setNewLibraryImage(prev => ({ ...prev, image_url: e.target.value }))}
+                      placeholder="https://.../image.jpg"
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                    />
+                    <input
+                      value={newLibraryImage.category}
+                      onChange={(e) => setNewLibraryImage(prev => ({ ...prev, category: e.target.value }))}
+                      placeholder="Danh mục (VD: Bảng giá, Hướng dẫn)"
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                    />
+                    <textarea
+                      value={newLibraryImage.description}
+                      onChange={(e) => setNewLibraryImage(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Mô tả ngắn..."
+                      rows={3}
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-violet-500 text-sm resize-none"
+                    />
+                    {newLibraryImage.image_url && (
+                      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                        <img src={newLibraryImage.image_url} alt="Preview ảnh mới" className="w-full max-h-48 object-contain" />
+                      </div>
+                    )}
+                    <button
+                      onClick={handleAddLibraryImage}
+                      disabled={!newLibraryImage.title.trim() || !newLibraryImage.image_url.trim()}
+                      className="w-full py-3 bg-slate-900 text-white rounded-2xl font-black disabled:opacity-50"
+                    >
+                      Lưu vào thư viện
+                    </button>
+                    <button
+                      onClick={() => handleSendImage(newLibraryImage.image_url)}
+                      disabled={!newLibraryImage.image_url.trim() || isSendingImage}
+                      className="w-full py-3 bg-violet-50 text-violet-700 border border-violet-100 rounded-2xl font-black disabled:opacity-50"
+                    >
+                      Gửi URL này ngay
                     </button>
                   </div>
                 </div>

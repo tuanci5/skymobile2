@@ -2,19 +2,83 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Sky Mobile
 
-This contains everything you need to run your app locally.
+Ứng dụng gồm frontend Vite/React và backend Express API trong cùng một codebase.
 
-View your app in AI Studio: https://ai.studio/apps/e5f2df11-a4a1-4d52-8d18-574c839bb724
+## Cấu trúc chính
 
-## Run Locally
+```txt
+src/
+├─ main.tsx              # Frontend entry
+├─ App.tsx
+├─ pages/
+├─ components/
+├─ services/
+└─ server/               # Backend API duy nhất
+   ├─ server.ts
+   ├─ db.ts
+   ├─ migrate.ts
+   ├─ seed.ts
+   ├─ fbMessenger.ts
+   └─ routes/
+```
 
-**Prerequisites:**  Node.js
+> [!IMPORTANT]
+> Backend source chuẩn nằm tại `src/server`. Không chạy build/backend từ `deploy/backend` nữa.
 
+## Run locally
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**Prerequisites:** Node.js
+
+1. Cài dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Cấu hình `.env.local` tại root project.
+
+3. Chạy frontend:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Chạy backend API:
+
+   ```bash
+   npm run api
+   ```
+
+   Mặc định API chạy port `3006` nếu không set biến `PORT`.
+
+## Scripts
+
+```bash
+npm run dev          # Frontend Vite, port 3000
+npm run api          # Backend Express API
+npm run api:migrate  # Migration dữ liệu/schema
+npm run api:seed     # Seed user/role mặc định
+npm run build        # Build frontend production
+npm run preview      # Preview frontend build
+npm run lint         # TypeScript check
+```
+
+## Deploy backend với PM2
+
+Chạy từ root project:
+
+```bash
+pm2 start npm --name skymobile-api -- run api
+```
+
+## Deploy frontend
+
+Build frontend từ root project:
+
+```bash
+npm run build
+```
+
+Output nằm trong `dist/`.
