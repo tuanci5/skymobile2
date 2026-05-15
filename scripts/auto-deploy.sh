@@ -19,7 +19,7 @@ npm install
 
 # 3. Build lại Frontend (React/Vite)
 echo "🏗️ Building frontend assets..."
-npm run build
+./node_modules/.bin/vite build
 
 # 4. Khởi động lại Backend bằng PM2
 echo "🔄 Restarting PM2 process (skymobile-api)..."
