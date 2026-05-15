@@ -1113,35 +1113,95 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
       return res.status(400).json({ error: 'profile_url is required' });
     }
 
-    // Trích xuất UID từ URL Facebook
-    // Các dạng URL: facebook.com/profile.php?id=123, facebook.com/username, business.facebook.com/latest/people/123
+    // Trích xuất UID từ URL Facebook / Meta Business Suite
+    // Ưu tiên: Business Suite selected_item_id -> profile.php?id -> /people/{id} -> numeric path -> username Graph API
     let uid: string | null = null;
     let username: string | null = null;
     let avatarUrl: string | null = null;
     let token: string | null = null;
+    let currentPageId: string | null = null;
+    let businessIdFromUrl: string | null = null;
+    let mailboxIdFromUrl: string | null = null;
+    let assetIdFromUrl: string | null = null;
+    let uidSource = 'none';
 
-    // Lấy page access token từ conversation để resolve username và thử lấy avatar
+    // Lấy page access token và page_id từ conversation để resolve username, cập nhật business_id và thử lấy avatar
     const { rows: convRows } = await pool.query(
-      `SELECT p.access_token FROM fb_conversations c
+      `SELECT c.page_id, p.access_token FROM fb_conversations c
        JOIN fb_pages p ON c.page_id = p.page_id
        WHERE c.id = $1`, [id]
     );
-    if (convRows.length > 0) token = convRows[0].access_token;
+    if (convRows.length > 0) {
+      token = convRows[0].access_token;
+      currentPageId = convRows[0].page_id;
+    }
+
+    // Ưu tiên 3: Parse toàn bộ link Business Suite Inbox
+    // Dạng: business.facebook.com/latest/inbox/all?...selected_item_id=UID&business_id=...&asset_id=...&mailbox_id=...
+    try {
+      const parsedUrl = new URL(profile_url.startsWith('http') ? profile_url : `https://${profile_url}`);
+      const host = parsedUrl.hostname.replace(/^www\./, '').replace(/^m\./, '');
+      const selectedItemId = parsedUrl.searchParams.get('selected_item_id');
+      const businessId = parsedUrl.searchParams.get('business_id');
+      const mailboxId = parsedUrl.searchParams.get('mailbox_id');
+      const assetId = parsedUrl.searchParams.get('asset_id');
+
+      if (host === 'business.facebook.com') {
+        if (selectedItemId && /^\d+$/.test(selectedItemId)) {
+          uid = selectedItemId;
+          uidSource = 'business_suite_selected_item_id';
+        }
+        if (businessId && /^\d+$/.test(businessId)) businessIdFromUrl = businessId;
+        if (mailboxId && /^\d+$/.test(mailboxId)) mailboxIdFromUrl = mailboxId;
+        if (assetId && /^\d+$/.test(assetId)) assetIdFromUrl = assetId;
+      }
+    } catch (e) {
+      const selectedMatch = profile_url.match(/[?&]selected_item_id=(\d+)/);
+      const businessMatch = profile_url.match(/[?&]business_id=(\d+)/);
+      const mailboxMatch = profile_url.match(/[?&]mailbox_id=(\d+)/);
+      const assetMatch = profile_url.match(/[?&]asset_id=(\d+)/);
+      if (selectedMatch) {
+        uid = selectedMatch[1];
+        uidSource = 'business_suite_selected_item_id';
+      }
+      if (businessMatch) businessIdFromUrl = businessMatch[1];
+      if (mailboxMatch) mailboxIdFromUrl = mailboxMatch[1];
+      if (assetMatch) assetIdFromUrl = assetMatch[1];
+    }
+
+    if (businessIdFromUrl) {
+      const pageIdToUpdate = mailboxIdFromUrl || assetIdFromUrl || currentPageId;
+      if (pageIdToUpdate) {
+        await pool.query(
+          `UPDATE fb_pages SET business_id = $1 WHERE page_id = $2`,
+          [businessIdFromUrl, pageIdToUpdate]
+        );
+      }
+    }
 
     // Dạng 1: facebook.com/profile.php?id=XXXXXXXX
     const phpIdMatch = profile_url.match(/profile\.php\?id=(\d+)/);
-    if (phpIdMatch) uid = phpIdMatch[1];
+    if (!uid && phpIdMatch) {
+      uid = phpIdMatch[1];
+      uidSource = 'profile_php_id';
+    }
 
     // Dạng 2: business.facebook.com/latest/people/XXXXXXXX
     if (!uid) {
       const bizMatch = profile_url.match(/\/people\/(\d+)/);
-      if (bizMatch) uid = bizMatch[1];
+      if (bizMatch) {
+        uid = bizMatch[1];
+        uidSource = 'business_people_path';
+      }
     }
 
     // Dạng 3: facebook.com/XXXXXXXX (chỉ số)
     if (!uid) {
       const numMatch = profile_url.match(/facebook\.com\/(\d+)(?:[/?]|$)/);
-      if (numMatch) uid = numMatch[1];
+      if (numMatch) {
+        uid = numMatch[1];
+        uidSource = 'facebook_numeric_path';
+      }
     }
 
     // Dạng 4: facebook.com/username hoặc fb.com/username
@@ -1170,6 +1230,7 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
           const usernameData = await usernameRes.json();
           if (usernameData?.id && /^\d+$/.test(usernameData.id)) {
             uid = usernameData.id;
+            uidSource = 'graph_username_lookup';
           } else if (usernameData?.error) {
             console.warn('[MANUAL_PROFILE] Could not resolve username to UID:', usernameData.error.message);
           }
@@ -1212,7 +1273,12 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
       manual_profile_url: profile_url,
       facebook_uid: uid,
       avatar_url: avatarUrl,
-      uid_extracted: uid
+      uid_extracted: uid,
+      uid_source: uidSource,
+      business_id: businessIdFromUrl,
+      asset_id: assetIdFromUrl,
+      mailbox_id: mailboxIdFromUrl,
+      business_id_updated: Boolean(businessIdFromUrl && (mailboxIdFromUrl || assetIdFromUrl || currentPageId))
     });
   } catch (err: any) {
     console.error('Error saving manual profile:', err);

@@ -169,7 +169,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [isEditingProfileUrl, setIsEditingProfileUrl] = useState(false);
   const [profileUrlInput, setProfileUrlInput] = useState('');
   const [isSavingProfileUrl, setIsSavingProfileUrl] = useState(false);
-  const [isResolvingFacebookUid, setIsResolvingFacebookUid] = useState(false);
 
   const currentUserName = user?.name || user?.email || 'Người dùng hiện tại';
   const currentUserEmail = user?.email || null;
@@ -903,7 +902,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         setSelectedConv(updatedConv);
         setConversations(prev => prev.map(c => c.id === selectedConv.id ? updatedConv : c));
         setIsEditingProfileUrl(false);
-        if (data.uid_extracted && newAvatarUrl) {
+        if (data.uid_source === 'business_suite_selected_item_id') {
+          alert(data.business_id_updated
+            ? 'Đã parse UID từ link Business Suite và cập nhật Business ID cho Fanpage.'
+            : 'Đã parse UID từ link Business Suite.');
+        } else if (data.uid_extracted && newAvatarUrl) {
           // Avatar đã được cập nhật tự động
         } else if (data.uid_extracted && !newAvatarUrl) {
           alert('Đã lưu profile URL. Không tải được avatar (ảnh riêng tư hoặc hạn chế).');
@@ -920,33 +923,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
-  const handleResolveFacebookUid = async () => {
-    if (!selectedConv) return;
-    setIsResolvingFacebookUid(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/fb/conversations/${selectedConv.id}/resolve-facebook-uid`, {
-        method: 'POST'
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        alert('Lỗi dò UID: ' + (data.error || 'Không thể gọi Graph API'));
-        return;
-      }
-
-      if (data.resolved && data.facebook_uid) {
-        const updatedConv: any = { ...selectedConv, facebook_uid: data.facebook_uid };
-        setSelectedConv(updatedConv);
-        setConversations(prev => prev.map(c => c.id === selectedConv.id ? updatedConv : c));
-        alert(`Đã dò được UID thật từ Graph API: ${data.facebook_uid}`);
-      } else {
-        alert(data.reason || 'Meta không trả UID thật cho hội thoại này. Hãy nhập UID thủ công hoặc dán link Business Suite.');
-      }
-    } catch (err: any) {
-      alert('Lỗi kết nối khi dò UID: ' + err.message);
-    } finally {
-      setIsResolvingFacebookUid(false);
-    }
-  };
 
   const handleAssign = async (staff: string) => {
     if (!selectedConv) return;
@@ -1746,14 +1722,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                   </div>
                 </div>
 
-                <button
-                  id="resolve-facebook-uid-from-conversation"
-                  onClick={handleResolveFacebookUid}
-                  disabled={isResolvingFacebookUid}
-                  className="w-full px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isResolvingFacebookUid ? 'Đang dò UID qua Graph API...' : 'Thử dò UID từ hội thoại'}
-                </button>
 
                 {isEditingProfileUrl && (
                   <div className="rounded-2xl border border-blue-100 bg-white p-3 space-y-2">
@@ -1761,7 +1729,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                       id="manual-profile-url-input"
                       value={profileUrlInput}
                       onChange={(e) => setProfileUrlInput(e.target.value)}
-                      placeholder="VD: https://facebook.com/username hoặc profile.php?id=..."
+                      placeholder="Dán link Business Suite có selected_item_id hoặc link Facebook profile"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
                     />
                     <div className="flex gap-2">
@@ -1771,7 +1739,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         disabled={isSavingProfileUrl || !profileUrlInput.trim()}
                         className="flex-1 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {isSavingProfileUrl ? 'Đang lưu...' : 'Lưu & lấy UID'}
+                        {isSavingProfileUrl ? 'Đang lưu...' : 'Lưu & parse UID'}
                       </button>
                       <button
                         onClick={() => {
@@ -1784,7 +1752,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                       </button>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Hỗ trợ URL chứa UID số và username. Nếu Facebook cho phép, hệ thống sẽ tự lưu UID và cập nhật avatar.
+                      Ưu tiên dán link Meta Business Suite Inbox có <b>selected_item_id</b>. Hệ thống sẽ tự lưu UID thật và cập nhật <b>business_id</b> cho Fanpage nếu link có tham số này.
                     </p>
                   </div>
                 )}
