@@ -101,6 +101,7 @@ export async function initDBUtils() {
         access_token TEXT NOT NULL,
         dify_api_key TEXT,
         facebook_ad_account_id VARCHAR(100),
+        business_id VARCHAR(100),
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
         assigned_users JSONB DEFAULT '[]'::jsonb,
         ai_reply_delay INT DEFAULT 5,
@@ -116,9 +117,12 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_pages ADD COLUMN distribution_mode VARCHAR(50) DEFAULT 'manual'");
     } catch (e) {}
 
-    // Add Facebook Ad Account ID if missing
+    // Add Facebook Ad Account ID and Business ID if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN facebook_ad_account_id VARCHAR(100)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN business_id VARCHAR(100)");
     } catch (e) {}
 
     // Add assigned_users if missing
@@ -167,6 +171,8 @@ export async function initDBUtils() {
         last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         unread_count INT DEFAULT 0,
         profile_link TEXT,
+        manual_profile_url TEXT,
+        facebook_uid VARCHAR(100),
         preferred_language_code VARCHAR(50),
         preferred_language_label VARCHAR(100),
         preferred_language_source VARCHAR(20),
@@ -260,10 +266,14 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN assigned_to VARCHAR(255)");
     } catch (e) {}
 
-    // Add manual_profile_url for staff to manually enter customer FB profile URL
+    // Add manual_profile_url and facebook_uid for staff-entered customer FB profile details
     try {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN manual_profile_url TEXT");
     } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN facebook_uid VARCHAR(100)");
+    } catch (e) {}
+    await client.query("CREATE INDEX IF NOT EXISTS idx_fb_conversations_facebook_uid ON fb_conversations(facebook_uid)");
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_messages (

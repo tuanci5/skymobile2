@@ -158,10 +158,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     pageId: '',
     pageAccessToken: '',
     difyApiKey: '',
-    facebookAdAccountId: ''
+    facebookAdAccountId: '',
+    businessId: ''
   });
 
-  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, facebookAdAccountId?: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
+  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, facebookAdAccountId?: string, businessId?: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
@@ -462,6 +463,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     setTranslatedReplyText('');
     setTranslatedFromText('');
     setIsEditingProfileUrl(false);
+    setProfileUrlInput(conv.manual_profile_url || '');
     void markConversationRead(conv.id);
     loadMessages(conv.id);
     loadNotes(conv.id);
@@ -894,6 +896,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         const updatedConv: any = {
           ...selectedConv,
           manual_profile_url: data.manual_profile_url,
+          facebook_uid: data.facebook_uid || null,
           ...(newAvatarUrl ? { customer_avatar: newAvatarUrl, avatarUrl: newAvatarUrl } : {})
         };
         setSelectedConv(updatedConv);
@@ -978,7 +981,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           page_name: newPageForm.pageName,
           access_token: newPageForm.pageAccessToken,
           dify_api_key: newPageForm.difyApiKey || null,
-          facebook_ad_account_id: newPageForm.facebookAdAccountId || null
+          facebook_ad_account_id: newPageForm.facebookAdAccountId || null,
+          business_id: newPageForm.businessId || null
         })
       });
 
@@ -994,7 +998,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           pageId: '',
           pageAccessToken: '',
           difyApiKey: '',
-          facebookAdAccountId: ''
+          facebookAdAccountId: '',
+          businessId: ''
         });
 
         alert(`Đã thêm Fanpage "${newPageForm.pageName}" thành công!`);
@@ -1019,6 +1024,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           access_token: editingPage.token,
           dify_api_key: editingPage.difyKey,
           facebook_ad_account_id: editingPage.facebookAdAccountId,
+          business_id: editingPage.businessId,
           ai_reply_delay: editingPage.aiReplyDelay,
           ai_start_hour: editingPage.aiStartHour,
           ai_end_hour: editingPage.aiEndHour
@@ -1030,6 +1036,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           ...p,
           dify_api_key: editingPage.difyKey,
           facebook_ad_account_id: editingPage.facebookAdAccountId,
+          business_id: editingPage.businessId,
           ai_reply_delay: editingPage.aiReplyDelay,
           ai_start_hour: editingPage.aiStartHour,
           ai_end_hour: editingPage.aiEndHour
@@ -1616,8 +1623,23 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
-                    if (selectedConv.customer_id && selectedConv.page_id) 
-                      window.open(`https://www.facebook.com/${selectedConv.page_id}/inbox/${selectedConv.customer_id}`, '_blank');
+                    if (!selectedConv.facebook_uid) {
+                      alert('Chưa có UID thật. Hãy cập nhật Profile Facebook thủ công trước để mở đúng hội thoại trong Meta Inbox.');
+                      return;
+                    }
+                    if (!selectedConv.business_id) {
+                      alert('Fanpage này chưa cấu hình Meta Business ID. Vào Cài đặt Messenger > Fanpage để nhập Business ID trước.');
+                      return;
+                    }
+                    const inboxUrl = new URL('https://business.facebook.com/latest/inbox/all');
+                    inboxUrl.searchParams.set('asset_id', selectedConv.page_id);
+                    inboxUrl.searchParams.set('business_id', selectedConv.business_id);
+                    inboxUrl.searchParams.set('ir_qe_exposed', '1');
+                    inboxUrl.searchParams.set('nav_ref', 'manage_page_ap_plus_default');
+                    inboxUrl.searchParams.set('selected_item_id', selectedConv.facebook_uid);
+                    inboxUrl.searchParams.set('mailbox_id', selectedConv.page_id);
+                    inboxUrl.searchParams.set('thread_type', 'FB_MESSAGE');
+                    window.open(inboxUrl.toString(), '_blank');
                   }}
                   className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-[11px]"
                 >
@@ -1626,7 +1648,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 </button>
                 <button
                   onClick={() => {
-                    if (selectedConv.customer_id && selectedConv.page_id) {
+                    const profileUrl = selectedConv.manual_profile_url?.trim();
+                    if (profileUrl) {
+                      window.open(profileUrl.startsWith('http') ? profileUrl : `https://${profileUrl}`, '_blank');
+                    } else if (selectedConv.customer_id && selectedConv.page_id) {
                       window.open(`https://business.facebook.com/latest/people/${selectedConv.customer_id}?asset_id=${selectedConv.page_id}`, '_blank');
                     }
                   }}
@@ -1635,6 +1660,96 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                   <User className="w-3.5 h-3.5 text-blue-500" />
                   Profile FB
                 </button>
+              </div>
+            </div>
+
+            {/* Manual Facebook Profile Panel */}
+            <div className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Profile Facebook thủ công
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Dùng khi link Profile FB theo PSID không mở đúng khách.
+                  </p>
+                </div>
+                <button
+                  id="edit-manual-profile-url"
+                  onClick={() => {
+                    setProfileUrlInput(selectedConv.manual_profile_url || '');
+                    setIsEditingProfileUrl(prev => !prev);
+                  }}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-white border border-blue-100 text-blue-700 text-[11px] font-bold hover:bg-blue-50 transition-colors"
+                >
+                  {isEditingProfileUrl ? 'Đóng' : selectedConv.manual_profile_url ? 'Sửa' : 'Thêm'}
+                </button>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="rounded-xl bg-white/80 border border-slate-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">URL đã lưu</p>
+                  {selectedConv.manual_profile_url ? (
+                    <a
+                      href={selectedConv.manual_profile_url.startsWith('http') ? selectedConv.manual_profile_url : `https://${selectedConv.manual_profile_url}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-700 font-semibold break-all hover:underline"
+                    >
+                      {selectedConv.manual_profile_url}
+                    </a>
+                  ) : (
+                    <p className="text-slate-400 italic">Chưa cập nhật URL Facebook thủ công.</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-white/80 border border-slate-100 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">PSID</p>
+                    <p className="font-mono text-[11px] text-slate-700 break-all">{selectedConv.customer_id}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/80 border border-slate-100 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">UID thật</p>
+                    <p className={`font-mono text-[11px] break-all ${selectedConv.facebook_uid ? 'text-emerald-700 font-bold' : 'text-slate-400 italic'}`}>
+                      {selectedConv.facebook_uid || 'Chưa có'}
+                    </p>
+                  </div>
+                </div>
+
+                {isEditingProfileUrl && (
+                  <div className="rounded-2xl border border-blue-100 bg-white p-3 space-y-2">
+                    <input
+                      id="manual-profile-url-input"
+                      value={profileUrlInput}
+                      onChange={(e) => setProfileUrlInput(e.target.value)}
+                      placeholder="VD: https://facebook.com/username hoặc profile.php?id=..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        id="save-manual-profile-url"
+                        onClick={handleSaveManualProfile}
+                        disabled={isSavingProfileUrl || !profileUrlInput.trim()}
+                        className="flex-1 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isSavingProfileUrl ? 'Đang lưu...' : 'Lưu & lấy UID'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditingProfileUrl(false);
+                          setProfileUrlInput(selectedConv.manual_profile_url || '');
+                        }}
+                        className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Hỗ trợ URL chứa UID số và username. Nếu Facebook cho phép, hệ thống sẽ tự lưu UID và cập nhật avatar.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1873,7 +1988,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         id: page.page_id,
                                         token: newToken,
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
-                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || '')
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || '')
                                       }));
                                     }}
                                   />
@@ -1891,7 +2007,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: newKey,
-                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || '')
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || '')
                                       }));
                                     }}
                                   />
@@ -1911,6 +2028,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: newDelay
                                       }));
                                     }}
@@ -1934,6 +2052,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: value,
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
@@ -1941,6 +2060,30 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                     }}
                                   />
                                   <p className="mt-1 text-[11px] text-slate-400">Dùng để test quyền <b>ads_read</b> qua Campaigns API.</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meta Business ID</p>
+                                  <input
+                                    id={`fb-business-id-${page.page_id}`}
+                                    type="text"
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="VD: 758611632240327"
+                                    value={editingPage?.id === page.page_id ? (editingPage.businessId ?? '') : (page.business_id || '')}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setEditingPage(prev => ({
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: value,
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
+                                      }));
+                                    }}
+                                  />
+                                  <p className="mt-1 text-[11px] text-slate-400">Dùng để mở đúng thread trong Meta Business Suite Inbox.</p>
                                 </div>
                                 <div>
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Bật AI từ lúc (Giờ)</p>
@@ -1954,6 +2097,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: val,
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
@@ -1977,6 +2121,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: val
@@ -2013,7 +2158,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleUpdatePageSettings(page.page_id)}
-                                    disabled={!editingPage || editingPage.id !== page.page_id || (!editingPage.token && editingPage.difyKey === page.dify_api_key)}
+                                    disabled={!editingPage || editingPage.id !== page.page_id}
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
                                   >
                                     Lưu thay đổi
@@ -2219,6 +2364,18 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         placeholder="VD: act_123456789 hoặc 123456789"
                       />
                       <p className="mt-1 text-xs text-slate-400">Cần user kết nối Page có quyền xem Ad Account và app đã duyệt ads_read.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1">Meta Business ID</label>
+                      <input
+                        id="new-facebook-business-id"
+                        type="text"
+                        value={newPageForm.businessId}
+                        onChange={(e) => setNewPageForm({ ...newPageForm, businessId: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                        placeholder="VD: 758611632240327"
+                      />
+                      <p className="mt-1 text-xs text-slate-400">Lấy trong URL Business Suite: business_id=...</p>
                     </div>
                     <button
                       onClick={handleAddPage}

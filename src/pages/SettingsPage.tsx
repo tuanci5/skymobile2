@@ -12,7 +12,8 @@ import {
   AlertCircle,
   MessageSquareText,
   Plus,
-  Trash2
+  Trash2,
+  Clock
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { settingService } from '../services/api';
@@ -100,6 +101,7 @@ export const SettingsPage: React.FC = () => {
     ai_endpoint: 'https://api.openai.com/v1/chat/completions',
     ai_model: 'gpt-3.5-turbo',
     app_name: 'Sky Mobile Dashboard',
+    system_timezone: 'Asia/Ho_Chi_Minh',
     message_templates: JSON.stringify(DEFAULT_MESSAGE_TEMPLATES),
   });
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplateMap>(() => normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES));
@@ -380,6 +382,26 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setSettings({ ...settings, app_name: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-400" />
+                Giờ hệ thống
+              </label>
+              <select
+                value={settings.system_timezone || 'Asia/Ho_Chi_Minh'}
+                onChange={(e) => setSettings({ ...settings, system_timezone: e.target.value })}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-semibold text-slate-700"
+              >
+                <option value="Asia/Ho_Chi_Minh">UTC+7 · Việt Nam / Bangkok / Jakarta</option>
+                <option value="UTC">UTC+0 · Giờ quốc tế</option>
+                <option value="Asia/Shanghai">UTC+8 · Trung Quốc / Singapore</option>
+                <option value="Asia/Tokyo">UTC+9 · Nhật Bản / Hàn Quốc</option>
+              </select>
+              <p className="text-xs font-medium text-slate-500">
+                Mặc định dùng giờ UTC+7 để hiển thị và xử lý các mốc thời gian trong hệ thống.
+              </p>
             </div>
           </div>
         </section>

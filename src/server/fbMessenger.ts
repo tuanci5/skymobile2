@@ -239,7 +239,7 @@ router.get('/avatar-proxy', async (req, res) => {
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -248,14 +248,15 @@ router.get('/pages', async (req, res) => {
 
 router.post('/pages', async (req, res) => {
   try {
-    const { page_id, page_name, access_token, dify_api_key, facebook_ad_account_id } = req.body;
+    const { page_id, page_name, access_token, dify_api_key, facebook_ad_account_id, business_id } = req.body;
     await pool.query(
-      `INSERT INTO fb_pages (page_id, page_name, access_token, dify_api_key, facebook_ad_account_id) 
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO fb_pages (page_id, page_name, access_token, dify_api_key, facebook_ad_account_id, business_id) 
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (page_id) DO UPDATE SET 
        page_name = EXCLUDED.page_name, access_token = EXCLUDED.access_token, dify_api_key = EXCLUDED.dify_api_key,
-       facebook_ad_account_id = EXCLUDED.facebook_ad_account_id`,
-      [page_id, page_name, access_token, dify_api_key, facebook_ad_account_id || null]
+       facebook_ad_account_id = EXCLUDED.facebook_ad_account_id,
+       business_id = EXCLUDED.business_id`,
+      [page_id, page_name, access_token, dify_api_key, facebook_ad_account_id || null, business_id || null]
     );
     res.json({ success: true });
   } catch (err: any) {
@@ -266,15 +267,16 @@ router.post('/pages', async (req, res) => {
 router.put('/pages/:page_id', async (req, res) => {
   try {
     const { page_id } = req.params;
-    const { access_token, dify_api_key, facebook_ad_account_id, ai_reply_delay, ai_start_hour, ai_end_hour } = req.body;
+    const { access_token, dify_api_key, facebook_ad_account_id, business_id, ai_reply_delay, ai_start_hour, ai_end_hour } = req.body;
     
     if (access_token && access_token.trim() !== '') {
       await pool.query(
-        'UPDATE fb_pages SET access_token = $1, dify_api_key = $2, facebook_ad_account_id = $3, ai_reply_delay = $4, ai_start_hour = $5, ai_end_hour = $6 WHERE page_id = $7',
+        'UPDATE fb_pages SET access_token = $1, dify_api_key = $2, facebook_ad_account_id = $3, business_id = $4, ai_reply_delay = $5, ai_start_hour = $6, ai_end_hour = $7 WHERE page_id = $8',
         [
           access_token, 
           dify_api_key,
           facebook_ad_account_id || null,
+          business_id || null,
           ai_reply_delay !== undefined ? ai_reply_delay : 5, 
           ai_start_hour !== undefined ? ai_start_hour : 0, 
           ai_end_hour !== undefined ? ai_end_hour : 24, 
@@ -283,10 +285,11 @@ router.put('/pages/:page_id', async (req, res) => {
       );
     } else {
       await pool.query(
-        'UPDATE fb_pages SET dify_api_key = $1, facebook_ad_account_id = $2, ai_reply_delay = $3, ai_start_hour = $4, ai_end_hour = $5 WHERE page_id = $6',
+        'UPDATE fb_pages SET dify_api_key = $1, facebook_ad_account_id = $2, business_id = $3, ai_reply_delay = $4, ai_start_hour = $5, ai_end_hour = $6 WHERE page_id = $7',
         [
           dify_api_key,
           facebook_ad_account_id || null,
+          business_id || null,
           ai_reply_delay !== undefined ? ai_reply_delay : 5, 
           ai_start_hour !== undefined ? ai_start_hour : 0, 
           ai_end_hour !== undefined ? ai_end_hour : 24, 
@@ -775,7 +778,7 @@ router.post('/webhook', (req, res) => {
 router.get('/conversations', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT c.*, p.page_name
+      SELECT c.*, p.page_name, p.business_id
       FROM fb_conversations c
       LEFT JOIN fb_pages p ON p.page_id = c.page_id
       ORDER BY c.last_message_at DESC
@@ -935,7 +938,17 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
     // Trích xuất UID từ URL Facebook
     // Các dạng URL: facebook.com/profile.php?id=123, facebook.com/username, business.facebook.com/latest/people/123
     let uid: string | null = null;
+    let username: string | null = null;
     let avatarUrl: string | null = null;
+    let token: string | null = null;
+
+    // Lấy page access token từ conversation để resolve username và thử lấy avatar
+    const { rows: convRows } = await pool.query(
+      `SELECT p.access_token FROM fb_conversations c
+       JOIN fb_pages p ON c.page_id = p.page_id
+       WHERE c.id = $1`, [id]
+    );
+    if (convRows.length > 0) token = convRows[0].access_token;
 
     // Dạng 1: facebook.com/profile.php?id=XXXXXXXX
     const phpIdMatch = profile_url.match(/profile\.php\?id=(\d+)/);
@@ -953,27 +966,52 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
       if (numMatch) uid = numMatch[1];
     }
 
-    // Nếu có UID số, thử fetch avatar qua Graph API với page token
-    if (uid) {
+    // Dạng 4: facebook.com/username hoặc fb.com/username
+    // Lưu ý: Graph API chỉ resolve được username public và token có quyền nhìn thấy object đó.
+    if (!uid) {
       try {
-        // Lấy page access token từ conversation
-        const { rows: convRows } = await pool.query(
-          `SELECT p.access_token FROM fb_conversations c
-           JOIN fb_pages p ON c.page_id = p.page_id
-           WHERE c.id = $1`, [id]
-        );
+        const parsedUrl = new URL(profile_url.startsWith('http') ? profile_url : `https://${profile_url}`);
+        const host = parsedUrl.hostname.replace(/^www\./, '').replace(/^m\./, '');
+        const reservedPaths = new Set([
+          'profile.php', 'people', 'pages', 'groups', 'events', 'marketplace', 'watch',
+          'photo', 'photos', 'videos', 'reel', 'story.php', 'messages', 'plugins'
+        ]);
+        const firstPath = parsedUrl.pathname.split('/').filter(Boolean)[0];
+        if ((host === 'facebook.com' || host === 'fb.com') && firstPath && !reservedPaths.has(firstPath.toLowerCase()) && !/^\d+$/.test(firstPath)) {
+          username = decodeURIComponent(firstPath);
+        }
+      } catch (e) {
+        console.warn('[MANUAL_PROFILE] Could not parse profile URL for username:', e);
+      }
 
-        if (convRows.length > 0) {
-          const token = convRows[0].access_token;
-          // Thử lấy picture qua UID thật (không phải PSID)
-          const picRes = await fetch(
-            `https://graph.facebook.com/v25.0/${uid}/picture?type=large&redirect=false&access_token=${token}`
+      if (username && token) {
+        try {
+          const usernameRes = await fetch(
+            `https://graph.facebook.com/v25.0/${encodeURIComponent(username)}?fields=id&access_token=${token}`
           );
-          if (picRes.ok) {
-            const picData = await picRes.json();
-            if (picData.data?.url && !picData.data?.is_silhouette) {
-              avatarUrl = picData.data.url;
-            }
+          const usernameData = await usernameRes.json();
+          if (usernameData?.id && /^\d+$/.test(usernameData.id)) {
+            uid = usernameData.id;
+          } else if (usernameData?.error) {
+            console.warn('[MANUAL_PROFILE] Could not resolve username to UID:', usernameData.error.message);
+          }
+        } catch (e) {
+          console.warn('[MANUAL_PROFILE] Username resolve failed:', e);
+        }
+      }
+    }
+
+    // Nếu có UID số, thử fetch avatar qua Graph API với page token
+    if (uid && token) {
+      try {
+        // Thử lấy picture qua UID thật (không phải PSID)
+        const picRes = await fetch(
+          `https://graph.facebook.com/v25.0/${uid}/picture?type=large&redirect=false&access_token=${token}`
+        );
+        if (picRes.ok) {
+          const picData = await picRes.json();
+          if (picData.data?.url && !picData.data?.is_silhouette) {
+            avatarUrl = picData.data.url;
           }
         }
       } catch (e) {
@@ -981,18 +1019,20 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
       }
     }
 
-    // Cập nhật DB: lưu profile URL thủ công và avatar nếu lấy được
+    // Cập nhật DB: lưu profile URL thủ công, UID thật nếu trích xuất được, và avatar nếu lấy được
     await pool.query(
-      `UPDATE fb_conversations 
-       SET manual_profile_url = $1
-       ${avatarUrl ? ', customer_avatar = $3, avatar_url = $3' : ''}
+      `UPDATE fb_conversations
+       SET manual_profile_url = $1,
+           facebook_uid = $3
+           ${avatarUrl ? ', customer_avatar = $4, avatar_url = $4' : ''}
        WHERE id = $2`,
-      avatarUrl ? [profile_url, id, avatarUrl] : [profile_url, id]
+      avatarUrl ? [profile_url, id, uid, avatarUrl] : [profile_url, id, uid]
     );
 
     res.json({
       success: true,
       manual_profile_url: profile_url,
+      facebook_uid: uid,
       avatar_url: avatarUrl,
       uid_extracted: uid
     });

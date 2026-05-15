@@ -6,6 +6,7 @@ export interface FBPage {
   distribution_mode: 'manual' | 'round_robin' | 'ai_first';
   dify_api_key?: string;
   facebook_ad_account_id?: string | null;
+  business_id?: string | null;
   assigned_users?: string[];
   ai_reply_delay?: number;
   ai_start_hour?: number;
@@ -46,6 +47,9 @@ export interface Conversation {
   preferred_language_source?: 'manual' | 'detected' | 'fallback' | null;
   preferred_language_confidence?: number | null;
   preferred_language_updated_at?: string | null;
+  manual_profile_url?: string | null;
+  facebook_uid?: string | null;
+  business_id?: string | null;
 }
 
 export interface ConversationAdSource {
