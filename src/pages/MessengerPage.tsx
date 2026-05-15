@@ -1653,11 +1653,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 </button>
                 <button
                   onClick={() => {
-                    const profileUrl = selectedConv.manual_profile_url?.trim();
-                    if (profileUrl) {
-                      window.open(profileUrl.startsWith('http') ? profileUrl : `https://${profileUrl}`, '_blank');
-                    } else if (selectedConv.customer_id && selectedConv.page_id) {
-                      window.open(`https://business.facebook.com/latest/people/${selectedConv.customer_id}?asset_id=${selectedConv.page_id}`, '_blank');
+                    if (selectedConv.facebook_uid) {
+                      window.open(`https://www.facebook.com/profile.php?id=${selectedConv.facebook_uid}`, '_blank');
+                    } else {
+                      alert('Chưa có UID thật. Hãy dán link Business Suite có selected_item_id để lưu UID trước.');
                     }
                   }}
                   className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-[11px]"
@@ -1693,21 +1692,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               </div>
 
               <div className="space-y-2 text-xs">
-                <div className="rounded-xl bg-white/80 border border-slate-100 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">URL đã lưu</p>
-                  {selectedConv.manual_profile_url ? (
-                    <a
-                      href={selectedConv.manual_profile_url.startsWith('http') ? selectedConv.manual_profile_url : `https://${selectedConv.manual_profile_url}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-700 font-semibold break-all hover:underline"
-                    >
-                      {selectedConv.manual_profile_url}
-                    </a>
-                  ) : (
-                    <p className="text-slate-400 italic">Chưa cập nhật URL Facebook thủ công.</p>
-                  )}
-                </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl bg-white/80 border border-slate-100 p-3">
