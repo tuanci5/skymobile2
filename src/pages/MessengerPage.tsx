@@ -106,6 +106,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [quickImageUrl, setQuickImageUrl] = useState('');
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [isSendingImage, setIsSendingImage] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<number | null>(null);
   const [newLibraryImage, setNewLibraryImage] = useState({ title: '', image_url: '', category: '', description: '' });
   const [expandedPageId, setExpandedPageId] = useState<string | null>(null);
   const [isTestingConn, setIsTestingConn] = useState(false);
@@ -670,6 +671,27 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       await loadImageLibrary();
     } catch (err: any) {
       alert(err.message || 'Lỗi khi thêm ảnh.');
+    }
+  };
+
+  const handleDeleteLibraryImage = async (image: ImageLibraryItem) => {
+    if (deletingImageId || isSendingImage) return;
+    if (!confirm(`Bạn có chắc chắn muốn xoá ảnh "${image.title}" khỏi thư viện?`)) return;
+
+    setDeletingImageId(image.id);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/image-library/${image.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Không thể xoá ảnh khỏi thư viện.');
+
+      setImageLibrary(prev => prev.filter(item => item.id !== image.id));
+      setSelectedImageIds(prev => prev.filter(id => id !== image.id));
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi xoá ảnh.');
+    } finally {
+      setDeletingImageId(null);
     }
   };
 
@@ -2309,16 +2331,29 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                             <div className="p-4">
                               <h3 className="font-black text-slate-900 truncate">{item.title}</h3>
                               {item.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description}</p>}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSendImage('', item.id);
-                                }}
-                                disabled={isSendingImage}
-                                className="mt-3 w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-sm hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                              >
-                                <Send className="w-4 h-4" /> {isSendingImage ? 'Đang gửi...' : 'Gửi riêng ảnh này'}
-                              </button>
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendImage('', item.id);
+                                  }}
+                                  disabled={isSendingImage || deletingImageId === item.id}
+                                  className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-sm hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                  <Send className="w-4 h-4" /> {isSendingImage ? 'Đang gửi...' : 'Gửi'}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteLibraryImage(item);
+                                  }}
+                                  disabled={deletingImageId === item.id || isSendingImage}
+                                  title="Xoá ảnh khỏi thư viện"
+                                  className="h-9 w-9 shrink-0 rounded-lg border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white hover:shadow-lg hover:shadow-rose-500/20 disabled:opacity-50 disabled:hover:bg-rose-50 disabled:hover:text-rose-600 flex items-center justify-center transition-all"
+                                >
+                                  {deletingImageId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
