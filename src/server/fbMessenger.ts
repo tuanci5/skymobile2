@@ -235,6 +235,137 @@ router.get('/avatar-proxy', async (req, res) => {
   }
 });
 
+const extractNumericIdFromBusinessLink = (link?: string | null): string | null => {
+  if (!link) return null;
+  try {
+    const parsed = new URL(link);
+    const selectedItemId = parsed.searchParams.get('selected_item_id');
+    if (selectedItemId && /^\d+$/.test(selectedItemId)) return selectedItemId;
+  } catch (e) {
+    const selectedMatch = link.match(/[?&]selected_item_id=(\d+)/);
+    if (selectedMatch) return selectedMatch[1];
+  }
+  return null;
+};
+
+const pickFacebookUidCandidate = (items: any[], pageId: string, psid: string): string | null => {
+  for (const item of items) {
+    const candidate = item?.id ? String(item.id) : '';
+    if (/^\d+$/.test(candidate) && candidate !== pageId && candidate !== psid) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+async function resolveFacebookUidFromConversationGraph(pageId: string, psid: string, accessToken: string) {
+  const baseResult = {
+    resolved: false,
+    facebook_uid: null as string | null,
+    source: 'graph_conversations_participants',
+    reason: 'Meta did not expose a global UID for this PSID',
+    conversation_id: null as string | null,
+    conversation_link: null as string | null,
+    participants: [] as any[],
+    senders: [] as any[]
+  };
+
+  const convSearchRes = await fetch(
+    `https://graph.facebook.com/v25.0/${pageId}/conversations?user_id=${encodeURIComponent(psid)}&fields=id,link,participants,senders&access_token=${encodeURIComponent(accessToken)}`
+  );
+  const convSearchData = await convSearchRes.json();
+  if (!convSearchRes.ok || convSearchData?.error) {
+    return {
+      ...baseResult,
+      reason: convSearchData?.error?.message || 'Could not query page conversations'
+    };
+  }
+
+  const conversation = convSearchData.data?.[0];
+  if (!conversation) {
+    return { ...baseResult, reason: 'No Graph conversation found for this PSID' };
+  }
+
+  baseResult.conversation_id = conversation.id || null;
+  baseResult.conversation_link = conversation.link || null;
+  baseResult.participants = conversation.participants?.data || [];
+  baseResult.senders = conversation.senders?.data || [];
+
+  const uidFromLink = extractNumericIdFromBusinessLink(conversation.link);
+  if (uidFromLink && uidFromLink !== pageId && uidFromLink !== psid) {
+    return {
+      ...baseResult,
+      resolved: true,
+      facebook_uid: uidFromLink,
+      source: 'graph_conversations_link_selected_item_id',
+      reason: 'Resolved from conversation link selected_item_id'
+    };
+  }
+
+  const shallowCandidate = pickFacebookUidCandidate(
+    [...baseResult.participants, ...baseResult.senders],
+    pageId,
+    psid
+  );
+  if (shallowCandidate) {
+    return {
+      ...baseResult,
+      resolved: true,
+      facebook_uid: shallowCandidate,
+      reason: 'Resolved from conversation participants/senders'
+    };
+  }
+
+  if (conversation.id) {
+    const detailRes = await fetch(
+      `https://graph.facebook.com/v25.0/${conversation.id}?fields=id,link,participants.fields(id,name,picture),senders.fields(id,name)&access_token=${encodeURIComponent(accessToken)}`
+    );
+    const detailData = await detailRes.json();
+    if (detailRes.ok && !detailData?.error) {
+      const detailLink = detailData.link || baseResult.conversation_link;
+      const detailParticipants = detailData.participants?.data || [];
+      const detailSenders = detailData.senders?.data || [];
+
+      const detailUidFromLink = extractNumericIdFromBusinessLink(detailLink);
+      if (detailUidFromLink && detailUidFromLink !== pageId && detailUidFromLink !== psid) {
+        return {
+          ...baseResult,
+          resolved: true,
+          facebook_uid: detailUidFromLink,
+          source: 'graph_conversation_detail_link_selected_item_id',
+          reason: 'Resolved from conversation detail link selected_item_id',
+          conversation_link: detailLink,
+          participants: detailParticipants,
+          senders: detailSenders
+        };
+      }
+
+      const detailCandidate = pickFacebookUidCandidate(
+        [...detailParticipants, ...detailSenders],
+        pageId,
+        psid
+      );
+      if (detailCandidate) {
+        return {
+          ...baseResult,
+          resolved: true,
+          facebook_uid: detailCandidate,
+          reason: 'Resolved from conversation detail participants/senders',
+          conversation_link: detailLink,
+          participants: detailParticipants,
+          senders: detailSenders
+        };
+      }
+    }
+  }
+
+  const allIds = [...baseResult.participants, ...baseResult.senders].map(item => String(item?.id || '')).filter(Boolean);
+  return {
+    ...baseResult,
+    reason: allIds.includes(psid) ? 'Graph API returned PSID only, not global UID' : baseResult.reason
+  };
+}
+
 // ─── FB PAGES ───
 
 router.get('/pages', async (req, res) => {
@@ -925,6 +1056,53 @@ router.post('/conversations/:id/rename', async (req, res) => {
 });
 
 // ─── CẬP NHẬT PROFILE URL THỦ CÔNG ───
+
+router.post('/conversations/:id/resolve-facebook-uid', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows: convRows } = await pool.query(
+      `SELECT c.customer_id, c.facebook_uid, p.page_id, p.access_token
+       FROM fb_conversations c
+       JOIN fb_pages p ON c.page_id = p.page_id
+       WHERE c.id = $1`,
+      [id]
+    );
+
+    if (convRows.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const { customer_id, facebook_uid, page_id, access_token } = convRows[0];
+    if (!customer_id || !page_id || !access_token) {
+      return res.status(400).json({ error: 'Missing customer_id, page_id, or page access token' });
+    }
+
+    const result = await resolveFacebookUidFromConversationGraph(page_id, customer_id, access_token);
+
+    if (result.resolved && result.facebook_uid) {
+      await pool.query(
+        `UPDATE fb_conversations SET facebook_uid = $1 WHERE id = $2`,
+        [result.facebook_uid, id]
+      );
+    }
+
+    res.json({
+      success: true,
+      resolved: result.resolved,
+      facebook_uid: result.facebook_uid || facebook_uid || null,
+      existing_facebook_uid: facebook_uid || null,
+      source: result.source,
+      reason: result.reason,
+      conversation_id: result.conversation_id,
+      conversation_link: result.conversation_link,
+      participant_ids: result.participants.map((item: any) => item?.id).filter(Boolean),
+      sender_ids: result.senders.map((item: any) => item?.id).filter(Boolean)
+    });
+  } catch (err: any) {
+    console.error('Error resolving Facebook UID:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.post('/conversations/:id/manual-profile', async (req, res) => {
   try {

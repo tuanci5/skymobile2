@@ -169,6 +169,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [isEditingProfileUrl, setIsEditingProfileUrl] = useState(false);
   const [profileUrlInput, setProfileUrlInput] = useState('');
   const [isSavingProfileUrl, setIsSavingProfileUrl] = useState(false);
+  const [isResolvingFacebookUid, setIsResolvingFacebookUid] = useState(false);
 
   const currentUserName = user?.name || user?.email || 'Người dùng hiện tại';
   const currentUserEmail = user?.email || null;
@@ -916,6 +917,34 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       alert('Lỗi kết nối: ' + err.message);
     } finally {
       setIsSavingProfileUrl(false);
+    }
+  };
+
+  const handleResolveFacebookUid = async () => {
+    if (!selectedConv) return;
+    setIsResolvingFacebookUid(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/conversations/${selectedConv.id}/resolve-facebook-uid`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert('Lỗi dò UID: ' + (data.error || 'Không thể gọi Graph API'));
+        return;
+      }
+
+      if (data.resolved && data.facebook_uid) {
+        const updatedConv: any = { ...selectedConv, facebook_uid: data.facebook_uid };
+        setSelectedConv(updatedConv);
+        setConversations(prev => prev.map(c => c.id === selectedConv.id ? updatedConv : c));
+        alert(`Đã dò được UID thật từ Graph API: ${data.facebook_uid}`);
+      } else {
+        alert(data.reason || 'Meta không trả UID thật cho hội thoại này. Hãy nhập UID thủ công hoặc dán link Business Suite.');
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối khi dò UID: ' + err.message);
+    } finally {
+      setIsResolvingFacebookUid(false);
     }
   };
 
@@ -1716,6 +1745,15 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     </p>
                   </div>
                 </div>
+
+                <button
+                  id="resolve-facebook-uid-from-conversation"
+                  onClick={handleResolveFacebookUid}
+                  disabled={isResolvingFacebookUid}
+                  className="w-full px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isResolvingFacebookUid ? 'Đang dò UID qua Graph API...' : 'Thử dò UID từ hội thoại'}
+                </button>
 
                 {isEditingProfileUrl && (
                   <div className="rounded-2xl border border-blue-100 bg-white p-3 space-y-2">
