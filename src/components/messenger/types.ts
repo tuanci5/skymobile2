@@ -50,6 +50,7 @@ export interface Conversation {
   manual_profile_url?: string | null;
   facebook_uid?: string | null;
   business_id?: string | null;
+  customer_status?: string | null;
 }
 
 export interface ConversationAdSource {

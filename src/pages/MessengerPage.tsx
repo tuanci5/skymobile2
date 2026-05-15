@@ -18,6 +18,55 @@ import { aiService, settingService } from '../services/api';
 
 type MessageTemplateMap = Record<string, string[]>;
 
+type CustomerStatusOption = {
+  label: string;
+  color: string;
+};
+
+const DEFAULT_CUSTOMER_STATUSES: CustomerStatusOption[] = [
+  { label: 'Khách nét', color: 'emerald' },
+  { label: 'Đang chăm', color: 'blue' },
+  { label: 'Chờ phản hồi', color: 'amber' },
+  { label: 'Đã chốt', color: 'violet' },
+  { label: 'Không tiềm năng', color: 'slate' }
+];
+
+const CUSTOMER_STATUS_STYLES: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  blue: 'bg-blue-100 text-blue-700 border-blue-200',
+  amber: 'bg-amber-100 text-amber-700 border-amber-200',
+  violet: 'bg-violet-100 text-violet-700 border-violet-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200',
+  rose: 'bg-rose-100 text-rose-700 border-rose-200'
+};
+
+const normalizeCustomerStatuses = (statuses: CustomerStatusOption[]) => {
+  const normalized = statuses
+    .filter(item => item && typeof item.label === 'string')
+    .map(item => ({ label: item.label.trim(), color: item.color || 'blue' }))
+    .filter(item => item.label);
+
+  return normalized.length > 0 ? normalized : DEFAULT_CUSTOMER_STATUSES;
+};
+
+const parseCustomerStatuses = (value?: string): CustomerStatusOption[] => {
+  if (!value) return DEFAULT_CUSTOMER_STATUSES;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      if (parsed.every(item => typeof item === 'string')) {
+        return normalizeCustomerStatuses(parsed.map(label => ({ label, color: 'blue' })));
+      }
+      return normalizeCustomerStatuses(parsed as CustomerStatusOption[]);
+    }
+  } catch (error) {
+    console.error('Failed to parse customer statuses:', error);
+  }
+
+  return DEFAULT_CUSTOMER_STATUSES;
+};
+
 const DEFAULT_MESSAGE_TEMPLATES: MessageTemplateMap = {
   vi: [
     'Dạ em chào anh/chị, Sky Mobile có thể hỗ trợ mình thông tin gì ạ?',
@@ -118,6 +167,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'bot'>('all');
   const [conversationSearch, setConversationSearch] = useState('');
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplateMap>(() => normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES));
+  const [customerStatuses, setCustomerStatuses] = useState<CustomerStatusOption[]>(DEFAULT_CUSTOMER_STATUSES);
   const replyLanguageOptions = [
     { code: 'zh-Mandarin', label: 'Tiếng Trung Quan thoại' },
     { code: 'zh-Cantonese', label: 'Tiếng Quảng Đông' },
@@ -177,6 +227,15 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     return conv.page_name || pages.find(page => page.page_id === conv.page_id)?.page_name || '';
   };
 
+  const getCustomerStatusOption = (status?: string | null) => (
+    customerStatuses.find(item => item.label === status) || null
+  );
+
+  const getCustomerStatusClass = (status?: string | null) => {
+    const option = getCustomerStatusOption(status);
+    return CUSTOMER_STATUS_STYLES[option?.color || 'blue'] || CUSTOMER_STATUS_STYLES.blue;
+  };
+
   const formatConversationListTime = (value: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -225,17 +284,19 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   }, []);
 
   useEffect(() => {
-    const fetchMessageTemplates = async () => {
+    const fetchMessengerSettings = async () => {
       try {
         const data = await settingService.getAll();
         setMessageTemplates(parseMessageTemplates(data.message_templates));
+        setCustomerStatuses(parseCustomerStatuses(data.customer_statuses));
       } catch (err) {
-        console.error('Lỗi khi tải tin nhắn mẫu:', err);
+        console.error('Lỗi khi tải cài đặt Messenger:', err);
         setMessageTemplates(DEFAULT_MESSAGE_TEMPLATES);
+        setCustomerStatuses(DEFAULT_CUSTOMER_STATUSES);
       }
     };
 
-    fetchMessageTemplates();
+    fetchMessengerSettings();
   }, []);
 
   useEffect(() => {
@@ -940,6 +1001,30 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
+  const handleCustomerStatusChange = async (status: string) => {
+    if (!selectedConv) return;
+
+    const previousStatus = selectedConv.customer_status || null;
+    const nextStatus = status || null;
+    setSelectedConv(prev => prev ? { ...prev, customer_status: nextStatus } : null);
+    setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, customer_status: nextStatus } : c));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/fb/conversations/${selectedConv.id}/customer-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_status: nextStatus })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Không thể cập nhật trạng thái khách.');
+    } catch (err: any) {
+      console.error('Error updating customer status:', err);
+      setSelectedConv(prev => prev ? { ...prev, customer_status: previousStatus } : null);
+      setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, customer_status: previousStatus } : c));
+      alert(err.message || 'Không thể cập nhật trạng thái khách. Vui lòng thử lại.');
+    }
+  };
+
   const handleChangeDistribution = (pageId: string, mode: 'manual' | 'round_robin' | 'ai_first') => {
     setPages(prev => prev.map(p => p.page_id === pageId ? { ...p, distribution_mode: mode } : p));
   };
@@ -1158,10 +1243,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }`;
 
   return (
-    <div className="h-[calc(100vh-100px)] min-h-[600px] bg-slate-50 flex rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="h-full min-h-0 bg-slate-50 flex overflow-hidden shadow-sm">
       {/* ─── LEFT PANEL: Conversation List ─── */}
-      <div className="w-[340px] bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-200">
+      <div className="w-[300px] xl:w-[340px] 2xl:w-[380px] bg-white border-r border-slate-200 flex flex-col shrink-0">
+        <div className="px-4 py-3 border-b border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-lg text-slate-800">Tin nhắn</h2>
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
@@ -1198,7 +1283,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               <div
                 key={conv.id}
                 onClick={() => handleSelectConv(conv)}
-                className={`p-4 border-b border-slate-100 cursor-pointer transition-colors ${selectedConv?.id === conv.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                className={`px-4 py-3 border-b border-slate-100 cursor-pointer transition-colors ${selectedConv?.id === conv.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
               >
                 <div className="flex gap-3">
                   <div
@@ -1246,6 +1331,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                           Ads: {conv.campaign_name}
                         </span>
                       )}
+                      {conv.customer_status && (
+                        <span className={`px-2 py-0.5 text-[10px] font-black rounded-md truncate max-w-[120px] border whitespace-nowrap ${getCustomerStatusClass(conv.customer_status)}`}>
+                          {conv.customer_status}
+                        </span>
+                      )}
                       {conv.assigned_to && (
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md truncate max-w-[120px] border border-slate-200 whitespace-nowrap">
                           👤 {conv.assigned_to.split(' ')[0]}
@@ -1260,11 +1350,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       </div>
 
       {/* ─── MIDDLE PANEL: Chat Area ─── */}
-      <div className="flex-1 flex flex-col bg-white relative">
+      <div className="flex-1 min-w-0 flex flex-col bg-white relative">
         {selectedConv ? (
           <>
             {/* Header */}
-            <div className="min-h-[72px] py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 px-6 bg-white shrink-0 z-10">
+            <div className="min-h-[64px] py-2 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-5 bg-white shrink-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
                   <AvatarImage
@@ -1288,8 +1378,22 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 flex-wrap">
-                {isManager && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 md:pr-3 md:border-r border-slate-200">
+                    <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Khách:</span>
+                    <select
+                      id="messenger-customer-status-select"
+                      className={`text-sm border rounded-lg px-3 py-1.5 font-black outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 max-w-[150px] truncate ${selectedConv.customer_status ? getCustomerStatusClass(selectedConv.customer_status) : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                      value={selectedConv.customer_status || ''}
+                      onChange={(e) => handleCustomerStatusChange(e.target.value)}
+                    >
+                      <option value="">-- Chọn trạng thái --</option>
+                      {customerStatuses.map(status => (
+                        <option key={status.label} value={status.label}>{status.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {isManager && (
                   <div className="flex items-center gap-2 md:pr-4 md:border-r border-slate-200">
                     <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Phụ trách:</span>
                     <select
@@ -1329,7 +1433,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             <div
               ref={chatContainerRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 scroll-smooth"
+              className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-slate-50/50 scroll-smooth"
             >
               {isLoadingMore && (
                 <div className="flex justify-center py-2">
@@ -1414,7 +1518,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             </div>
 
             {/* Chat Input */}
-            <div className="p-4 bg-white border-t border-slate-200">
+            <div className="px-4 py-3 bg-white border-t border-slate-200">
               {!selectedConv.is_human_intervened && (
                 <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
                   <Bot className="w-4 h-4 shrink-0" />
@@ -1588,44 +1692,49 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       </div>
 
       {/* ─── RIGHT PANEL: Customer Info & Notes ─── */}
-      <div className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
-        <div className="h-16 border-b border-slate-200 flex items-center px-6">
+      <div className="w-[300px] xl:w-[340px] 2xl:w-[380px] bg-white border-l border-slate-200 flex flex-col shrink-0">
+        <div className="h-[56px] border-b border-slate-200 flex items-center px-5">
           <h2 className="font-bold text-slate-800">Thông tin chi tiết</h2>
         </div>
 
         {selectedConv ? (
-          <div className="p-6 overflow-y-auto flex-1">
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mb-3 border-4 border-white shadow-sm overflow-hidden">
-                <AvatarImage
-                  src={getConversationAvatar(selectedConv)}
-                  name={selectedConv.customer_name}
-                  size="lg"
-                />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">{selectedConv.customer_name}</h3>
-              {getConversationPageName(selectedConv) && (
-                <div className="mt-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 max-w-full">
-                  <Facebook className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{getConversationPageName(selectedConv)}</span>
+          <div className="px-5 py-4 overflow-y-auto flex-1">
+            <div className="mb-3 rounded-2xl border border-slate-100 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-slate-200 rounded-full flex items-center justify-center border-2 border-white shadow-sm overflow-hidden shrink-0">
+                  <AvatarImage
+                    src={getConversationAvatar(selectedConv)}
+                    name={selectedConv.customer_name}
+                    size="lg"
+                  />
                 </div>
-              )}
-              <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mt-2">
-                <Clock className="w-4 h-4" /> Lần cuối: {new Date(selectedConv.last_message_at).toLocaleDateString('vi-VN')}
-              </p>
+                <div className="min-w-0 flex-1 text-left">
+                  <h3 className="text-base font-black text-slate-900 truncate">{selectedConv.customer_name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {getConversationPageName(selectedConv) && (
+                      <div className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[11px] font-bold flex items-center gap-1 max-w-full">
+                        <Facebook className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{getConversationPageName(selectedConv)}</span>
+                      </div>
+                    )}
+                    <span className="text-[11px] text-slate-500 flex items-center gap-1 whitespace-nowrap">
+                      <Clock className="w-3.5 h-3.5" /> {new Date(selectedConv.last_message_at).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Nút Lên Đơn */}
-            <div className="flex flex-col gap-2 mb-6">
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 onClick={() => setIsOrderModalOpen(true)}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-sm"
+                className="col-span-2 w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-sm"
               >
                 <ShoppingCart className="w-4 h-4" />
                 Lên Đơn
               </button>
-              
-              <div className="grid grid-cols-2 gap-2">
+
                 <button
                   onClick={() => {
                     if (!selectedConv.facebook_uid) {
@@ -1646,7 +1755,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     inboxUrl.searchParams.set('thread_type', 'FB_MESSAGE');
                     window.open(inboxUrl.toString(), '_blank');
                   }}
-                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-[11px]"
+                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
                   Inbox FB
@@ -1659,12 +1768,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                       alert('Chưa có UID thật. Hãy dán link Business Suite có selected_item_id để lưu UID trước.');
                     }
                   }}
-                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-[11px]"
+                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
                 >
                   <User className="w-3.5 h-3.5 text-blue-500" />
                   Profile FB
                 </button>
-              </div>
             </div>
 
             {/* Manual Facebook Profile Panel */}
@@ -1673,11 +1781,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 <div>
                   <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <User className="w-4 h-4 text-blue-600" />
-                    Profile Facebook thủ công
+                    Lấy UID
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Dùng khi link Profile FB theo PSID không mở đúng khách.
-                  </p>
                 </div>
                 <button
                   id="edit-manual-profile-url"

@@ -13,12 +13,18 @@ import {
   MessageSquareText,
   Plus,
   Trash2,
-  Clock
+  Clock,
+  Tag
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { settingService } from '../services/api';
 
 type MessageTemplateMap = Record<string, string[]>;
+
+type CustomerStatusOption = {
+  label: string;
+  color: string;
+};
 
 type LanguageOption = {
   code: string;
@@ -38,6 +44,32 @@ const MESSAGE_TEMPLATE_LANGUAGES: LanguageOption[] = [
   { code: 'my', label: 'Tiếng Miến Điện / Myanmar' },
   { code: 'ko', label: 'Tiếng Hàn' }
 ];
+
+const CUSTOMER_STATUS_COLORS = [
+  { value: 'emerald', label: 'Xanh lá' },
+  { value: 'blue', label: 'Xanh dương' },
+  { value: 'amber', label: 'Vàng' },
+  { value: 'violet', label: 'Tím' },
+  { value: 'rose', label: 'Hồng/Đỏ' },
+  { value: 'slate', label: 'Xám' }
+];
+
+const DEFAULT_CUSTOMER_STATUSES: CustomerStatusOption[] = [
+  { label: 'Khách nét', color: 'emerald' },
+  { label: 'Đang chăm', color: 'blue' },
+  { label: 'Chờ phản hồi', color: 'amber' },
+  { label: 'Đã chốt', color: 'violet' },
+  { label: 'Không tiềm năng', color: 'slate' }
+];
+
+const CUSTOMER_STATUS_STYLES: Record<string, string> = {
+  emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  blue: 'bg-blue-100 text-blue-700 border-blue-200',
+  amber: 'bg-amber-100 text-amber-700 border-amber-200',
+  violet: 'bg-violet-100 text-violet-700 border-violet-200',
+  rose: 'bg-rose-100 text-rose-700 border-rose-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200'
+};
 
 const DEFAULT_MESSAGE_TEMPLATES: MessageTemplateMap = {
   vi: [
@@ -95,6 +127,26 @@ const parseMessageTemplates = (value?: string): MessageTemplateMap => {
   return normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES);
 };
 
+const parseCustomerStatuses = (value?: string): CustomerStatusOption[] => {
+  if (!value) return DEFAULT_CUSTOMER_STATUSES;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const normalized = parsed
+        .map(item => typeof item === 'string' ? { label: item, color: 'blue' } : item)
+        .filter((item): item is CustomerStatusOption => item && typeof item.label === 'string')
+        .map(item => ({ label: item.label.trim(), color: item.color || 'blue' }))
+        .filter(item => item.label);
+      return normalized.length > 0 ? normalized : DEFAULT_CUSTOMER_STATUSES;
+    }
+  } catch (error) {
+    console.error('Failed to parse customer statuses:', error);
+  }
+
+  return DEFAULT_CUSTOMER_STATUSES;
+};
+
 export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<Record<string, string>>({
     ai_api_key: '',
@@ -103,8 +155,11 @@ export const SettingsPage: React.FC = () => {
     app_name: 'Sky Mobile Dashboard',
     system_timezone: 'Asia/Ho_Chi_Minh',
     message_templates: JSON.stringify(DEFAULT_MESSAGE_TEMPLATES),
+    customer_statuses: JSON.stringify(DEFAULT_CUSTOMER_STATUSES),
   });
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplateMap>(() => normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES));
+  const [customerStatuses, setCustomerStatuses] = useState<CustomerStatusOption[]>(DEFAULT_CUSTOMER_STATUSES);
+  const [newCustomerStatus, setNewCustomerStatus] = useState({ label: '', color: 'blue' });
   const [selectedTemplateLanguage, setSelectedTemplateLanguage] = useState('vi');
   const [newTemplateText, setNewTemplateText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -121,6 +176,7 @@ export const SettingsPage: React.FC = () => {
       const loadedSettings = { ...settings, ...data };
       setSettings(loadedSettings);
       setMessageTemplates(parseMessageTemplates(loadedSettings.message_templates));
+      setCustomerStatuses(parseCustomerStatuses(loadedSettings.customer_statuses));
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     } finally {
@@ -134,12 +190,21 @@ export const SettingsPage: React.FC = () => {
     setMessage(null);
     try {
       const templatesToSave = normalizeMessageTemplateMap(messageTemplates);
+      const statusesToSave = customerStatuses
+        .map(status => ({ label: status.label.trim(), color: status.color || 'blue' }))
+        .filter(status => status.label);
       await settingService.save({
         ...settings,
         message_templates: JSON.stringify(templatesToSave),
+        customer_statuses: JSON.stringify(statusesToSave),
       });
-      setSettings(prev => ({ ...prev, message_templates: JSON.stringify(templatesToSave) }));
+      setSettings(prev => ({
+        ...prev,
+        message_templates: JSON.stringify(templatesToSave),
+        customer_statuses: JSON.stringify(statusesToSave)
+      }));
       setMessageTemplates(templatesToSave);
+      setCustomerStatuses(statusesToSave.length > 0 ? statusesToSave : DEFAULT_CUSTOMER_STATUSES);
       setMessage({ type: 'success', text: 'Đã lưu cài đặt thành công!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
@@ -174,6 +239,23 @@ export const SettingsPage: React.FC = () => {
       ...prev,
       [selectedTemplateLanguage]: (prev[selectedTemplateLanguage] || []).filter((_, itemIndex) => itemIndex !== index)
     }));
+  };
+
+  const addCustomerStatus = () => {
+    const label = newCustomerStatus.label.trim();
+    if (!label) return;
+    setCustomerStatuses(prev => [...prev, { label, color: newCustomerStatus.color || 'blue' }]);
+    setNewCustomerStatus({ label: '', color: 'blue' });
+  };
+
+  const updateCustomerStatus = (index: number, patch: Partial<CustomerStatusOption>) => {
+    setCustomerStatuses(prev => prev.map((status, statusIndex) => (
+      statusIndex === index ? { ...status, ...patch } : status
+    )));
+  };
+
+  const removeCustomerStatus = (index: number) => {
+    setCustomerStatuses(prev => prev.filter((_, statusIndex) => statusIndex !== index));
   };
 
   if (loading) {
@@ -359,6 +441,86 @@ export const SettingsPage: React.FC = () => {
               >
                 <Plus className="w-4 h-4" />
                 Thêm mẫu
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Customer Status Section */}
+        <section className="bg-white rounded-[2rem] border border-emerald-100 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-teal-50 to-white">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Tag className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h2 className="font-bold text-slate-800">Trạng thái khách hàng Messenger</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Tạo các nhãn như Khách nét, Đang chăm, Đã chốt để CSKH phân loại hội thoại.</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-white/80 border border-emerald-100 text-xs font-black text-emerald-700">
+                {customerStatuses.length} trạng thái
+              </span>
+            </div>
+          </div>
+
+          <div className="p-8 space-y-4">
+            <div className="space-y-3">
+              {customerStatuses.map((status, index) => (
+                <div key={`${status.label}-${index}`} className="group flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 transition-all focus-within:border-emerald-200 focus-within:bg-white focus-within:shadow-sm md:flex-row md:items-center">
+                  <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${CUSTOMER_STATUS_STYLES[status.color] || CUSTOMER_STATUS_STYLES.blue}`}>
+                    {status.label || 'Chưa đặt tên'}
+                  </span>
+                  <input
+                    value={status.label}
+                    onChange={(e) => updateCustomerStatus(index, { label: e.target.value })}
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Tên trạng thái khách..."
+                  />
+                  <select
+                    value={status.color}
+                    onChange={(e) => updateCustomerStatus(index, { color: e.target.value })}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {CUSTOMER_STATUS_COLORS.map(color => (
+                      <option key={color.value} value={color.value}>{color.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomerStatus(index)}
+                    className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                    title="Xóa trạng thái"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/50 p-4 md:flex-row md:items-center">
+              <input
+                value={newCustomerStatus.label}
+                onChange={(e) => setNewCustomerStatus(prev => ({ ...prev, label: e.target.value }))}
+                className="flex-1 rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Thêm trạng thái mới, ví dụ: Khách cần gọi lại..."
+              />
+              <select
+                value={newCustomerStatus.color}
+                onChange={(e) => setNewCustomerStatus(prev => ({ ...prev, color: e.target.value }))}
+                className="rounded-xl border border-emerald-100 bg-white px-3 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {CUSTOMER_STATUS_COLORS.map(color => (
+                  <option key={color.value} value={color.value}>{color.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={addCustomerStatus}
+                disabled={!newCustomerStatus.label.trim()}
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+              >
+                <Plus className="w-4 h-4" />
+                Thêm trạng thái
               </button>
             </div>
           </div>

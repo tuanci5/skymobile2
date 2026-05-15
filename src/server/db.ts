@@ -178,6 +178,7 @@ export async function initDBUtils() {
         preferred_language_source VARCHAR(20),
         preferred_language_confidence DECIMAL(4,3),
         preferred_language_updated_at TIMESTAMP,
+        customer_status VARCHAR(100),
         UNIQUE(page_id, customer_id)
       )
     `);
@@ -253,6 +254,9 @@ export async function initDBUtils() {
     } catch (e) {}
     try {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN preferred_language_updated_at TIMESTAMP");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN customer_status VARCHAR(100)");
     } catch (e) {}
 
     // Add avatar_url if missing. customer_avatar is kept for backward compatibility.

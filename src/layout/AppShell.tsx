@@ -30,7 +30,7 @@ export const AppShell = ({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+    <div className={`flex flex-col md:flex-row bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${activeTab === 'messenger' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       <Sidebar
         activeTab={activeTab}
         activeDept={activeDept}
@@ -43,9 +43,9 @@ export const AppShell = ({
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto"
+        className={`flex-1 ${activeTab === 'messenger' ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-6 lg:p-8'}`}
       >
-        <div className="w-full max-w-[1800px] mx-auto">
+        <div className={`w-full ${activeTab === 'messenger' ? 'h-full max-w-none' : 'max-w-[1800px] mx-auto'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={routeKey}
@@ -53,6 +53,7 @@ export const AppShell = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
+              className={activeTab === 'messenger' ? 'h-full' : undefined}
             >
               {children}
             </motion.div>

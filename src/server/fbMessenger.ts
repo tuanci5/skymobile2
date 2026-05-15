@@ -1000,6 +1000,24 @@ router.put('/conversations/:id/assign', async (req, res) => {
   }
 });
 
+router.put('/conversations/:id/customer-status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rawStatus = typeof req.body?.customer_status === 'string' ? req.body.customer_status.trim() : '';
+    const customerStatus = rawStatus || null;
+
+    const { rows } = await pool.query(
+      'UPDATE fb_conversations SET customer_status = $1 WHERE id = $2 RETURNING *',
+      [customerStatus, id]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+    res.json({ success: true, conversation: rows[0] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/conversations/:id/preferred-language', async (req, res) => {
   try {
     const { id } = req.params;
