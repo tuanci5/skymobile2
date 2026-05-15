@@ -101,6 +101,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [isImageLibraryOpen, setIsImageLibraryOpen] = useState(false);
   const [isTemplatePanelOpen, setIsTemplatePanelOpen] = useState(false);
   const [imageLibrary, setImageLibrary] = useState<ImageLibraryItem[]>([]);
+  const [selectedImageIds, setSelectedImageIds] = useState<number[]>([]);
   const [imageLibrarySearch, setImageLibrarySearch] = useState('');
   const [quickImageUrl, setQuickImageUrl] = useState('');
   const [isLoadingImages, setIsLoadingImages] = useState(false);
@@ -643,6 +644,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   };
 
   const openImageLibrary = () => {
+    setSelectedImageIds([]);
     setIsImageLibraryOpen(true);
     loadImageLibrary('');
   };
@@ -671,7 +673,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
-  const handleSendImage = async (imageUrl: string, libraryImageId?: number) => {
+  const handleSendImage = async (imageUrl: string, libraryImageId?: number, options?: { keepLibraryOpen?: boolean }) => {
     if (!selectedConv || isSendingImage) return;
     const finalUrl = imageUrl.trim();
     if (!finalUrl && !libraryImageId) return;
@@ -705,13 +707,36 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       if (!res.ok) throw new Error(data?.error || `Không thể gửi ảnh. Mã lỗi HTTP: ${res.status}`);
       if (data.message) setMessages(prev => prev.map(msg => msg.id === optimisticId ? data.message : msg));
       setQuickImageUrl('');
-      setIsImageLibraryOpen(false);
+      if (!options?.keepLibraryOpen) setIsImageLibraryOpen(false);
     } catch (err: any) {
       console.error('Error sending image:', err);
       setMessages(prev => prev.filter(msg => msg.id !== optimisticId));
       alert(`Không thể gửi ảnh:\n\n${err?.message || 'Lỗi không xác định'}`);
+      throw err;
     } finally {
       setIsSendingImage(false);
+    }
+  };
+
+  const toggleSelectedImage = (imageId: number) => {
+    setSelectedImageIds(prev => prev.includes(imageId)
+      ? prev.filter(id => id !== imageId)
+      : [...prev, imageId]
+    );
+  };
+
+  const handleSendSelectedImages = async () => {
+    if (!selectedImageIds.length || isSendingImage) return;
+    const idsToSend = [...selectedImageIds];
+    try {
+      for (const imageId of idsToSend) {
+        await handleSendImage('', imageId, { keepLibraryOpen: true });
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      setSelectedImageIds([]);
+      setIsImageLibraryOpen(false);
+    } catch {
+      // handleSendImage already shows the detailed error.
     }
   };
 
@@ -2230,6 +2255,29 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     </button>
                   </div>
 
+                  {selectedImageIds.length > 0 && (
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
+                      <div className="text-sm font-bold text-slate-700">
+                        Đã chọn <span className="text-violet-600">{selectedImageIds.length}</span> ảnh để gửi
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedImageIds([])}
+                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50"
+                        >
+                          Bỏ chọn
+                        </button>
+                        <button
+                          onClick={handleSendSelectedImages}
+                          disabled={isSendingImage}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-xs font-black text-white shadow-lg shadow-violet-500/20 disabled:opacity-50"
+                        >
+                          {isSendingImage ? 'Đang gửi...' : `Gửi ${selectedImageIds.length} ảnh`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {imageLibrary.length === 0 ? (
                     <div className="h-64 rounded-3xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-center text-slate-400">
                       <ImageIcon className="w-12 h-12 mb-3 opacity-40" />
@@ -2238,29 +2286,43 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {imageLibrary.map(item => (
-                        <div key={item.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden group hover:shadow-xl transition-all">
-                          <div className="aspect-[4/3] bg-slate-100 overflow-hidden relative">
-                            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                            {item.category && (
-                              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 text-slate-700 text-[10px] font-black shadow-sm">
-                                {item.category}
-                              </span>
-                            )}
+                      {imageLibrary.map(item => {
+                        const selectedIndex = selectedImageIds.indexOf(item.id);
+                        const isSelected = selectedIndex >= 0;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => toggleSelectedImage(item.id)}
+                            className={`bg-white rounded-3xl border shadow-sm overflow-hidden group hover:shadow-xl transition-all cursor-pointer ${isSelected ? 'border-violet-500 ring-4 ring-violet-100' : 'border-slate-200'}`}
+                          >
+                            <div className="aspect-[4/3] bg-slate-100 overflow-hidden relative">
+                              <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                              <div className={`absolute top-3 right-3 h-7 min-w-7 rounded-full border-2 flex items-center justify-center text-xs font-black shadow-sm ${isSelected ? 'bg-violet-600 text-white border-white px-2' : 'bg-white/90 text-slate-400 border-white'}`}>
+                                {isSelected ? selectedIndex + 1 : ''}
+                              </div>
+                              {item.category && (
+                                <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 text-slate-700 text-[10px] font-black shadow-sm">
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-black text-slate-900 truncate">{item.title}</h3>
+                              {item.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description}</p>}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendImage('', item.id);
+                                }}
+                                disabled={isSendingImage}
+                                className="mt-3 w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-sm hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                              >
+                                <Send className="w-4 h-4" /> {isSendingImage ? 'Đang gửi...' : 'Gửi riêng ảnh này'}
+                              </button>
+                            </div>
                           </div>
-                          <div className="p-4">
-                            <h3 className="font-black text-slate-900 truncate">{item.title}</h3>
-                            {item.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{item.description}</p>}
-                            <button
-                              onClick={() => handleSendImage('', item.id)}
-                              disabled={isSendingImage}
-                              className="mt-3 w-full py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-sm hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                              <Send className="w-4 h-4" /> {isSendingImage ? 'Đang gửi...' : 'Gửi ảnh này'}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

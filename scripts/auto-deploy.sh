@@ -15,7 +15,7 @@ git pull origin main
 
 # 2. Cài đặt các gói phụ thuộc mới (nếu có)
 echo "📦 Installing dependencies..."
-npm install
+npm install --include=dev
 
 # 3. Build lại Frontend (React/Vite)
 echo "🏗️ Building frontend assets..."
