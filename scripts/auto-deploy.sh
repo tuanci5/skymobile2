@@ -2,6 +2,8 @@
 
 # Đường dẫn project trên aaPanel (Khớp với hướng dẫn của bạn)
 PROJECT_DIR="/www/wwwroot/skymobile"
+API_PORT="3006"
+PM2_APP_NAME="skymobile-api"
 
 echo "------------------------------------------"
 echo "🚀 Starting Deployment: $(date)"
@@ -21,10 +23,25 @@ npm install --include=dev
 echo "🏗️ Building frontend assets..."
 ./node_modules/.bin/vite build
 
-# 4. Khởi động lại Backend bằng PM2
-echo "🔄 Restarting PM2 process (skymobile-api)..."
-# Thử restart, nếu chưa tồn tại thì start mới
-pm2 restart skymobile-api || pm2 start "npm run start" --name skymobile-api
+# 4. Dừng API cũ đang chiếm port trước khi restart PM2
+echo "🧹 Checking and freeing API port ${API_PORT}..."
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k ${API_PORT}/tcp 2>/dev/null || true
+else
+  PORT_PIDS=$(lsof -ti tcp:${API_PORT} 2>/dev/null || true)
+  if [ -n "$PORT_PIDS" ]; then
+    echo "Killing processes on port ${API_PORT}: $PORT_PIDS"
+    kill -9 $PORT_PIDS 2>/dev/null || true
+  else
+    echo "No process found on port ${API_PORT}."
+  fi
+fi
+
+# 5. Khởi động lại Backend bằng PM2
+echo "🔄 Restarting PM2 process (${PM2_APP_NAME})..."
+pm2 delete ${PM2_APP_NAME} 2>/dev/null || true
+pm2 start npm --name ${PM2_APP_NAME} -- run start
+pm2 save
 
 echo "------------------------------------------"
 echo "✅ Deployment Successful!"
