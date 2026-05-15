@@ -24,23 +24,15 @@ echo "🏗️ Building frontend assets..."
 ./node_modules/.bin/vite build
 
 # 4. Dừng API cũ đang chiếm port trước khi restart PM2
-echo "🧹 Checking and freeing API port ${API_PORT}..."
-if command -v fuser >/dev/null 2>&1; then
-  fuser -k ${API_PORT}/tcp 2>/dev/null || true
-else
-  PORT_PIDS=$(lsof -ti tcp:${API_PORT} 2>/dev/null || true)
-  if [ -n "$PORT_PIDS" ]; then
-    echo "Killing processes on port ${API_PORT}: $PORT_PIDS"
-    kill -9 $PORT_PIDS 2>/dev/null || true
-  else
-    echo "No process found on port ${API_PORT}."
-  fi
-fi
+# Tránh lỗi: EADDRINUSE address already in use 0.0.0.0:3006
+echo "🧹 Killing old API process on port ${API_PORT}..."
+fuser -k ${API_PORT}/tcp 2>/dev/null || true
 
 # 5. Khởi động lại Backend bằng PM2
 echo "🔄 Restarting PM2 process (${PM2_APP_NAME})..."
 pm2 delete ${PM2_APP_NAME} 2>/dev/null || true
 pm2 start npm --name ${PM2_APP_NAME} -- run start
+pm2 list
 pm2 save
 
 echo "------------------------------------------"
