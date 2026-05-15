@@ -214,7 +214,6 @@ export const UserPage = () => {
   const TABS_TO_MANAGE = [
     { id: 'model', label: 'Mô hình Vận hành' },
     { id: 'hr', label: 'Nhân sự & JD' },
-    { id: 'cost', label: 'Cơ cấu chi phí' },
     { id: 'training', label: 'Đào tạo & Văn hóa' },
     { id: 'business', label: 'Kế hoạch kinh doanh' },
     { id: 'products', label: 'Sản phẩm & Dịch vụ' },
@@ -223,7 +222,6 @@ export const UserPage = () => {
     { id: 'messenger', label: 'CSKH Messenger' },
     { id: 'revenue', label: 'Báo cáo doanh thu' },
     { id: 'settings', label: 'Cài đặt hệ thống' },
-    { id: 'accounts', label: 'Quản lý Tài khoản' },
   ];
 
   return (

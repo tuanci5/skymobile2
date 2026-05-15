@@ -11,7 +11,6 @@ import {
   MessageSquare,
   PieChart,
   Settings,
-  ShieldAlert,
   ShoppingCart,
   TrendingUp,
   UserCog,
@@ -57,7 +56,6 @@ export const Sidebar = ({
     { id: 'messenger', label: 'CSKH Messenger', icon: <MessageSquare className="w-5 h-5" /> },
     { id: 'revenue', label: 'Báo cáo doanh thu', icon: <PieChart className="w-5 h-5" /> },
     { id: 'users', label: 'Quản lý người dùng', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
-    { id: 'accounts', label: 'Quản lý Tài khoản', icon: <ShieldAlert className="w-5 h-5" />, adminOnly: true },
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
     { id: 'settings', label: 'Cài đặt hệ thống', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   ];

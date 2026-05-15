@@ -22,7 +22,6 @@ import { TrainingPage } from './pages/TrainingPage';
 import { BusinessPlanPage } from './pages/BusinessPlanPage';
 import { ModelPage } from './pages/ModelPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { AccountPage } from './pages/AccountPage';
 
 import { ROLE_MAPPING } from './auth/roleMapping';
 import { isAdminRole } from './auth/roleUtils';
@@ -69,10 +68,10 @@ function AppContent() {
   }, [user, internalRoleId, isSystemAdmin]);
 
   useEffect(() => {
-    if (pathname === '/' || pathname === '') {
+    if (pathname === '/' || pathname === '' || rootSeg === 'accounts') {
       navigate('/model', { replace: true });
     }
-  }, [pathname, navigate]);
+  }, [pathname, rootSeg, navigate]);
 
   if (loading) {
     return <div className="h-screen w-full flex items-center justify-center">Loading permissions...</div>;
@@ -169,7 +168,6 @@ function AppContent() {
           {activeTab === 'messenger' && <MessengerPage user={user} />}
           {activeTab === 'revenue' && <RevenuePage />}
           {activeTab === 'settings' && <SettingsPage />}
-          {activeTab === 'accounts' && <AccountPage user={user} />}
         </>
       )}
     </AppShell>

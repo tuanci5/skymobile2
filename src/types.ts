@@ -31,7 +31,7 @@ export interface Department {
   color: string;
 }
 
-export type TabType = 'model' | 'hr' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks' | 'messenger' | 'revenue' | 'settings' | 'accounts';
+export type TabType = 'model' | 'hr' | 'training' | 'business' | 'action-plan' | 'products' | 'users' | 'tasks' | 'messenger' | 'revenue' | 'settings';
 
 export interface JobDescription {
   title: string;

@@ -12,7 +12,6 @@ export const TAB_TO_PATH: Record<TabType, string> = {
   messenger: '/messenger',
   revenue: '/revenue',
   settings: '/settings',
-  accounts: '/accounts',
 };
 
 export const PATH_TO_TAB: Record<string, TabType> = {
@@ -27,5 +26,4 @@ export const PATH_TO_TAB: Record<string, TabType> = {
   messenger: 'messenger',
   revenue: 'revenue',
   settings: 'settings',
-  accounts: 'accounts',
 };
