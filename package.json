@@ -10,6 +10,7 @@
     "api": "tsx src/server/server.ts",
     "api:migrate": "tsx src/server/migrate.ts",
     "api:seed": "tsx src/server/seed.ts",
+    "start": "npm run api",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
