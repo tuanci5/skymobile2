@@ -101,6 +101,7 @@ export async function initDBUtils() {
         access_token TEXT NOT NULL,
         dify_api_key TEXT,
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
+        assigned_users JSONB DEFAULT '[]'::jsonb,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -109,6 +110,11 @@ export async function initDBUtils() {
     // Add distribution_mode if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN distribution_mode VARCHAR(50) DEFAULT 'manual'");
+    } catch (e) {}
+
+    // Add assigned_users if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN assigned_users JSONB DEFAULT '[]'::jsonb");
     } catch (e) {}
 
     await client.query(`
@@ -124,6 +130,8 @@ export async function initDBUtils() {
         ad_cost DECIMAL(10,2),
         dify_conversation_id VARCHAR(100),
         is_human_intervened BOOLEAN DEFAULT false,
+        dify_context_needs_sync BOOLEAN DEFAULT false,
+        dify_context_synced_message_id INT,
         assigned_to VARCHAR(255), -- Email/Name of the assigned staff
         last_message TEXT,
         last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -149,15 +157,42 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN assigned_to VARCHAR(255)");
     } catch (e) {}
 
+    // Add manual_profile_url for staff to manually enter customer FB profile URL
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN manual_profile_url TEXT");
+    } catch (e) {}
+
+    // Track Dify context rehydration when AI is re-enabled after human support.
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN dify_context_needs_sync BOOLEAN DEFAULT false");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN dify_context_synced_message_id INT");
+    } catch (e) {}
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_messages (
         id SERIAL PRIMARY KEY,
         conversation_id INT NOT NULL REFERENCES fb_conversations(id) ON DELETE CASCADE,
         sender_type VARCHAR(50) NOT NULL, -- 'user', 'ai', 'human'
         message_text TEXT,
+        ai_translation TEXT,
+        ai_translation_language VARCHAR(50) DEFAULT 'Vietnamese',
+        translated_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add AI translation cache columns if missing
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation TEXT");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation_language VARCHAR(50) DEFAULT 'Vietnamese'");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN translated_at TIMESTAMP");
+    } catch (e) {}
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_conversation_notes (

@@ -1,0 +1,18 @@
+export const ROLE_MAPPING: Record<string, string> = {
+  'Quản trị': 'admin',
+  'Trưởng nhóm Marketing': 'mkt_lead',
+  'Trưởng nhóm Sale': 'sale_lead',
+  'Trưởng nhóm CSKH': 'cskh_lead',
+  'Nhân viên Quảng cáo': 'mkt_ads',
+  'Nhân viên Content': 'mkt_content',
+  'Nhân viên Media': 'mkt_media',
+  'Nhân viên Sale': 'sale_staff',
+  'Nhân viên CSKH': 'cskh_staff',
+  'Telesale': 'telesale',
+  'Nhân viên Kỹ thuật': 'ops',
+  'Nhân viên Kế toán': 'accountant',
+  'Nhân viên kế toán tổng hợp': 'accountant',
+  'Nhân viên Hành chính & Nhân sự': 'hr_staff',
+  'Quản lý': 'head',
+  'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head',
+};

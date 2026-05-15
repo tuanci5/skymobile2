@@ -101,6 +101,7 @@ export async function initDBUtils() {
         access_token TEXT NOT NULL,
         dify_api_key TEXT,
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
+        assigned_users JSONB DEFAULT '[]'::jsonb,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -109,6 +110,11 @@ export async function initDBUtils() {
     // Add distribution_mode if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN distribution_mode VARCHAR(50) DEFAULT 'manual'");
+    } catch (e) {}
+
+    // Add assigned_users if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN assigned_users JSONB DEFAULT '[]'::jsonb");
     } catch (e) {}
 
     await client.query(`
@@ -149,15 +155,34 @@ export async function initDBUtils() {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN assigned_to VARCHAR(255)");
     } catch (e) {}
 
+    // Add manual_profile_url for staff to manually enter customer FB profile URL
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN manual_profile_url TEXT");
+    } catch (e) {}
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_messages (
         id SERIAL PRIMARY KEY,
         conversation_id INT NOT NULL REFERENCES fb_conversations(id) ON DELETE CASCADE,
         sender_type VARCHAR(50) NOT NULL, -- 'user', 'ai', 'human'
         message_text TEXT,
+        ai_translation TEXT,
+        ai_translation_language VARCHAR(50) DEFAULT 'Vietnamese',
+        translated_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Add AI translation cache columns if missing
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation TEXT");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation_language VARCHAR(50) DEFAULT 'Vietnamese'");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN translated_at TIMESTAMP");
+    } catch (e) {}
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fb_conversation_notes (
@@ -296,6 +321,31 @@ export async function initDBUtils() {
         team_id INT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
         user_email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
         PRIMARY KEY (team_id, user_email)
+      )
+    `);
+
+    // Ensure app_settings table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure accounts table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        account_type VARCHAR(100) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        password VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(100),
+        two_factor TEXT,
+        recovery_email VARCHAR(255),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 

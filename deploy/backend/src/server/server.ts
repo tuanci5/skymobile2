@@ -25,6 +25,51 @@ app.use(async (req, res, next) => {
   next();
 });
 
+const TRANSLATION_TARGET_LANGUAGE = 'Vietnamese';
+const TRANSLATION_CACHE_LANGUAGE = 'Vietnamese:auto-detect:v2';
+const TRANSLATION_SYSTEM_PROMPT = [
+  'You are a strict translation engine.',
+  'Auto-detect the source language from the user text. Do not assume the source language is English.',
+  `Always translate to ${TRANSLATION_TARGET_LANGUAGE} only.`,
+  'If the text is already Vietnamese, return natural Vietnamese with the same meaning.',
+  'Preserve names, product names, URLs, phone numbers, prices, emojis, line breaks, and markdown emphasis.',
+  'Do not answer the message. Return only the Vietnamese translation with no explanation.'
+].join(' ');
+
+const buildTranslationQuery = (text: string) => [
+  'Translate the following customer message to Vietnamese.',
+  'Auto-detect the source language. Return only the Vietnamese translation.',
+  '',
+  text
+].join('\n');
+
+const buildTranslationRequestBody = (endpoint: string, model: string, text: string) => {
+  if (/\/chat-messages(?:[/?#]|$)/i.test(endpoint)) {
+    return {
+      inputs: {},
+      query: `${TRANSLATION_SYSTEM_PROMPT}\n\n${buildTranslationQuery(text)}`,
+      response_mode: 'blocking',
+      conversation_id: '',
+      user: 'sky-mobile-translation'
+    };
+  }
+
+  return {
+    model,
+    messages: [
+      {
+        role: 'system',
+        content: TRANSLATION_SYSTEM_PROMPT
+      },
+      {
+        role: 'user',
+        content: buildTranslationQuery(text)
+      }
+    ],
+    temperature: 0.1
+  };
+};
+
 // ─── DEBUG API ────────────────────────────────────────────────────────────────
 app.get('/api/debug', (req, res) => {
   res.json({
@@ -39,6 +84,27 @@ app.get('/api/debug', (req, res) => {
       vercel: !!process.env.VERCEL
     }
   });
+});
+
+// ─── AUTHENTICATION API ───────────────────────────────────────────────────────
+app.get('/api/auth/verify', async (req, res) => {
+  try {
+    const email = req.query.email as string;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+    
+    if (rows.length > 0) {
+      res.json({ authorized: true, user: rows[0] });
+    } else {
+      res.json({ authorized: false });
+    }
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    res.status(500).json({ error: 'Failed to verify user' });
+  }
 });
 
 // ─── CANDIDATES API ─────────────────────────────────────────────────────────────
@@ -228,7 +294,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // ─── EXPORT/START ──────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 3006;
+const PORT = Number(process.env.PORT || 3006);
 // Chỉ chạy app.listen nếu không phải môi trường Vercel
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, '0.0.0.0', () => {
@@ -446,16 +512,38 @@ app.put('/api/tasks/:id', async (req, res) => {
     const { id } = req.params;
     const { title, description, assignees, status, due_date, result_handover, report_url, task_group, progress } = req.body;
     
-    const rawAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
-    const finalAssignees = rawAssignees.map((e: string) => e.toLowerCase().trim());
+    const hasAssignees = Array.isArray(assignees) || Boolean(req.body.assignee_email);
+    const rawAssignees = Array.isArray(assignees) ? assignees : (req.body.assignee_email ? [req.body.assignee_email] : []);
+    const finalAssignees = rawAssignees.map((e: string) => e.toLowerCase().trim()).filter(Boolean);
     const assignee_email = finalAssignees.length > 0 ? finalAssignees[0] : null;
 
     await pool.query(
-      'UPDATE tasks SET title = $1, description = $2, assignee_email = COALESCE($3, assignee_email), status = $4, due_date = $5, result_handover = $6, report_url = $7, task_group = $8, progress = COALESCE($9, progress) WHERE id = $10',
-      [title, description, assignee_email, status, due_date, result_handover || null, report_url || null, task_group || null, progress !== undefined ? progress : null, id]
+      `UPDATE tasks SET
+        title = COALESCE($1, title),
+        description = COALESCE($2, description),
+        assignee_email = COALESCE($3, assignee_email),
+        status = COALESCE($4, status),
+        due_date = COALESCE($5, due_date),
+        result_handover = COALESCE($6, result_handover),
+        report_url = COALESCE($7, report_url),
+        task_group = COALESCE($8, task_group),
+        progress = COALESCE($9, progress)
+       WHERE id = $10`,
+      [
+        title ?? null,
+        description ?? null,
+        assignee_email,
+        status ?? null,
+        due_date ?? null,
+        result_handover ?? null,
+        report_url ?? null,
+        task_group ?? null,
+        progress !== undefined ? progress : null,
+        id
+      ]
     );
 
-    if (finalAssignees && finalAssignees.length > 0) {
+    if (hasAssignees) {
       await pool.query('DELETE FROM task_assignees WHERE task_id = $1', [id]);
       for (const email of finalAssignees) {
         await pool.query('INSERT INTO task_assignees (task_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, email]);
@@ -663,7 +751,157 @@ app.put('/api/teams/:id', async (req, res) => {
   }
 });
 
+
+// ─── APP SETTINGS API ────────────────────────────────────────────────────────────
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM app_settings');
+    const settings: Record<string, string> = {};
+    rows.forEach(row => {
+      settings[row.key] = row.value;
+    });
+    res.json(settings);
+  } catch (error: any) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const settings = req.body;
+    for (const [key, value] of Object.entries(settings)) {
+      await pool.query(
+        'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP',
+        [key, value]
+      );
+    }
+    res.json({ success: true, message: 'Settings saved' });
+  } catch (error: any) {
+    console.error('Error saving settings:', error);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
+// ─── AI TRANSLATE API ────────────────────────────────────────────────────────────
+
+app.post('/api/ai/translate', async (req, res) => {
+  try {
+    const { text, messageId } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
+
+    const parsedMessageId = messageId ? Number(messageId) : null;
+    if (parsedMessageId && Number.isFinite(parsedMessageId)) {
+      const { rows: cachedRows } = await pool.query(
+        `SELECT ai_translation, ai_translation_language, translated_at
+         FROM fb_messages
+         WHERE id = $1
+           AND ai_translation IS NOT NULL
+           AND btrim(ai_translation) <> ''
+           AND COALESCE(ai_translation_language, $2) = $2`,
+        [parsedMessageId, TRANSLATION_CACHE_LANGUAGE]
+      );
+
+      if (cachedRows.length > 0) {
+        return res.json({
+          translatedText: cachedRows[0].ai_translation,
+          cached: true,
+          targetLanguage: TRANSLATION_TARGET_LANGUAGE,
+          translatedAt: cachedRows[0].translated_at
+        });
+      }
+    }
+
+    // Fetch AI settings
+    const { rows } = await pool.query('SELECT * FROM app_settings WHERE key IN ($1, $2, $3)', ['ai_api_key', 'ai_endpoint', 'ai_model']);
+    const settings: Record<string, string> = {};
+    rows.forEach(row => {
+      settings[row.key] = row.value;
+    });
+
+    const apiKey = settings['ai_api_key'];
+    const endpoint = settings['ai_endpoint'] || 'https://api.openai.com/v1/chat/completions';
+    const model = settings['ai_model'] || 'gpt-3.5-turbo';
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'AI API Key is not configured' });
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(buildTranslationRequestBody(endpoint, model, text))
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = response.statusText;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error?.message || errorData.message || errorMessage;
+      } catch (e) {}
+      throw new Error(`AI API error: ${errorMessage}`);
+    }
+
+    const textRes = await response.text();
+    let translatedText = '';
+
+    try {
+      // Try normal JSON parsing first
+      const data = JSON.parse(textRes);
+      translatedText = data.choices?.[0]?.message?.content?.trim();
+      if (!translatedText && data.answer) {
+        translatedText = data.answer.trim(); // Dify direct format
+      }
+    } catch (e) {
+      // If parsing fails, it might be an SSE stream (starts with data: )
+      const lines = textRes.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+          try {
+            const data = JSON.parse(line.substring(6));
+            if (data.choices?.[0]?.delta?.content) {
+              translatedText += data.choices[0].delta.content;
+            } else if (data.choices?.[0]?.message?.content) {
+              translatedText += data.choices[0].message.content;
+            } else if (data.answer) {
+              translatedText += data.answer;
+            }
+          } catch (err) {}
+        }
+      }
+      translatedText = translatedText.trim();
+    }
+
+    if (!translatedText) {
+      console.error('AI API Raw Response:', textRes);
+      throw new Error('Could not get translation from AI or response format is not supported.');
+    }
+
+    if (parsedMessageId && Number.isFinite(parsedMessageId)) {
+      await pool.query(
+        `UPDATE fb_messages
+         SET ai_translation = $1,
+             ai_translation_language = $2,
+             translated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [translatedText, TRANSLATION_CACHE_LANGUAGE, parsedMessageId]
+      );
+    }
+
+    res.json({ translatedText, cached: false, targetLanguage: TRANSLATION_TARGET_LANGUAGE });
+  } catch (error: any) {
+    console.error('AI Translation Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to translate' });
+  }
+});
+
 app.delete('/api/teams/:id', async (req, res) => {
+
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM teams WHERE id = $1', [id]);
@@ -674,3 +912,53 @@ app.delete('/api/teams/:id', async (req, res) => {
   }
 });
 
+// --- Accounts API ---
+app.get('/api/accounts', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM accounts ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching accounts:', error);
+    res.status(500).json({ error: 'Failed to fetch accounts' });
+  }
+});
+
+app.post('/api/accounts', async (req, res) => {
+  try {
+    const { account_type, username, password, email, phone, two_factor, recovery_email, notes } = req.body;
+    const { rows } = await pool.query(
+      'INSERT INTO accounts (account_type, username, password, email, phone, two_factor, recovery_email, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [account_type, username, password, email, phone, two_factor, recovery_email, notes]
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error creating account:', error);
+    res.status(500).json({ error: 'Failed to create account' });
+  }
+});
+
+app.put('/api/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { account_type, username, password, email, phone, two_factor, recovery_email, notes } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE accounts SET account_type = $1, username = $2, password = $3, email = $4, phone = $5, two_factor = $6, recovery_email = $7, notes = $8 WHERE id = $9 RETURNING *',
+      [account_type, username, password, email, phone, two_factor, recovery_email, notes, id]
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating account:', error);
+    res.status(500).json({ error: 'Failed to update account' });
+  }
+});
+
+app.delete('/api/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM accounts WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});

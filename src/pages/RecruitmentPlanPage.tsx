@@ -38,6 +38,18 @@ interface Candidate {
   interviewTime?: string;
 }
 
+const formatHrNote = (note: any) => {
+  if (note == null) return '';
+  if (typeof note === 'string') return note;
+  if (typeof note === 'number' || typeof note === 'boolean') return String(note);
+  if (typeof note.content === 'string') return note.content;
+  if (note.content != null) return formatHrNote(note.content);
+  return [note.date, note.note_text, note.text, note.title]
+    .filter(Boolean)
+    .map(String)
+    .join(' - ') || JSON.stringify(note);
+};
+
 const formatPhone = (phone?: string) => {
   if (!phone) return '—';
   const cleanPhone = phone.toString().replace(/\s/g, '');
@@ -58,7 +70,7 @@ interface RecruitmentPlanTabProps {
   user: any;
 }
 
-export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) => {
+export const RecruitmentPlanPage: React.FC<RecruitmentPlanTabProps> = ({ user }) => {
   const [plans, setPlans] = useState<RecruitmentPlan[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [evaluations, setEvaluations] = useState<Record<string, Evaluation>>({});
@@ -422,7 +434,7 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
                   <th className="px-6 py-5 font-bold uppercase tracking-wider text-[11px] w-64">Vị trí công việc</th>
                   <th className="px-4 py-5 font-bold uppercase tracking-wider text-[11px] text-center bg-slate-800">Mục tiêu</th>
                   <th className="px-4 py-5 font-bold uppercase tracking-wider text-[11px] text-center">Ứng tuyển</th>
-                  <th className="px-4 py-5 font-bold uppercase tracking-wider text-[11px] text-center">Phòng vấn</th>
+                  <th className="px-4 py-5 font-bold uppercase tracking-wider text-[11px] text-center">Phỏng vấn</th>
                   <th className="px-4 py-5 font-bold uppercase tracking-wider text-[11px] text-center">Đã nhận</th>
                   <th className="px-6 py-5 font-bold uppercase tracking-wider text-[11px] text-center">Tiến độ (%)</th>
                   <th className="px-6 py-5 font-bold uppercase tracking-wider text-[11px]">Thời gian & Ghi chú</th>
@@ -660,11 +672,11 @@ export const RecruitmentPlanTab: React.FC<RecruitmentPlanTabProps> = ({ user }) 
                           {Array.isArray(hrInfo.hrNotes) ? (
                             hrInfo.hrNotes.map((note: any, i: number) => (
                               <p key={i} className="text-xs text-slate-600 flex gap-2 line-clamp-2">
-                                <span className="text-slate-300">•</span> {note.content || note}
+                                <span className="text-slate-300">•</span> {formatHrNote(note)}
                               </p>
                             ))
                           ) : (
-                            <p className="text-xs text-slate-600 line-clamp-2">{hrInfo.hrNotes}</p>
+                            <p className="text-xs text-slate-600 line-clamp-2">{formatHrNote(hrInfo.hrNotes)}</p>
                           )}
                         </div>
                       ) : (

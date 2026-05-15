@@ -38,7 +38,7 @@ const ROLE_OPTIONS = [
   'Khách'
 ];
 
-export const UserManagementTab = () => {
+export const UserPage = () => {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'roles'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
@@ -220,6 +220,10 @@ export const UserManagementTab = () => {
     { id: 'products', label: 'Sản phẩm & Dịch vụ' },
     { id: 'users', label: 'Quản lý người dùng' },
     { id: 'tasks', label: 'Quản lý công việc' },
+    { id: 'messenger', label: 'CSKH Messenger' },
+    { id: 'revenue', label: 'Báo cáo doanh thu' },
+    { id: 'settings', label: 'Cài đặt hệ thống' },
+    { id: 'accounts', label: 'Quản lý Tài khoản' },
   ];
 
   return (

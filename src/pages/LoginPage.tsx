@@ -3,6 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { motion } from 'motion/react';
 import { ShieldCheck, Loader2, AlertCircle, Lock, Wifi, FlaskConical } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface GoogleUser {
   email: string;
@@ -110,7 +111,8 @@ const DEV_ACCOUNTS = [
   },
 ];
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+const LoginPage: React.FC = () => {
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDevMenu, setShowDevMenu] = useState(false);
@@ -137,7 +139,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
       if (data.authorized) {
         // Use user data from database (role, name)
-        onLoginSuccess({ 
+        login({ 
           ...decoded, 
           name: data.user.name || decoded.name,
           role: data.user.role || 'Thành viên',
@@ -246,7 +248,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     {DEV_ACCOUNTS.map(acc => (
                       <button
                         key={acc.label}
-                        onClick={() => onLoginSuccess(acc.user)}
+                        onClick={() => login(acc.user)}
                         className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-left transition-colors group"
                       >
                         <img

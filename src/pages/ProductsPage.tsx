@@ -76,7 +76,7 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
-export const ProductsTab: React.FC = () => {
+export const ProductsPage: React.FC = () => {
   const [view, setView] = useState<'overview' | 'inventory'>('overview');
   const [search, setSearch] = useState('');
   const [filterObj, setFilterObj] = useState<string>('Tất cả');

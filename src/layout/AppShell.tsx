@@ -1,0 +1,72 @@
+﻿import React from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import type { TabType } from '../types';
+import { ScrollToTop } from './ScrollToTop';
+import { Sidebar } from './Sidebar';
+
+type AppShellProps = {
+  activeTab: TabType;
+  activeDept: string | null;
+  hrSubTab?: string;
+  onLogout: () => void;
+  user: any;
+  allowedTabs: string[];
+  isSystemAdmin: boolean;
+  routeKey: string;
+  children: React.ReactNode;
+};
+
+export const AppShell = ({
+  activeTab,
+  activeDept,
+  hrSubTab,
+  onLogout,
+  user,
+  allowedTabs,
+  isSystemAdmin,
+  routeKey,
+  children,
+}: AppShellProps) => {
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+      <Sidebar
+        activeTab={activeTab}
+        activeDept={activeDept}
+        hrSubTab={hrSubTab}
+        onLogout={onLogout}
+        user={user}
+        allowedTabs={allowedTabs}
+        isSystemAdmin={isSystemAdmin}
+      />
+
+      <main
+        ref={scrollContainerRef}
+        className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto"
+      >
+        <div className="w-full max-w-[1800px] mx-auto">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={routeKey}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+
+          <footer className="mt-20 py-12 border-t border-slate-200 text-center">
+            <p className="mt-8 text-slate-400 text-sm">
+              © 2026 Hệ thống Quản trị Doanh nghiệp Online. Thiết kế chuyên biệt cho ngành Viễn thông tại Nhật.
+            </p>
+          </footer>
+        </div>
+      </main>
+
+      <ScrollToTop scrollContainerRef={scrollContainerRef} />
+    </div>
+  );
+};

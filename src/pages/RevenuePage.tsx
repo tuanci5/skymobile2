@@ -40,7 +40,7 @@ const PERIOD_DATA: Record<string, any> = {
   }
 };
 
-export const RevenueReportTab: React.FC = () => {
+export const RevenuePage: React.FC = () => {
   const [dateRange, setDateRange] = useState('Tháng này');
 
   const calculateGrowth = (current: number, previous: number) => {

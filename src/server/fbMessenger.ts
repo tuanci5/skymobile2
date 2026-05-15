@@ -45,11 +45,11 @@ const normalizeConversation = (row: any) => ({
 });
 
 async function fetchCustomerProfile(psid: string, accessToken: string) {
-  let customer_name = 'Khách hàng FB';
-  let avatarUrl = null;
-  let profile_link = null;
+  let customer_name: string | null = null;
+  let avatarUrl: string | null = null;
+  let profile_link: string | null = null;
 
-  const fields = 'name,first_name,last_name,profile_pic,link';
+  const fields = 'name,first_name,last_name,profile_pic,picture,link';
   const profileRes = await fetch(
     `https://graph.facebook.com/${GRAPH_API_VERSION}/${psid}?fields=${fields}&access_token=${accessToken}`
   );
@@ -67,18 +67,93 @@ async function fetchCustomerProfile(psid: string, accessToken: string) {
 
   if (profileData.profile_pic) {
     avatarUrl = profileData.profile_pic;
+  } else if (profileData.picture?.data?.url && !profileData.picture.data.is_silhouette) {
+    avatarUrl = profileData.picture.data.url;
   }
 
-  profile_link = profileData.link || `https://www.facebook.com/${psid}`;
+  if (!avatarUrl) {
+    const pictureRes = await fetch(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${psid}/picture?type=large&redirect=false&access_token=${accessToken}`
+    );
+    const pictureData: any = await pictureRes.json();
+    if (pictureData.data?.url && !pictureData.data?.is_silhouette) {
+      avatarUrl = pictureData.data.url;
+    }
+  }
+
+  profile_link = profileData.link || `https://business.facebook.com/latest/people/${psid}`;
 
   return { customer_name, avatarUrl, customer_avatar: avatarUrl, profile_link, raw: profileData };
+}
+
+const DIFY_CONTEXT_MESSAGE_LIMIT = 50;
+
+function formatDifyContextMessage(message: any) {
+  const text = String(message.message_text || '').trim();
+  if (!text) return null;
+
+  const senderLabel = message.sender_type === 'user'
+    ? 'Khách hàng'
+    : message.sender_type === 'ai'
+      ? 'AI Dify'
+      : 'CSKH';
+
+  return `${senderLabel}: ${text}`;
+}
+
+async function prepareDifyQueryWithMissingContext(convId: number, messageText: string) {
+  const { rows: convRows } = await pool.query(
+    `SELECT dify_context_needs_sync, dify_context_synced_message_id
+     FROM fb_conversations
+     WHERE id = $1`,
+    [convId]
+  );
+
+  const conv = convRows[0];
+  if (!conv?.dify_context_needs_sync) {
+    return { queryText: messageText, lastContextMessageId: null, contextCount: 0 };
+  }
+
+  const lastSyncedMessageId = conv.dify_context_synced_message_id;
+  const params: any[] = [convId, DIFY_CONTEXT_MESSAGE_LIMIT];
+  const sinceFilter = lastSyncedMessageId ? 'AND id > $3' : '';
+  if (lastSyncedMessageId) params.push(lastSyncedMessageId);
+
+  const { rows: contextRows } = await pool.query(
+    `SELECT id, sender_type, message_text, created_at
+     FROM (
+       SELECT id, sender_type, message_text, created_at
+       FROM fb_messages
+       WHERE conversation_id = $1
+         AND message_text IS NOT NULL
+         AND btrim(message_text) <> ''
+         ${sinceFilter}
+       ORDER BY id DESC
+       LIMIT $2
+     ) recent_messages
+     ORDER BY id ASC`,
+    params
+  );
+
+  const contextLines = contextRows
+    .map(formatDifyContextMessage)
+    .filter(Boolean);
+
+  if (contextLines.length === 0) {
+    return { queryText: messageText, lastContextMessageId: null, contextCount: 0 };
+  }
+
+  const queryText = `Bạn là AI CSKH. Dưới đây là phần hội thoại gần nhất mà bạn có thể đã bỏ lỡ khi nhân viên CSKH hỗ trợ thủ công. Hãy dùng làm ngữ cảnh để trả lời tự nhiên, không cần nhắc lại toàn bộ lịch sử.\n\n[Ngữ cảnh gần nhất]\n${contextLines.join('\n')}\n\n[Tin nhắn mới nhất của khách hàng]\n${messageText}`;
+  const lastContextMessageId = contextRows[contextRows.length - 1].id;
+
+  return { queryText, lastContextMessageId, contextCount: contextRows.length };
 }
 
 // ─── FB PAGES ───
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, distribution_mode, assigned_users FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -97,6 +172,22 @@ router.post('/pages', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/pages/:id/assign-users', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assigned_users } = req.body; // should be an array of strings
+    
+    await pool.query(
+      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2`,
+      [JSON.stringify(assigned_users || []), id]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error assigning users to page:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -237,9 +328,9 @@ router.post('/webhook', async (req, res) => {
 
         const { rows: convs } = await pool.query(
           `INSERT INTO fb_conversations (page_id, customer_id, customer_name, customer_avatar, avatar_url, last_message, unread_count, assigned_to, profile_link)
-           VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8)
+           VALUES ($1, $2, COALESCE($3, 'Khách hàng FB'), $4, $5, $6, 1, $7, $8)
            ON CONFLICT (page_id, customer_id) DO UPDATE SET
-           customer_name = COALESCE(EXCLUDED.customer_name, fb_conversations.customer_name),
+           customer_name = COALESCE(EXCLUDED.customer_name, NULLIF(fb_conversations.customer_name, 'Khách hàng FB'), fb_conversations.customer_name),
            customer_avatar = COALESCE(EXCLUDED.customer_avatar, fb_conversations.customer_avatar),
            avatar_url = COALESCE(EXCLUDED.avatar_url, fb_conversations.avatar_url, fb_conversations.customer_avatar),
            profile_link = COALESCE(EXCLUDED.profile_link, fb_conversations.profile_link),
@@ -256,14 +347,20 @@ router.post('/webhook', async (req, res) => {
         is_human_intervened = convs[0].is_human_intervened;
 
         // Insert Message
-        await pool.query(
-          `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3)`,
+        const { rows: insertedUserMessages } = await pool.query(
+          `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3) RETURNING id`,
           [convId, 'user', messageText]
         );
+        const userMessageId = insertedUserMessages[0]?.id;
 
         // Forward to Dify if not human intervened
         if (!is_human_intervened && page.dify_api_key) {
           try {
+            const { queryText, lastContextMessageId, contextCount } = await prepareDifyQueryWithMissingContext(convId, messageText);
+            if (contextCount > 0) {
+              console.log(`[DIFY_CONTEXT] Prepended ${contextCount} messages for conversation ${convId}`);
+            }
+
             const difyRes = await fetch('https://dify.movads.vn/v1/chat-messages', {
               method: 'POST',
               headers: {
@@ -272,7 +369,7 @@ router.post('/webhook', async (req, res) => {
               },
               body: JSON.stringify({
                 inputs: {},
-                query: messageText,
+                query: queryText,
                 response_mode: 'blocking',
                 conversation_id: dify_conversation_id || '',
                 user: sender_psid
@@ -291,10 +388,16 @@ router.post('/webhook', async (req, res) => {
                 [convId, 'ai', aiReply]
               );
 
-              // Update conversation_id
+              // Update conversation_id and mark Dify context as synced after a successful AI response.
               await pool.query(
-                `UPDATE fb_conversations SET dify_conversation_id = $1, last_message = $2, last_message_at = CURRENT_TIMESTAMP WHERE id = $3`,
-                [newDifyConvId, aiReply, convId]
+                `UPDATE fb_conversations
+                 SET dify_conversation_id = $1,
+                     last_message = $2,
+                     last_message_at = CURRENT_TIMESTAMP,
+                     dify_context_needs_sync = false,
+                     dify_context_synced_message_id = COALESCE($4, $5, dify_context_synced_message_id)
+                 WHERE id = $3`,
+                [newDifyConvId, aiReply, convId, lastContextMessageId, userMessageId]
               );
 
               // Send back to FB with metadata
@@ -341,6 +444,24 @@ router.get('/conversations/:id/messages', async (req, res) => {
     const { id } = req.params;
     const { rows } = await pool.query('SELECT * FROM fb_messages WHERE conversation_id = $1 ORDER BY created_at ASC', [id]);
     res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/conversations/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      'UPDATE fb_conversations SET unread_count = 0 WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({ success: true, conversation: rows[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -444,18 +565,19 @@ router.post('/conversations/:id/refresh-profile', async (req, res) => {
       return res.status(400).json({ error: profileData.error.message });
     }
 
-    let customer_name = profileData.name || 'Khách hàng FB';
-    if (!profileData.name && (profileData.first_name || profileData.last_name)) {
-      customer_name = [profileData.first_name, profileData.last_name].filter(Boolean).join(' ');
-    }
-
+    const customer_name = profile.customer_name;
     const avatarUrl = profile.avatarUrl;
     const customer_avatar = profile.customer_avatar;
     const profile_link = profile.profile_link;
 
-    // Update DB
+    // Update DB. Only overwrite the display name when Facebook returns a real name.
     await pool.query(
-      `UPDATE fb_conversations SET customer_name = $1, customer_avatar = $2, avatar_url = $3, profile_link = $4 WHERE id = $5`,
+      `UPDATE fb_conversations
+       SET customer_name = COALESCE($1, NULLIF(customer_name, 'Khách hàng FB'), customer_name),
+           customer_avatar = COALESCE($2, customer_avatar),
+           avatar_url = COALESCE($3, avatar_url, customer_avatar),
+           profile_link = COALESCE($4, profile_link)
+       WHERE id = $5`,
       [customer_name, customer_avatar, avatarUrl, profile_link, id]
     );
 
@@ -463,6 +585,87 @@ router.post('/conversations/:id/refresh-profile', async (req, res) => {
   } catch (err: any) {
     const message = err?.message || err?.error_user_msg || 'Failed to refresh Facebook profile';
     res.status(err?.code ? 400 : 500).json({ error: message });
+  }
+});
+
+// ─── CẬP NHẬT PROFILE URL THỦ CÔNG ───
+
+router.post('/conversations/:id/manual-profile', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { profile_url } = req.body;
+
+    if (!profile_url) {
+      return res.status(400).json({ error: 'profile_url is required' });
+    }
+
+    // Trích xuất UID từ URL Facebook
+    let uid: string | null = null;
+    let avatarUrl: string | null = null;
+
+    // Dạng 1: facebook.com/profile.php?id=XXXXXXXX
+    const phpIdMatch = profile_url.match(/profile\.php\?id=(\d+)/);
+    if (phpIdMatch) uid = phpIdMatch[1];
+
+    // Dạng 2: business.facebook.com/latest/people/XXXXXXXX
+    if (!uid) {
+      const bizMatch = profile_url.match(/\/people\/(\d+)/);
+      if (bizMatch) uid = bizMatch[1];
+    }
+
+    // Dạng 3: facebook.com/XXXXXXXX (chỉ số)
+    if (!uid) {
+      const numMatch = profile_url.match(/facebook\.com\/(\d+)(?:[/?]|$)/);
+      if (numMatch) uid = numMatch[1];
+    }
+
+    // Nếu có UID số, thử fetch avatar qua Graph API
+    if (uid) {
+      try {
+        const { rows: convRows } = await pool.query(
+          `SELECT p.access_token FROM fb_conversations c
+           JOIN fb_pages p ON c.page_id = p.page_id
+           WHERE c.id = $1`, [id]
+        );
+        if (convRows.length > 0) {
+          const token = convRows[0].access_token;
+          const picRes = await fetch(
+            `https://graph.facebook.com/v19.0/${uid}/picture?type=large&redirect=false&access_token=${token}`
+          );
+          if (picRes.ok) {
+            const picData = await picRes.json();
+            if (picData.data?.url && !picData.data?.is_silhouette) {
+              avatarUrl = picData.data.url;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[MANUAL_PROFILE] Could not fetch avatar from UID:', e);
+      }
+    }
+
+    // Cập nhật DB
+    if (avatarUrl) {
+      await pool.query(
+        'UPDATE fb_conversations SET manual_profile_url = $1, customer_avatar = $2, avatar_url = $2 WHERE id = $3',
+        [profile_url, avatarUrl, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE fb_conversations SET manual_profile_url = $1 WHERE id = $2',
+        [profile_url, id]
+      );
+    }
+
+    res.json({
+      success: true,
+      manual_profile_url: profile_url,
+      avatar_url: avatarUrl,
+      uid_extracted: uid
+    });
+  } catch (err: any) {
+    console.error('Error saving manual profile:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -479,7 +682,25 @@ router.all('/conversations/:id/toggle-bot', async (req, res) => {
       return res.status(400).json({ error: 'is_human_intervened is required' });
     }
 
-    const result = await pool.query('UPDATE fb_conversations SET is_human_intervened = $1 WHERE id = $2', [is_human_intervened, id]);
+    const { rows: existingRows } = await pool.query(
+      'SELECT is_human_intervened FROM fb_conversations WHERE id = $1',
+      [id]
+    );
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const wasHumanIntervened = existingRows[0].is_human_intervened;
+    const shouldSyncContext = wasHumanIntervened === true && is_human_intervened === false;
+
+    const result = await pool.query(
+      `UPDATE fb_conversations
+       SET is_human_intervened = $1,
+           dify_context_needs_sync = CASE WHEN $2 THEN true ELSE dify_context_needs_sync END
+       WHERE id = $3`,
+      [is_human_intervened, shouldSyncContext, id]
+    );
     console.log(`[BOT_TOGGLE] DB Update Result: ${result.rowCount} rows updated`);
     
     if (result.rowCount === 0) {

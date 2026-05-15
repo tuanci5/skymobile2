@@ -1,0 +1,23 @@
+const ADMIN_ROLES = ['Quản trị'];
+const MANAGER_MARKERS = ['Trưởng phòng', 'Trưởng nhóm'];
+const HR_MARKERS = ['Hành chính - Nhân sự', 'Hành chính & Nhân sự'];
+
+const normalizeRole = (role?: string | null) =>
+  (role || '')
+    .normalize('NFC')
+    .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, ' ')
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export const isAdminRole = (role?: string | null) => ADMIN_ROLES.includes(normalizeRole(role));
+
+export const isManagerRole = (role?: string | null) => {
+  const normalizedRole = normalizeRole(role);
+  return !!normalizedRole && MANAGER_MARKERS.some(marker => normalizedRole.includes(marker));
+};
+
+export const isHrRole = (role?: string | null) => {
+  const normalizedRole = normalizeRole(role);
+  return !!normalizedRole && HR_MARKERS.some(marker => normalizedRole.includes(marker));
+};
