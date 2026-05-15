@@ -1137,16 +1137,18 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
     }
 
     // Ưu tiên 3: Parse toàn bộ link Business Suite Inbox
-    // Dạng: business.facebook.com/latest/inbox/all?...selected_item_id=UID&business_id=...&asset_id=...&mailbox_id=...
+    // Hỗ trợ cả /latest/inbox/all và /latest/inbox/messenger:
+    // business.facebook.com/latest/inbox/messenger?...selected_item_id=UID&business_id=...&asset_id=...&mailbox_id=...
+    const normalizedProfileUrl = profile_url.trim().replace(/&amp;/g, '&');
     try {
-      const parsedUrl = new URL(profile_url.startsWith('http') ? profile_url : `https://${profile_url}`);
+      const parsedUrl = new URL(normalizedProfileUrl.startsWith('http') ? normalizedProfileUrl : `https://${normalizedProfileUrl}`);
       const host = parsedUrl.hostname.replace(/^www\./, '').replace(/^m\./, '');
       const selectedItemId = parsedUrl.searchParams.get('selected_item_id');
       const businessId = parsedUrl.searchParams.get('business_id');
       const mailboxId = parsedUrl.searchParams.get('mailbox_id');
       const assetId = parsedUrl.searchParams.get('asset_id');
 
-      if (host === 'business.facebook.com') {
+      if (host === 'business.facebook.com' && parsedUrl.pathname.includes('/latest/inbox/')) {
         if (selectedItemId && /^\d+$/.test(selectedItemId)) {
           uid = selectedItemId;
           uidSource = 'business_suite_selected_item_id';
@@ -1156,10 +1158,10 @@ router.post('/conversations/:id/manual-profile', async (req, res) => {
         if (assetId && /^\d+$/.test(assetId)) assetIdFromUrl = assetId;
       }
     } catch (e) {
-      const selectedMatch = profile_url.match(/[?&]selected_item_id=(\d+)/);
-      const businessMatch = profile_url.match(/[?&]business_id=(\d+)/);
-      const mailboxMatch = profile_url.match(/[?&]mailbox_id=(\d+)/);
-      const assetMatch = profile_url.match(/[?&]asset_id=(\d+)/);
+      const selectedMatch = normalizedProfileUrl.match(/[?&]selected_item_id=(\d+)/);
+      const businessMatch = normalizedProfileUrl.match(/[?&]business_id=(\d+)/);
+      const mailboxMatch = normalizedProfileUrl.match(/[?&]mailbox_id=(\d+)/);
+      const assetMatch = normalizedProfileUrl.match(/[?&]asset_id=(\d+)/);
       if (selectedMatch) {
         uid = selectedMatch[1];
         uidSource = 'business_suite_selected_item_id';
