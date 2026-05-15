@@ -14,7 +14,60 @@ import { OPTIMISTIC_MESSAGE_ID_BASE, isOptimisticMessage, isSameOutgoingMessage 
 import type { Conversation, ConversationAdSource, ConversationNote, DetailedProduct, FBPage, Message } from '../components/messenger/types';
 import { useFacebookSdk } from '../components/messenger/useFacebookSdk';
 import { formatNoteTime, getConversationAvatar } from '../components/messenger/utils';
-import { aiService } from '../services/api';
+import { aiService, settingService } from '../services/api';
+
+type MessageTemplateMap = Record<string, string[]>;
+
+const DEFAULT_MESSAGE_TEMPLATES: MessageTemplateMap = {
+  vi: [
+    'Dạ em chào anh/chị, Sky Mobile có thể hỗ trợ mình thông tin gì ạ?',
+    'Dạ anh/chị cho em xin số điện thoại để CSKH hỗ trợ nhanh hơn ạ.',
+    'Dạ bên em sẽ kiểm tra và phản hồi lại mình trong ít phút ạ.',
+    'Dạ anh/chị muốn tham khảo dòng máy hoặc gói cước nào ạ?',
+    'Dạ cảm ơn anh/chị đã liên hệ Sky Mobile ạ.'
+  ],
+  en: [
+    'Hello, thank you for contacting Sky Mobile. How can we support you today?',
+    'Could you please send your phone number so our support team can assist you faster?',
+    'We will check and get back to you in a few minutes.',
+    'Which device model or service plan would you like to learn more about?',
+    'Thank you for contacting Sky Mobile.'
+  ]
+};
+
+const normalizeMessageTemplateMap = (templates: MessageTemplateMap) => {
+  const normalized: MessageTemplateMap = { ...DEFAULT_MESSAGE_TEMPLATES };
+
+  Object.entries(templates).forEach(([languageCode, languageTemplates]) => {
+    if (!Array.isArray(languageTemplates)) return;
+
+    normalized[languageCode] = languageTemplates
+      .filter((item): item is string => typeof item === 'string')
+      .map(item => item.trim())
+      .filter(Boolean);
+  });
+
+  return normalized;
+};
+
+const parseMessageTemplates = (value?: string): MessageTemplateMap => {
+  if (!value) return normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES);
+
+  try {
+    const templates = JSON.parse(value);
+    if (Array.isArray(templates)) {
+      return normalizeMessageTemplateMap({ vi: templates });
+    }
+
+    if (templates && typeof templates === 'object') {
+      return normalizeMessageTemplateMap(templates as MessageTemplateMap);
+    }
+  } catch (error) {
+    console.error('Failed to parse message templates:', error);
+  }
+
+  return normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES);
+};
 
 const TRANSLATION_CACHE_LANGUAGE = 'Vietnamese:auto-detect:v2';
 
@@ -62,6 +115,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [warehouseProducts, setWarehouseProducts] = useState<DetailedProduct[]>([]);
   const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'bot'>('all');
   const [conversationSearch, setConversationSearch] = useState('');
+  const [messageTemplates, setMessageTemplates] = useState<MessageTemplateMap>(() => normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES));
   const replyLanguageOptions = [
     { code: 'zh-Mandarin', label: 'Tiếng Trung Quan thoại' },
     { code: 'zh-Cantonese', label: 'Tiếng Quảng Đông' },
@@ -81,6 +135,13 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [isTranslatingReply, setIsTranslatingReply] = useState(false);
   const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
   const [replyLanguageSource, setReplyLanguageSource] = useState<'manual' | 'detected' | 'fallback' | null>(null);
+  const activeTemplateLanguageCode = selectedConv?.preferred_language_code || replyTargetLanguage.code || 'vi';
+  const activeTemplateLanguageLabel = selectedConv?.preferred_language_label || replyTargetLanguage.label || 'Tiếng Việt';
+  const activeMessageTemplates = messageTemplates[activeTemplateLanguageCode]?.length
+    ? messageTemplates[activeTemplateLanguageCode]
+    : messageTemplates.vi?.length
+      ? messageTemplates.vi
+      : messageTemplates.en || [];
 
   const [orderForm, setOrderForm] = useState({
     phone: '',
@@ -158,6 +219,20 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       }
     };
     fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    const fetchMessageTemplates = async () => {
+      try {
+        const data = await settingService.getAll();
+        setMessageTemplates(parseMessageTemplates(data.message_templates));
+      } catch (err) {
+        console.error('Lỗi khi tải tin nhắn mẫu:', err);
+        setMessageTemplates(DEFAULT_MESSAGE_TEMPLATES);
+      }
+    };
+
+    fetchMessageTemplates();
   }, []);
 
   useEffect(() => {
@@ -1414,18 +1489,20 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
               {!translationMode && isTemplatePanelOpen && (
                 <div className="mt-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 shadow-sm">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-wider text-blue-700">Tin nhắn mẫu</p>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wider text-blue-700">Tin nhắn mẫu</p>
+                      <p className="text-[11px] font-semibold text-blue-500">Đang hiển thị theo {activeTemplateLanguageLabel}</p>
+                    </div>
                     <button onClick={() => setIsTemplatePanelOpen(false)} className="text-xs font-bold text-slate-400 hover:text-slate-600">Đóng</button>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {[
-                      'Dạ em chào anh/chị, Sky Mobile có thể hỗ trợ mình thông tin gì ạ?',
-                      'Dạ anh/chị cho em xin số điện thoại để CSKH hỗ trợ nhanh hơn ạ.',
-                      'Dạ bên em sẽ kiểm tra và phản hồi lại mình trong ít phút ạ.',
-                      'Dạ anh/chị muốn tham khảo dòng máy hoặc gói cước nào ạ?',
-                      'Dạ cảm ơn anh/chị đã liên hệ Sky Mobile ạ.'
-                    ].map((template) => (
+                    {activeMessageTemplates.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-blue-200 bg-white/70 px-3 py-4 text-xs font-semibold text-slate-500">
+                        Chưa có tin nhắn mẫu cho ngôn ngữ này. Vui lòng thêm trong Cài đặt hệ thống.
+                      </div>
+                    )}
+                    {activeMessageTemplates.map((template) => (
                       <button
                         key={template}
                         onClick={() => {
