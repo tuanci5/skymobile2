@@ -1044,11 +1044,16 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     const page = pages.find(p => p.page_id === pageId);
     if (!page) return;
 
-    let newUsers = [...(editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || []))];
+    const email = userEmail.toLowerCase();
+    let currentAssigned = (editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || []));
+    // Ensure all items are lowercased for comparison
+    currentAssigned = currentAssigned.map(u => u.toLowerCase());
+    
+    let newUsers = [...currentAssigned];
     if (isChecked) {
-      if (!newUsers.includes(userEmail)) newUsers.push(userEmail);
+      if (!newUsers.includes(email)) newUsers.push(email);
     } else {
-      newUsers = newUsers.filter(u => u !== userEmail);
+      newUsers = newUsers.filter(u => u !== email);
     }
 
     setEditingPage(prev => ({
@@ -2293,8 +2298,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         type="checkbox" 
                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                         checked={editingPage?.id === page.page_id && editingPage.assignedUsers 
-                                          ? editingPage.assignedUsers.includes(staff.email)
-                                          : (page.assigned_users || []).includes(staff.email)}
+                                          ? editingPage.assignedUsers.map(u => u.toLowerCase()).includes(staff.email.toLowerCase())
+                                          : (page.assigned_users || []).map(u => u.toLowerCase()).includes(staff.email.toLowerCase())}
                                         onChange={(e) => handleAssignPageUser(page.page_id, staff.email, e.target.checked)}
                                       />
                                       <span className="text-sm text-slate-700">{staff.name} <span className="text-xs text-slate-400">({staff.role || 'Thành viên'})</span></span>

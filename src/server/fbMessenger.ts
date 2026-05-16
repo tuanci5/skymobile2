@@ -447,13 +447,19 @@ router.put('/pages/:page_id', async (req, res) => {
     params.push(page_id);
     const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex}`;
     
-    const logData = `[${new Date().toISOString()}] Updating page ${page_id}\nUpdates: ${JSON.stringify(updates)}\nQuery: ${query}\nParams: ${JSON.stringify(params)}\n\n`;
-    require('fs').appendFileSync('debug_log.txt', logData);
+    console.log(`📡 Updating Page ${page_id}:`, updates);
     
-    await pool.query(query, params);
-    res.json({ success: true });
+    const result = await pool.query(query, params);
+    
+    if (result.rowCount === 0) {
+      console.warn(`⚠️ No page found with ID ${page_id} to update.`);
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    console.log(`✅ Page ${page_id} updated successfully.`);
+    res.json({ success: true, message: 'Settings updated successfully' });
   } catch (err: any) {
-    console.error('Error updating page:', err);
+    console.error('❌ Error updating page:', err);
     res.status(500).json({ error: err.message });
   }
 });
