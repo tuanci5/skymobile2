@@ -23,9 +23,17 @@ import { BusinessPlanPage } from './pages/BusinessPlanPage';
 import { ModelPage } from './pages/ModelPage';
 import { SettingsPage } from './pages/SettingsPage';
 
+import { MobileMessengerPage } from './pages/mobile/MobileMessengerPage';
+import { MobileTaskPage } from './pages/mobile/MobileTaskPage';
+import { MobileProductsPage } from './pages/mobile/MobileProductsPage';
+import { MobileRevenuePage } from './pages/mobile/MobileRevenuePage';
+import { MobileMenuPage } from './pages/mobile/MobileMenuPage';
+
 import { ROLE_MAPPING } from './auth/roleMapping';
 import { isAdminRole } from './auth/roleUtils';
 import { AppShell } from './layout/AppShell';
+import { MobileShell } from './layout/MobileShell';
+import { useIsMobile } from './hooks/useIsMobile';
 import { PATH_TO_TAB, TAB_TO_PATH } from './routing/navigation';
 import { TabType } from './types';
 
@@ -41,12 +49,15 @@ function AppContent() {
   const { pathname } = useLocation();
 
   // --- Derive navigation state from URL ---
+  const isMobile = useIsMobile();
+
   const pathParts = pathname.replace(/^\//, '').split('/');
   const rootSeg = pathParts[0] || 'model';
   const subSeg = pathParts[1] || '';
   const teamSeg = pathParts[2] || '';
 
-  const activeTab: TabType = PATH_TO_TAB[rootSeg] ?? 'model';
+  const activeTab: TabType = (rootSeg === 'mobile-menu' ? 'model' : PATH_TO_TAB[rootSeg]) ?? 'model';
+  const isMobileMenu = rootSeg === 'mobile-menu';
   const activeDept = (activeTab === 'model' && ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(subSeg)) ? subSeg : null;
   const activeTeam = (activeDept === 'sales-mkt' && ['marketing', 'sale', 'cskh'].includes(teamSeg)) ? teamSeg as any : null;
   const hrSubTab = activeTab === 'hr' ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : 'jd')) : 'jd';
@@ -107,6 +118,44 @@ function AppContent() {
     navigate(TAB_TO_PATH[tab]);
   };
 
+  // ── MOBILE LAYOUT ──
+  if (isMobile) {
+    return (
+      <MobileShell activeTab={activeTab} routeKey={pathname}>
+        {isMobileMenu ? (
+          <MobileMenuPage user={user} onLogout={logout} isSystemAdmin={isSystemAdmin} allowedTabs={allowedTabs} />
+        ) : !hasPermission(activeTab) ? (
+          <div className="flex flex-col items-center justify-center py-40 space-y-6 px-6">
+            <div className="p-6 bg-rose-100 text-rose-600 rounded-full"><ShieldAlert className="w-12 h-12" /></div>
+            <h2 className="text-xl font-bold text-slate-900 text-center">Truy cập bị từ chối</h2>
+            <button onClick={() => navigate('/model')} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold text-sm">Quay lại</button>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'messenger' && <MobileMessengerPage user={user} />}
+            {activeTab === 'tasks' && <MobileTaskPage currentUser={user} />}
+            {activeTab === 'products' && <MobileProductsPage />}
+            {activeTab === 'revenue' && <MobileRevenuePage />}
+            {/* Fallback: desktop pages rendered on mobile for other tabs */}
+            {activeTab === 'model' && !isMobileMenu && (
+              <div className="p-4 pb-24">
+                <ModelPage activeDept={activeDept} activeTeam={activeTeam} activeRole={activeRole} setActiveRole={setActiveRole}
+                  goToDept={(dept) => navigate(dept ? `/model/${dept}` : '/model')}
+                  goToTeam={(team) => navigate(team ? `/model/sales-mkt/${team}` : '/model/sales-mkt')} />
+              </div>
+            )}
+            {activeTab === 'hr' && <div className="p-4 pb-24"><HRPage selectedRole={restrictedView ? internalRoleId : activeRole} setSelectedRole={restrictedView ? () => {} : setActiveRole} setActiveTab={goToTab} restricted={restrictedView} hrSubTab={hrSubTab} user={user} /></div>}
+            {activeTab === 'training' && <div className="p-4 pb-24"><TrainingPage courseSlug={subSeg === 'course' ? teamSeg : null} lectureSlug={subSeg === 'lecture' ? teamSeg : null} lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null} /></div>}
+            {activeTab === 'business' && <div className="p-4 pb-24"><BusinessPlanPage initialSubTab="finance" /></div>}
+            {activeTab === 'users' && <div className="p-4 pb-24"><UserPage /></div>}
+            {activeTab === 'settings' && <div className="p-4 pb-24"><SettingsPage /></div>}
+          </>
+        )}
+      </MobileShell>
+    );
+  }
+
+  // ── DESKTOP LAYOUT (unchanged) ──
   return (
     <AppShell
       activeTab={activeTab}

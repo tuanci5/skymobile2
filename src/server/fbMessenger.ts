@@ -398,39 +398,62 @@ router.post('/pages', async (req, res) => {
 router.put('/pages/:page_id', async (req, res) => {
   try {
     const { page_id } = req.params;
-    const { access_token, dify_api_key, facebook_ad_account_id, business_id, ai_reply_delay, ai_start_hour, ai_end_hour } = req.body;
+    const updates = req.body;
     
-    if (access_token && access_token.trim() !== '') {
-      await pool.query(
-        'UPDATE fb_pages SET access_token = $1, dify_api_key = $2, facebook_ad_account_id = $3, business_id = $4, ai_reply_delay = $5, ai_start_hour = $6, ai_end_hour = $7 WHERE page_id = $8',
-        [
-          access_token, 
-          dify_api_key,
-          facebook_ad_account_id || null,
-          business_id || null,
-          ai_reply_delay !== undefined ? ai_reply_delay : 5, 
-          ai_start_hour !== undefined ? ai_start_hour : 0, 
-          ai_end_hour !== undefined ? ai_end_hour : 24, 
-          page_id
-        ]
-      );
-    } else {
-      await pool.query(
-        'UPDATE fb_pages SET dify_api_key = $1, facebook_ad_account_id = $2, business_id = $3, ai_reply_delay = $4, ai_start_hour = $5, ai_end_hour = $6 WHERE page_id = $7',
-        [
-          dify_api_key,
-          facebook_ad_account_id || null,
-          business_id || null,
-          ai_reply_delay !== undefined ? ai_reply_delay : 5, 
-          ai_start_hour !== undefined ? ai_start_hour : 0, 
-          ai_end_hour !== undefined ? ai_end_hour : 24, 
-          page_id
-        ]
-      );
+    if (Object.keys(updates).length === 0) {
+      return res.json({ success: true, message: 'No fields to update' });
     }
+
+    const fieldMap: Record<string, string> = {
+      access_token: 'access_token',
+      dify_api_key: 'dify_api_key',
+      facebook_ad_account_id: 'facebook_ad_account_id',
+      business_id: 'business_id',
+      ai_reply_delay: 'ai_reply_delay',
+      ai_start_hour: 'ai_start_hour',
+      ai_end_hour: 'ai_end_hour',
+      distribution_mode: 'distribution_mode',
+      assigned_users: 'assigned_users'
+    };
+
+    const setClauses: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updates[key] !== undefined) {
+        if (key === 'assigned_users') {
+          setClauses.push(`${dbField} = $${paramIndex}::jsonb`);
+          params.push(JSON.stringify(updates[key] || []));
+        } else if (key === 'access_token') {
+           if (updates[key].trim() !== '') {
+             setClauses.push(`${dbField} = $${paramIndex}`);
+             params.push(updates[key]);
+           } else {
+             continue; // Skip empty token
+           }
+        } else {
+          setClauses.push(`${dbField} = $${paramIndex}`);
+          params.push(updates[key] === '' ? null : updates[key]);
+        }
+        paramIndex++;
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.json({ success: true, message: 'No valid fields to update' });
+    }
+
+    params.push(page_id);
+    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex}`;
     
+    const logData = `[${new Date().toISOString()}] Updating page ${page_id}\nUpdates: ${JSON.stringify(updates)}\nQuery: ${query}\nParams: ${JSON.stringify(params)}\n\n`;
+    require('fs').appendFileSync('debug_log.txt', logData);
+    
+    await pool.query(query, params);
     res.json({ success: true });
   } catch (err: any) {
+    console.error('Error updating page:', err);
     res.status(500).json({ error: err.message });
   }
 });

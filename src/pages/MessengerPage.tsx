@@ -212,7 +212,18 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     businessId: ''
   });
 
-  const [editingPage, setEditingPage] = useState<{ id: string, token: string, difyKey: string, facebookAdAccountId?: string, businessId?: string, aiReplyDelay?: number, aiStartHour?: number, aiEndHour?: number } | null>(null);
+  const [editingPage, setEditingPage] = useState<{ 
+    id: string, 
+    token: string, 
+    difyKey: string, 
+    facebookAdAccountId?: string, 
+    businessId?: string, 
+    aiReplyDelay?: number, 
+    aiStartHour?: number, 
+    aiEndHour?: number,
+    distributionMode?: 'manual' | 'round_robin' | 'ai_first',
+    assignedUsers?: string[]
+  } | null>(null);
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
@@ -1029,31 +1040,29 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     setPages(prev => prev.map(p => p.page_id === pageId ? { ...p, distribution_mode: mode } : p));
   };
 
-  const handleAssignPageUser = async (pageId: string, userEmail: string, isChecked: boolean) => {
+  const handleAssignPageUser = (pageId: string, userEmail: string, isChecked: boolean) => {
     const page = pages.find(p => p.page_id === pageId);
     if (!page) return;
 
-    let newUsers = [...(page.assigned_users || [])];
+    let newUsers = [...(editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || []))];
     if (isChecked) {
       if (!newUsers.includes(userEmail)) newUsers.push(userEmail);
     } else {
       newUsers = newUsers.filter(u => u !== userEmail);
     }
 
-    setPages(prev => prev.map(p => p.page_id === pageId ? { ...p, assigned_users: newUsers } : p));
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/fb/pages/${pageId}/assign-users`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assigned_users: newUsers })
-      });
-      if (!res.ok) throw new Error('Failed to update page assignments');
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi cập nhật nhân sự quản lý Page');
-      setPages(prev => prev.map(p => p.page_id === pageId ? { ...p, assigned_users: page.assigned_users } : p));
-    }
+    setEditingPage(prev => ({
+      id: pageId,
+      token: prev?.id === pageId ? prev.token : '',
+      difyKey: prev?.id === pageId ? prev.difyKey : (page.dify_api_key || ''),
+      facebookAdAccountId: prev?.id === pageId ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+      businessId: prev?.id === pageId ? prev.businessId : (page.business_id || ''),
+      aiReplyDelay: prev?.id === pageId ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+      aiStartHour: prev?.id === pageId ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+      aiEndHour: prev?.id === pageId ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+      distributionMode: prev?.id === pageId ? (prev.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual'),
+      assignedUsers: newUsers
+    }));
   };
 
   const handleAddPage = async () => {
@@ -1106,31 +1115,40 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const handleUpdatePageSettings = async (pageId: string) => {
     if (!editingPage || editingPage.id !== pageId) return;
 
+    const page = pages.find(p => p.page_id === pageId);
+    if (!page) return;
+
+    const updates: any = {};
+    if (editingPage.token.trim() !== '') updates.access_token = editingPage.token;
+    if (editingPage.difyKey !== undefined) updates.dify_api_key = editingPage.difyKey;
+    if (editingPage.facebookAdAccountId !== undefined) updates.facebook_ad_account_id = editingPage.facebookAdAccountId;
+    if (editingPage.businessId !== undefined) updates.business_id = editingPage.businessId;
+    if (editingPage.aiReplyDelay !== undefined) updates.ai_reply_delay = editingPage.aiReplyDelay;
+    if (editingPage.aiStartHour !== undefined) updates.ai_start_hour = editingPage.aiStartHour;
+    if (editingPage.aiEndHour !== undefined) updates.ai_end_hour = editingPage.aiEndHour;
+    if (editingPage.distributionMode !== undefined) updates.distribution_mode = editingPage.distributionMode;
+    if (editingPage.assignedUsers !== undefined) updates.assigned_users = editingPage.assignedUsers;
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/fb/pages/${pageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          access_token: editingPage.token,
-          dify_api_key: editingPage.difyKey,
-          facebook_ad_account_id: editingPage.facebookAdAccountId,
-          business_id: editingPage.businessId,
-          ai_reply_delay: editingPage.aiReplyDelay,
-          ai_start_hour: editingPage.aiStartHour,
-          ai_end_hour: editingPage.aiEndHour
-        })
+        body: JSON.stringify(updates)
       });
 
       if (res.ok) {
         setPages(prev => prev.map(p => p.page_id === pageId ? {
           ...p,
-          dify_api_key: editingPage.difyKey,
-          facebook_ad_account_id: editingPage.facebookAdAccountId,
-          business_id: editingPage.businessId,
-          ai_reply_delay: editingPage.aiReplyDelay,
-          ai_start_hour: editingPage.aiStartHour,
-          ai_end_hour: editingPage.aiEndHour
+          dify_api_key: updates.dify_api_key !== undefined ? updates.dify_api_key : p.dify_api_key,
+          facebook_ad_account_id: updates.facebook_ad_account_id !== undefined ? updates.facebook_ad_account_id : p.facebook_ad_account_id,
+          business_id: updates.business_id !== undefined ? updates.business_id : p.business_id,
+          ai_reply_delay: updates.ai_reply_delay !== undefined ? updates.ai_reply_delay : p.ai_reply_delay,
+          ai_start_hour: updates.ai_start_hour !== undefined ? updates.ai_start_hour : p.ai_start_hour,
+          ai_end_hour: updates.ai_end_hour !== undefined ? updates.ai_end_hour : p.ai_end_hour,
+          distribution_mode: updates.distribution_mode !== undefined ? updates.distribution_mode : p.distribution_mode,
+          assigned_users: updates.assigned_users !== undefined ? updates.assigned_users : p.assigned_users
         } : p));
+        setEditingPage(null);
         alert("Đã cập nhật cài đặt Fanpage thành công!");
       } else {
         alert("Lỗi khi cập nhật cài đặt.");
@@ -2046,10 +2064,24 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                           <div className="flex flex-col gap-1 items-end ml-2" onClick={e => e.stopPropagation()}>
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phân phối</span>
                             <select
-                              className="text-xs bg-white border border-slate-200 rounded-md px-2 py-1 font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500 shadow-sm"
-                              value={page.distribution_mode || 'manual'}
-                              onChange={(e) => handleUpdatePageSettings(page.page_id)}
-                            >
+                                className="text-xs bg-white border border-slate-200 rounded-md px-2 py-1 font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500 shadow-sm"
+                                value={editingPage?.id === page.page_id ? (editingPage.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual')}
+                                onChange={(e) => {
+                                  const mode = e.target.value as 'manual' | 'round_robin' | 'ai_first';
+                                  setEditingPage(prev => ({
+                                    id: page.page_id,
+                                    token: prev?.id === page.page_id ? prev.token : '',
+                                    difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                    facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                    businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
+                                    aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                    aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                    aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                    assignedUsers: prev?.id === page.page_id ? prev.assignedUsers : (page.assigned_users || []),
+                                    distributionMode: mode
+                                  }));
+                                }}
+                              >
                               <option value="manual">Thủ công (Manager chia)</option>
                               <option value="round_robin">Chia đều (Round Robin)</option>
                               <option value="ai_first">AI Trả lời trước</option>
@@ -2084,7 +2116,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: newToken,
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
-                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || '')
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   />
@@ -2103,7 +2140,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         token: prev?.id === page.page_id ? prev.token : '',
                                         difyKey: newKey,
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
-                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || '')
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   />
@@ -2124,7 +2166,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
-                                        aiReplyDelay: newDelay
+                                        aiReplyDelay: newDelay,
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   />
@@ -2150,7 +2196,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
-                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   />
@@ -2174,7 +2222,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         businessId: value,
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
-                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   />
@@ -2195,7 +2245,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: val,
-                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24)
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   >
@@ -2219,7 +2271,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
                                         aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
-                                        aiEndHour: val
+                                        aiEndHour: val,
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
                                       }));
                                     }}
                                   >
@@ -2238,7 +2292,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       <input 
                                         type="checkbox" 
                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        checked={(page.assigned_users || []).includes(staff.email)}
+                                        checked={editingPage?.id === page.page_id && editingPage.assignedUsers 
+                                          ? editingPage.assignedUsers.includes(staff.email)
+                                          : (page.assigned_users || []).includes(staff.email)}
                                         onChange={(e) => handleAssignPageUser(page.page_id, staff.email, e.target.checked)}
                                       />
                                       <span className="text-sm text-slate-700">{staff.name} <span className="text-xs text-slate-400">({staff.role || 'Thành viên'})</span></span>
