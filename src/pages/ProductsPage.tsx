@@ -14,6 +14,11 @@ let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 
 if (API_BASE_URL === '/') API_BASE_URL = '';
 else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
+interface MonthlyPayment {
+  month: number;
+  amount: number;
+}
+
 interface DetailedProduct {
   id: number;
   name: string;
@@ -23,6 +28,9 @@ interface DetailedProduct {
   seller: string;
   category: string;
   description: string;
+  sale_type?: 'outright' | 'monthly';
+  initial_payment?: number;
+  monthly_payments?: MonthlyPayment[];
   created_at: string;
 }
 
@@ -87,15 +95,20 @@ export const ProductsPage: React.FC = () => {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<DetailedProduct | null>(null);
-  const [productFormData, setProductFormData] = useState({
+  const defaultProductFormData = () => ({
     name: '',
     sale_price: 0,
     import_price: 0,
     import_date: new Date().toISOString().split('T')[0],
     seller: '',
     category: 'Wifi Cầm Tay & Wifi Cắm điện Au',
-    description: ''
+    description: '',
+    sale_type: 'outright' as 'outright' | 'monthly',
+    initial_payment: 0,
+    monthly_payments: [{ month: 1, amount: 0 }] as MonthlyPayment[]
   });
+
+  const [productFormData, setProductFormData] = useState(defaultProductFormData());
 
   const fetchDetailedProducts = async () => {
     setLoadingProducts(true);
@@ -120,6 +133,12 @@ export const ProductsPage: React.FC = () => {
   const handleOpenModal = (product?: DetailedProduct) => {
     if (product) {
       setEditingProduct(product);
+      const monthlyPayments = Array.isArray(product.monthly_payments) && product.monthly_payments.length > 0
+        ? product.monthly_payments.map((payment, index) => ({
+            month: Number(payment.month || index + 1),
+            amount: Number(payment.amount || 0)
+          }))
+        : [{ month: 1, amount: 0 }];
       setProductFormData({
         name: product.name,
         sale_price: Number(product.sale_price),
@@ -127,19 +146,14 @@ export const ProductsPage: React.FC = () => {
         import_date: product.import_date || '',
         seller: product.seller || '',
         category: product.category || 'Wifi Cầm Tay & Wifi Cắm điện Au',
-        description: product.description || ''
+        description: product.description || '',
+        sale_type: product.sale_type === 'monthly' ? 'monthly' : 'outright',
+        initial_payment: Number(product.initial_payment || 0),
+        monthly_payments: monthlyPayments
       });
     } else {
       setEditingProduct(null);
-      setProductFormData({
-        name: '',
-        sale_price: 0,
-        import_price: 0,
-        import_date: new Date().toISOString().split('T')[0],
-        seller: '',
-        category: 'Wifi Cầm Tay & Wifi Cắm điện Au',
-        description: ''
-      });
+      setProductFormData(defaultProductFormData());
     }
     setIsModalOpen(true);
   };
@@ -152,10 +166,18 @@ export const ProductsPage: React.FC = () => {
         : `${API_BASE_URL}/api/products`;
       const method = editingProduct ? 'PUT' : 'POST';
       
+      const monthlyTotal = productFormData.initial_payment + productFormData.monthly_payments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+      const payload = {
+        ...productFormData,
+        sale_price: productFormData.sale_type === 'monthly' ? monthlyTotal : productFormData.sale_price,
+        monthly_payments: productFormData.sale_type === 'monthly' ? productFormData.monthly_payments : [],
+        initial_payment: productFormData.sale_type === 'monthly' ? productFormData.initial_payment : 0
+      };
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productFormData)
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
@@ -204,6 +226,37 @@ export const ProductsPage: React.FC = () => {
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(price);
+  };
+
+  const getMonthlyPayments = (product: DetailedProduct) => {
+    return Array.isArray(product.monthly_payments) ? product.monthly_payments : [];
+  };
+
+  const getTotalSalePrice = (product: DetailedProduct) => {
+    if (product.sale_type !== 'monthly') return Number(product.sale_price || 0);
+    return Number(product.initial_payment || 0) + getMonthlyPayments(product).reduce((total, payment) => total + Number(payment.amount || 0), 0);
+  };
+
+  const updateMonthlyPayment = (index: number, amount: number) => {
+    const monthlyPayments = productFormData.monthly_payments.map((payment, paymentIndex) =>
+      paymentIndex === index ? { ...payment, amount } : payment
+    );
+    setProductFormData({ ...productFormData, monthly_payments: monthlyPayments });
+  };
+
+  const addMonthlyPayment = () => {
+    const nextMonth = productFormData.monthly_payments.length + 1;
+    setProductFormData({
+      ...productFormData,
+      monthly_payments: [...productFormData.monthly_payments, { month: nextMonth, amount: 0 }]
+    });
+  };
+
+  const removeMonthlyPayment = (index: number) => {
+    const monthlyPayments = productFormData.monthly_payments
+      .filter((_, paymentIndex) => paymentIndex !== index)
+      .map((payment, paymentIndex) => ({ ...payment, month: paymentIndex + 1 }));
+    setProductFormData({ ...productFormData, monthly_payments: monthlyPayments });
   };
 
   return (
@@ -414,7 +467,9 @@ export const ProductsPage: React.FC = () => {
                     </tr>
                   ) : (
                     filteredInventoryProducts.map((p) => {
-                      const profit = p.sale_price - p.import_price;
+                      const totalSalePrice = getTotalSalePrice(p);
+                      const profit = totalSalePrice - Number(p.import_price || 0);
+                      const monthlyPayments = getMonthlyPayments(p);
                       return (
                         <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="px-6 py-5">
@@ -431,7 +486,22 @@ export const ProductsPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-6 py-5 font-medium text-slate-600">{formatPrice(Number(p.import_price))}</td>
-                          <td className="px-6 py-5 font-bold text-slate-900">{formatPrice(Number(p.sale_price))}</td>
+                          <td className="px-6 py-5 font-bold text-slate-900">
+                            {p.sale_type === 'monthly' ? (
+                              <div className="space-y-1">
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[11px] font-black uppercase tracking-wide">
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  Thu hàng tháng
+                                </div>
+                                <div>{formatPrice(totalSalePrice)}</div>
+                                <div className="text-[11px] font-semibold text-slate-500">
+                                  Lần đầu {formatPrice(Number(p.initial_payment || 0))} + {monthlyPayments.length} tháng
+                                </div>
+                              </div>
+                            ) : (
+                              formatPrice(totalSalePrice)
+                            )}
+                          </td>
                           <td className="px-6 py-5">
                             <span className={`font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                               {profit >= 0 ? '+' : ''}{formatPrice(profit)}
@@ -618,21 +688,6 @@ export const ProductsPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Giá bán (JPY)</label>
-                    <div className="relative">
-                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        required 
-                        type="number" 
-                        placeholder="0" 
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" 
-                        value={productFormData.sale_price} 
-                        onChange={e => setProductFormData({...productFormData, sale_price: Number(e.target.value)})} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">Ngày nhập hàng</label>
                     <div className="relative">
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -686,6 +741,113 @@ export const ProductsPage: React.FC = () => {
                       value={productFormData.description} 
                       onChange={e => setProductFormData({...productFormData, description: e.target.value})} 
                     />
+                  </div>
+
+                  <div className="space-y-4 col-span-1 md:col-span-2 rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-indigo-50/40 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <label className="text-sm font-bold text-slate-700">Kiểu giá bán</label>
+                        <p className="text-xs text-slate-500 mt-1">Chọn bán đứt hoặc thu tiền theo từng tháng.</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setProductFormData({ ...productFormData, sale_type: 'outright' })}
+                          className={`px-4 py-2.5 rounded-xl text-sm font-black transition-all ${productFormData.sale_type === 'outright' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Bán đứt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductFormData({ ...productFormData, sale_type: 'monthly' })}
+                          className={`px-4 py-2.5 rounded-xl text-sm font-black transition-all ${productFormData.sale_type === 'monthly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Thu hàng tháng
+                        </button>
+                      </div>
+                    </div>
+
+                    {productFormData.sale_type === 'outright' ? (
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">Giá bán (JPY)</label>
+                        <div className="relative">
+                          <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input 
+                            required 
+                            type="number" 
+                            placeholder="0" 
+                            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white" 
+                            value={productFormData.sale_price} 
+                            onChange={e => setProductFormData({...productFormData, sale_price: Number(e.target.value)})} 
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-slate-700">Thu tiền lần đầu (JPY)</label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              required
+                              type="number"
+                              placeholder="0"
+                              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none bg-white"
+                              value={productFormData.initial_payment}
+                              onChange={e => setProductFormData({...productFormData, initial_payment: Number(e.target.value)})}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-sm font-bold text-slate-700">Thu tiền từng tháng</label>
+                            <button
+                              type="button"
+                              onClick={addMonthlyPayment}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Thêm tháng
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            {productFormData.monthly_payments.map((payment, index) => (
+                              <div key={payment.month} className="grid grid-cols-[96px_1fr_auto] items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+                                <div className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-black text-center">
+                                  Tháng {index + 1}
+                                </div>
+                                <input
+                                  required
+                                  type="number"
+                                  placeholder="Số tiền"
+                                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                                  value={payment.amount}
+                                  onChange={e => updateMonthlyPayment(index, Number(e.target.value))}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeMonthlyPayment(index)}
+                                  disabled={productFormData.monthly_payments.length === 1}
+                                  className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                                  title="Xóa tháng"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-indigo-600 p-4 text-white shadow-lg shadow-indigo-200">
+                          <div className="text-xs font-bold uppercase tracking-widest text-indigo-100">Tổng thu dự kiến</div>
+                          <div className="mt-1 text-2xl font-black">
+                            {formatPrice(productFormData.initial_payment + productFormData.monthly_payments.reduce((total, payment) => total + Number(payment.amount || 0), 0))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

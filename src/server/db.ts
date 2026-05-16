@@ -496,6 +496,35 @@ export async function initDBUtils() {
       )
     `);
 
+    // Ensure product inventory table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        sale_price DECIMAL(12,2) DEFAULT 0,
+        import_price DECIMAL(12,2) DEFAULT 0,
+        import_date VARCHAR(50),
+        seller VARCHAR(255),
+        category VARCHAR(255),
+        description TEXT,
+        sale_type VARCHAR(20) DEFAULT 'outright',
+        initial_payment DECIMAL(12,2) DEFAULT 0,
+        monthly_payments JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    const productColumns = [
+      "ALTER TABLE products ADD COLUMN sale_type VARCHAR(20) DEFAULT 'outright'",
+      "ALTER TABLE products ADD COLUMN initial_payment DECIMAL(12,2) DEFAULT 0",
+      "ALTER TABLE products ADD COLUMN monthly_payments JSONB DEFAULT '[]'::jsonb"
+    ];
+    for (const alterSql of productColumns) {
+      try {
+        await client.query(alterSql);
+      } catch (e) {}
+    }
+
     
     console.log('✅ PostgreSQL schema verified.');
   } catch (err: any) {
