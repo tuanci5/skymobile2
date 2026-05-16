@@ -664,6 +664,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     const newMessage: Message = {
       id: optimisticId,
       sender_type: 'human',
+      sender_name: user?.name || user?.email || 'CSKH',
+      sender_email: user?.email || null,
       message_text: textToSend,
       created_at: new Date().toISOString()
     };
@@ -679,7 +681,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversation_id: selectedConv.id,
-          text: textToSend
+          text: textToSend,
+          sender_name: user?.name || user?.email || null,
+          sender_email: user?.email || null
         })
       });
 
@@ -780,6 +784,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     const optimisticMessage: Message = {
       id: optimisticId,
       sender_type: 'human',
+      sender_name: user?.name || user?.email || 'CSKH',
+      sender_email: user?.email || null,
       message_text: '[Ảnh]',
       attachment_type: 'image',
       attachment_proxy_url: finalUrl ? `/api/fb/message-attachment-proxy/${optimisticId}` : null,
@@ -797,7 +803,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         body: JSON.stringify({
           conversation_id: selectedConv.id,
           image_url: finalUrl || undefined,
-          library_image_id: libraryImageId
+          library_image_id: libraryImageId,
+          sender_name: user?.name || user?.email || null,
+          sender_email: user?.email || null
         })
       });
       const data = await res.json().catch(() => null);
@@ -1481,6 +1489,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               )}
               {messages.map((msg, i) => {
                 const isUser = msg.sender_type === 'user';
+                const senderLabel = msg.sender_type === 'ai'
+                  ? 'AI Dify'
+                  : (msg.sender_name || msg.sender_email || 'CSKH');
                 return (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -1541,7 +1552,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         <span className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           {!isUser && (
-                            <span className="opacity-70 ml-1 font-medium">• {msg.sender_type === 'ai' ? 'AI Dify' : 'CSKH'}</span>
+                            <span className="opacity-70 ml-1 font-medium">• {senderLabel}</span>
                           )}
                         </span>
                       </div>
