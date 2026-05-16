@@ -5,7 +5,8 @@ import {
   Briefcase, Globe, Store, Network, Search, CheckCircle2,
   PackageSearch, X, Eye, Info, Plus, Edit2, Trash2, Save,
   Calendar, Tag, User, DollarSign, ArrowLeft, MoreVertical,
-  Layers, Package, TrendingUp, AlertCircle, RefreshCw
+  Layers, Package, TrendingUp, AlertCircle, RefreshCw, Building2,
+  Phone, Mail, MapPin
 } from 'lucide-react';
 import { PRODUCTS, ProductItem } from '../data/productData';
 import { SUB_PRODUCTS_DATA } from '../data/subProductsData';
@@ -32,6 +33,17 @@ interface DetailedProduct {
   initial_payment?: number;
   monthly_payments?: MonthlyPayment[];
   created_at: string;
+}
+
+interface ProductSupplier {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -85,7 +97,7 @@ const itemVariants = {
 };
 
 export const ProductsPage: React.FC = () => {
-  const [view, setView] = useState<'overview' | 'inventory'>('overview');
+  const [view, setView] = useState<'overview' | 'inventory' | 'suppliers'>('overview');
   const [search, setSearch] = useState('');
   const [filterObj, setFilterObj] = useState<string>('Tất cả');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
@@ -95,6 +107,21 @@ export const ProductsPage: React.FC = () => {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<DetailedProduct | null>(null);
+
+  // Supplier states
+  const [suppliers, setSuppliers] = useState<ProductSupplier[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<ProductSupplier | null>(null);
+  const defaultSupplierFormData = () => ({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    notes: ''
+  });
+  const [supplierFormData, setSupplierFormData] = useState(defaultSupplierFormData());
+
   const defaultProductFormData = () => ({
     name: '',
     sale_price: 0,
@@ -124,13 +151,32 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
+  const fetchSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/suppliers`);
+      if (res.ok) {
+        setSuppliers(await res.json());
+      }
+    } catch (err) {
+      console.error('Error fetching product suppliers:', err);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
   useEffect(() => {
     if (view === 'inventory') {
       fetchDetailedProducts();
+      fetchSuppliers();
+    }
+    if (view === 'suppliers') {
+      fetchSuppliers();
     }
   }, [view]);
 
   const handleOpenModal = (product?: DetailedProduct) => {
+    fetchSuppliers();
     if (product) {
       setEditingProduct(product);
       const monthlyPayments = Array.isArray(product.monthly_payments) && product.monthly_payments.length > 0
@@ -201,6 +247,59 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleOpenSupplierModal = (supplier?: ProductSupplier) => {
+    if (supplier) {
+      setEditingSupplier(supplier);
+      setSupplierFormData({
+        name: supplier.name || '',
+        phone: supplier.phone || '',
+        email: supplier.email || '',
+        address: supplier.address || '',
+        notes: supplier.notes || ''
+      });
+    } else {
+      setEditingSupplier(null);
+      setSupplierFormData(defaultSupplierFormData());
+    }
+    setIsSupplierModalOpen(true);
+  };
+
+  const handleSubmitSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = editingSupplier
+        ? `${API_BASE_URL}/api/products/suppliers/${editingSupplier.id}`
+        : `${API_BASE_URL}/api/products/suppliers`;
+      const method = editingSupplier ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(supplierFormData)
+      });
+
+      if (res.ok) {
+        setIsSupplierModalOpen(false);
+        fetchSuppliers();
+      } else if (res.status === 409) {
+        alert('Nhà cung cấp này đã tồn tại.');
+      } else {
+        alert('Có lỗi xảy ra khi lưu nhà cung cấp.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteSupplier = async (id: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa nhà cung cấp này? Sản phẩm cũ vẫn giữ tên người bán đã lưu.')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/suppliers/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchSuppliers();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Lấy danh sách các Mục tiêu duy nhất từ dữ liệu
   const uniqueObjectives = useMemo(() => {
     const objs = new Set(PRODUCTS.map(p => p.objective));
@@ -223,6 +322,29 @@ export const ProductsPage: React.FC = () => {
       p.category?.toLowerCase().includes(search.toLowerCase())
     );
   }, [detailedProducts, search]);
+
+  const filteredSuppliers = useMemo(() => {
+    const keyword = search.toLowerCase();
+    return suppliers.filter(supplier =>
+      supplier.name.toLowerCase().includes(keyword) ||
+      supplier.phone?.toLowerCase().includes(keyword) ||
+      supplier.email?.toLowerCase().includes(keyword) ||
+      supplier.address?.toLowerCase().includes(keyword) ||
+      supplier.notes?.toLowerCase().includes(keyword)
+    );
+  }, [suppliers, search]);
+
+  const supplierOptions = useMemo(() => {
+    const options = [...suppliers];
+    if (productFormData.seller && !options.some(supplier => supplier.name === productFormData.seller)) {
+      options.unshift({
+        id: -1,
+        name: productFormData.seller,
+        created_at: new Date().toISOString()
+      });
+    }
+    return options;
+  }, [suppliers, productFormData.seller]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(price);
@@ -273,31 +395,39 @@ export const ProductsPage: React.FC = () => {
               <PackageSearch className="w-4 h-4" />
               <span>Hệ sinh thái sản phẩm</span>
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
               <button 
                 onClick={() => setView('overview')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Layers className="w-3.5 h-3.5" />
                 Chiến lược
               </button>
               <button 
                 onClick={() => setView('inventory')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Package className="w-3.5 h-3.5" />
                 Kho sản phẩm
               </button>
+              <button 
+                onClick={() => setView('suppliers')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'suppliers' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Người bán / Nhà cung cấp
+              </button>
             </div>
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
-            {view === 'overview' ? 'Danh Mục Khai Thác' : 'Quản Lý Kho Sản Phẩm'}
+            {view === 'overview' && 'Danh Mục Khai Thác'}
+            {view === 'inventory' && 'Quản Lý Kho Sản Phẩm'}
+            {view === 'suppliers' && 'Người Bán / Nhà Cung Cấp'}
           </h1>
           <p className="text-slate-500 mt-2 max-w-xl text-sm md:text-base leading-relaxed">
-            {view === 'overview' 
-              ? 'Danh sách các sản phẩm/dịch vụ cốt lõi mà công ty đang triển khai, cùng các định hướng mục tiêu và đánh giá thị trường cụ thể.'
-              : 'Quản lý chi tiết từng sản phẩm nhập kho, theo dõi giá nhập, giá bán, nhà cung cấp và ngày nhập hàng.'
-            }
+            {view === 'overview' && 'Danh sách các sản phẩm/dịch vụ cốt lõi mà công ty đang triển khai, cùng các định hướng mục tiêu và đánh giá thị trường cụ thể.'}
+            {view === 'inventory' && 'Quản lý chi tiết từng sản phẩm nhập kho, theo dõi giá nhập, giá bán, nhà cung cấp và ngày nhập hàng.'}
+            {view === 'suppliers' && 'Quản lý danh sách người bán, đối tác và nhà cung cấp để dùng trực tiếp trong form thêm sản phẩm mới.'}
           </p>
         </div>
 
@@ -312,12 +442,23 @@ export const ProductsPage: React.FC = () => {
               Thêm sản phẩm
             </button>
           )}
+          {view === 'suppliers' && (
+            <button 
+              onClick={() => handleOpenSupplierModal()}
+              className="flex items-center gap-2 px-6 py-3.5 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+            >
+              <Plus className="w-5 h-5" />
+              Thêm nhà cung cấp
+            </button>
+          )}
           <div className="hidden sm:flex gap-4">
             <div className="bg-slate-50 rounded-2xl p-4 min-w-[120px] border border-slate-100">
               <p className="text-2xl font-black text-slate-800">
-                {view === 'overview' ? PRODUCTS.length : detailedProducts.length}
+                {view === 'overview' ? PRODUCTS.length : view === 'inventory' ? detailedProducts.length : suppliers.length}
               </p>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">Sản phẩm</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
+                {view === 'suppliers' ? 'Nhà cung cấp' : 'Sản phẩm'}
+              </p>
             </div>
             {view === 'overview' && (
               <div className="bg-emerald-50 rounded-2xl p-4 min-w-[120px] border border-emerald-100">
@@ -337,7 +478,7 @@ export const ProductsPage: React.FC = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input
             type="text"
-            placeholder={view === 'overview' ? "Tìm kiếm sản phẩm hoặc từ khóa đánh giá..." : "Tìm tên sản phẩm, danh mục, người bán..."}
+            placeholder={view === 'overview' ? "Tìm kiếm sản phẩm hoặc từ khóa đánh giá..." : view === 'inventory' ? "Tìm tên sản phẩm, danh mục, người bán..." : "Tìm tên, SĐT, email, địa chỉ nhà cung cấp..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
@@ -359,13 +500,13 @@ export const ProductsPage: React.FC = () => {
             </div>
           </div>
         )}
-        {view === 'inventory' && (
+        {(view === 'inventory' || view === 'suppliers') && (
           <button 
-            onClick={fetchDetailedProducts}
+            onClick={view === 'inventory' ? fetchDetailedProducts : fetchSuppliers}
             className="p-3.5 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-blue-600 transition-colors shadow-sm"
             title="Làm mới"
           >
-            <RefreshCw className={`w-5 h-5 ${loadingProducts ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-5 h-5 ${(loadingProducts || loadingSuppliers) ? 'animate-spin' : ''}`} />
           </button>
         )}
       </div>
@@ -424,7 +565,7 @@ export const ProductsPage: React.FC = () => {
               );
             })}
           </motion.div>
-        ) : (
+        ) : view === 'inventory' ? (
           <motion.div 
             key="inventory"
             initial={{ opacity: 0 }}
@@ -540,6 +681,84 @@ export const ProductsPage: React.FC = () => {
                         </tr>
                       );
                     })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="suppliers"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Nhà cung cấp</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">SĐT</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Địa chỉ</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Ghi chú</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {loadingSuppliers ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+                          <p className="text-slate-500 font-medium">Đang tải danh sách...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredSuppliers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <Building2 className="w-10 h-10 text-slate-300" />
+                          <p className="text-slate-500 font-medium">Chưa có nhà cung cấp nào.</p>
+                          <button onClick={() => handleOpenSupplierModal()} className="text-blue-600 font-bold hover:underline text-sm">Thêm nhà cung cấp đầu tiên</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSuppliers.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                              <Building2 className="w-5 h-5" />
+                            </div>
+                            <span className="font-bold text-slate-800">{s.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-slate-600 text-sm">
+                          {s.phone ? <div className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-400" />{s.phone}</div> : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-6 py-5 text-slate-600 text-sm">
+                          {s.email ? <div className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" />{s.email}</div> : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-6 py-5 text-slate-600 text-sm max-w-[200px] truncate">
+                          {s.address ? <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400" /><span className="truncate">{s.address}</span></div> : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-6 py-5 text-slate-500 text-sm max-w-[180px] truncate">{s.notes || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleOpenSupplierModal(s)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Chỉnh sửa">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteSupplier(s.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Xóa">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
@@ -704,15 +923,34 @@ export const ProductsPage: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">Người bán / Nhà cung cấp</label>
                     <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        required 
-                        type="text" 
-                        placeholder="Tên đối tác..." 
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" 
-                        value={productFormData.seller} 
-                        onChange={e => setProductFormData({...productFormData, seller: e.target.value})} 
-                      />
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      {suppliers.length > 0 ? (
+                        <select
+                          required
+                          className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none appearance-none bg-white cursor-pointer"
+                          value={productFormData.seller}
+                          onChange={e => setProductFormData({...productFormData, seller: e.target.value})}
+                        >
+                          <option value="">-- Chọn nhà cung cấp --</option>
+                          {supplierOptions.map(supplier => (
+                            <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="Nhập tên hoặc vào tab Người bán để thêm..."
+                            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                            value={productFormData.seller}
+                            onChange={e => setProductFormData({...productFormData, seller: e.target.value})}
+                          />
+                          <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Chưa có nhà cung cấp. Hãy vào tab &ldquo;Người bán / Nhà cung cấp&rdquo; để thêm trước.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -865,6 +1103,72 @@ export const ProductsPage: React.FC = () => {
                   >
                     <Save className="w-5 h-5" />
                     Lưu sản phẩm
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal Thêm/Sửa Nhà cung cấp ── */}
+      <AnimatePresence>
+        {isSupplierModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSupplierModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                  {editingSupplier ? 'Chỉnh sửa nhà cung cấp' : 'Thêm nhà cung cấp mới'}
+                </h3>
+                <button onClick={() => setIsSupplierModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+              </div>
+              <form onSubmit={handleSubmitSupplier} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">Tên nhà cung cấp <span className="text-rose-500">*</span></label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input required type="text" placeholder="Vd: Công ty ABC..." className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" value={supplierFormData.name} onChange={e => setSupplierFormData({...supplierFormData, name: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Số điện thoại</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input type="tel" placeholder="0909..." className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" value={supplierFormData.phone} onChange={e => setSupplierFormData({...supplierFormData, phone: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input type="email" placeholder="email@..." className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" value={supplierFormData.email} onChange={e => setSupplierFormData({...supplierFormData, email: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">Địa chỉ</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-3.5 w-4 h-4 text-slate-400" />
+                    <input type="text" placeholder="Địa chỉ công ty..." className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none" value={supplierFormData.address} onChange={e => setSupplierFormData({...supplierFormData, address: e.target.value})} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700">Ghi chú</label>
+                  <textarea rows={3} placeholder="Thông tin bổ sung..." className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none resize-none" value={supplierFormData.notes} onChange={e => setSupplierFormData({...supplierFormData, notes: e.target.value})} />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="px-6 py-3 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 transition-all">Hủy bỏ</button>
+                  <button type="submit" className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+                    <Save className="w-5 h-5" />
+                    Lưu nhà cung cấp
                   </button>
                 </div>
               </form>

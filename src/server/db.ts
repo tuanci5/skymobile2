@@ -525,6 +525,26 @@ export async function initDBUtils() {
       } catch (e) {}
     }
 
+    // Ensure product suppliers table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS product_suppliers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        phone VARCHAR(100),
+        email VARCHAR(255),
+        address TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await client.query('ALTER TABLE product_suppliers ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    } catch (e) {}
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_product_suppliers_name ON product_suppliers(name)');
+
     
     console.log('✅ PostgreSQL schema verified.');
   } catch (err: any) {

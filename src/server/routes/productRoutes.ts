@@ -44,6 +44,94 @@ const normalizeProductPayload = (body: any) => {
   };
 };
 
+const normalizeSupplierPayload = (body: any) => ({
+  name: String(body.name || '').trim(),
+  phone: String(body.phone || '').trim(),
+  email: String(body.email || '').trim(),
+  address: String(body.address || '').trim(),
+  notes: String(body.notes || '').trim()
+});
+
+router.get('/suppliers', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM product_suppliers ORDER BY name ASC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching product suppliers:', error);
+    res.status(500).json({ error: 'Failed to fetch product suppliers' });
+  }
+});
+
+router.post('/suppliers', async (req, res) => {
+  try {
+    const supplier = normalizeSupplierPayload(req.body);
+    if (!supplier.name) {
+      return res.status(400).json({ error: 'Supplier name is required' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO product_suppliers (name, phone, email, address, notes)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [supplier.name, supplier.phone, supplier.email, supplier.address, supplier.notes]
+    );
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error creating product supplier:', error);
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Supplier already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create product supplier' });
+  }
+});
+
+router.put('/suppliers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supplier = normalizeSupplierPayload(req.body);
+    if (!supplier.name) {
+      return res.status(400).json({ error: 'Supplier name is required' });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE product_suppliers SET
+        name = $1,
+        phone = $2,
+        email = $3,
+        address = $4,
+        notes = $5,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
+      RETURNING *`,
+      [supplier.name, supplier.phone, supplier.email, supplier.address, supplier.notes, id]
+    );
+
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Supplier not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating product supplier:', error);
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Supplier already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update product supplier' });
+  }
+});
+
+router.delete('/suppliers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM product_suppliers WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting product supplier:', error);
+    res.status(500).json({ error: 'Failed to delete product supplier' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM products ORDER BY created_at DESC, id DESC');
