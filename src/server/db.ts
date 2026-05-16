@@ -284,6 +284,8 @@ export async function initDBUtils() {
         id SERIAL PRIMARY KEY,
         conversation_id INT NOT NULL REFERENCES fb_conversations(id) ON DELETE CASCADE,
         sender_type VARCHAR(50) NOT NULL, -- 'user', 'ai', 'human'
+        sender_name VARCHAR(255),
+        sender_email VARCHAR(255),
         message_text TEXT,
         ai_translation TEXT,
         ai_translation_language VARCHAR(50) DEFAULT 'Vietnamese',
@@ -292,7 +294,13 @@ export async function initDBUtils() {
       )
     `);
 
-    // Add AI translation cache columns and attachment columns if missing
+    // Add staff sender metadata columns, AI translation cache columns and attachment columns if missing
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN sender_name VARCHAR(255)");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN sender_email VARCHAR(255)");
+    } catch (e) {}
     try {
       await client.query("ALTER TABLE fb_messages ADD COLUMN ai_translation TEXT");
     } catch (e) {}

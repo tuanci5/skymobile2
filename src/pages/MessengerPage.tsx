@@ -212,18 +212,19 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     businessId: ''
   });
 
-  const [editingPage, setEditingPage] = useState<{ 
-    id: string, 
-    token: string, 
-    difyKey: string, 
-    facebookAdAccountId?: string, 
-    businessId?: string, 
-    aiReplyDelay?: number, 
-    aiStartHour?: number, 
+  const [editingPage, setEditingPage] = useState<{
+    id: string,
+    token: string,
+    difyKey: string,
+    facebookAdAccountId?: string,
+    businessId?: string,
+    aiReplyDelay?: number,
+    aiStartHour?: number,
     aiEndHour?: number,
     distributionMode?: 'manual' | 'round_robin' | 'ai_first',
     assignedUsers?: string[]
   } | null>(null);
+  const assignmentDraftRef = useRef<Record<string, string[]>>({});
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
@@ -260,7 +261,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
-  
+
   useFacebookSdk();
 
   const markConversationRead = async (convId: number) => {
@@ -349,10 +350,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           setMessages(prev => {
             if (data.length === 0) return prev;
             if (prev.length === 0) return data;
-            
+
             const lastPrev = prev[prev.length - 1];
             const lastNew = data[data.length - 1];
-            
+
             if (lastNew.id !== lastPrev.id) {
               const newItems = data.filter(newMsg => !prev.some(existingMsg => {
                 if (existingMsg.id === newMsg.id) return true;
@@ -1048,13 +1049,14 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     let currentAssigned = (editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || []));
     // Ensure all items are lowercased for comparison
     currentAssigned = currentAssigned.map(u => u.toLowerCase());
-    
+
     let newUsers = [...currentAssigned];
     if (isChecked) {
       if (!newUsers.includes(email)) newUsers.push(email);
     } else {
       newUsers = newUsers.filter(u => u !== email);
     }
+    assignmentDraftRef.current[pageId] = newUsers;
 
     setEditingPage(prev => ({
       id: pageId,
@@ -1132,7 +1134,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     if (editingPage.aiStartHour !== undefined) updates.ai_start_hour = editingPage.aiStartHour;
     if (editingPage.aiEndHour !== undefined) updates.ai_end_hour = editingPage.aiEndHour;
     if (editingPage.distributionMode !== undefined) updates.distribution_mode = editingPage.distributionMode;
-    if (editingPage.assignedUsers !== undefined) updates.assigned_users = editingPage.assignedUsers;
+    const assignedUsersDraft = assignmentDraftRef.current[pageId] ?? editingPage.assignedUsers;
+    if (assignedUsersDraft !== undefined) updates.assigned_users = assignedUsersDraft;
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/fb/pages/${pageId}`, {
@@ -1141,8 +1144,14 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         body: JSON.stringify(updates)
       });
 
-      if (res.ok) {
-        setPages(prev => prev.map(p => p.page_id === pageId ? {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        const updatedPage = data.page;
+        setPages(prev => prev.map(p => p.page_id === pageId ? (updatedPage ? {
+          ...p,
+          ...updatedPage,
+          assigned_users: Array.isArray(updatedPage.assigned_users) ? updatedPage.assigned_users : (updates.assigned_users || p.assigned_users)
+        } : {
           ...p,
           dify_api_key: updates.dify_api_key !== undefined ? updates.dify_api_key : p.dify_api_key,
           facebook_ad_account_id: updates.facebook_ad_account_id !== undefined ? updates.facebook_ad_account_id : p.facebook_ad_account_id,
@@ -1152,7 +1161,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           ai_end_hour: updates.ai_end_hour !== undefined ? updates.ai_end_hour : p.ai_end_hour,
           distribution_mode: updates.distribution_mode !== undefined ? updates.distribution_mode : p.distribution_mode,
           assigned_users: updates.assigned_users !== undefined ? updates.assigned_users : p.assigned_users
-        } : p));
+        }) : p));
+        delete assignmentDraftRef.current[pageId];
         setEditingPage(null);
         alert("Đã cập nhật cài đặt Fanpage thành công!");
       } else {
@@ -1377,7 +1387,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         {selectedConv ? (
           <>
             {/* Header */}
-            <div className="min-h-[64px] py-2 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-5 bg-white shrink-0 z-10">
+            <div className="min-h-[64px] py-2 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 px-5 bg-white shrink-0 z-10 relative">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
                   <AvatarImage
@@ -1401,22 +1411,22 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 </div>
               </div>
 
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 md:pr-3 md:border-r border-slate-200">
-                    <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Khách:</span>
-                    <select
-                      id="messenger-customer-status-select"
-                      className={`text-sm border rounded-lg px-3 py-1.5 font-black outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 max-w-[150px] truncate ${selectedConv.customer_status ? getCustomerStatusClass(selectedConv.customer_status) : 'bg-slate-50 border-slate-200 text-slate-500'}`}
-                      value={selectedConv.customer_status || ''}
-                      onChange={(e) => handleCustomerStatusChange(e.target.value)}
-                    >
-                      <option value="">-- Chọn trạng thái --</option>
-                      {customerStatuses.map(status => (
-                        <option key={status.label} value={status.label}>{status.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {isManager && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 md:pr-3 md:border-r border-slate-200">
+                  <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Khách:</span>
+                  <select
+                    id="messenger-customer-status-select"
+                    className={`text-sm border rounded-lg px-3 py-1.5 font-black outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 max-w-[150px] truncate ${selectedConv.customer_status ? getCustomerStatusClass(selectedConv.customer_status) : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                    value={selectedConv.customer_status || ''}
+                    onChange={(e) => handleCustomerStatusChange(e.target.value)}
+                  >
+                    <option value="">-- Chọn trạng thái --</option>
+                    {customerStatuses.map(status => (
+                      <option key={status.label} value={status.label}>{status.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {isManager && (
                   <div className="flex items-center gap-2 md:pr-4 md:border-r border-slate-200">
                     <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Phụ trách:</span>
                     <select
@@ -1436,20 +1446,21 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     </select>
                   </div>
                 )}
-                <button
-                  onClick={handleToggleBot}
-                  className={`px-4 py-2 text-sm font-bold rounded-xl flex items-center gap-2 transition-all whitespace-nowrap shadow-sm ${selectedConv.is_human_intervened
-                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200'
-                      : 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200'
-                    }`}
-                >
-                  {selectedConv.is_human_intervened ? (
-                    <><Power className="w-4 h-4" /> Bật lại AI</>
-                  ) : (
-                    <><Hand className="w-4 h-4" /> Dừng AI - CSKH Chat</>
-                  )}
-                </button>
               </div>
+
+              <button
+                onClick={handleToggleBot}
+                className={`absolute top-2 right-5 px-4 py-2 text-sm font-bold rounded-xl flex items-center gap-2 transition-all whitespace-nowrap shadow-sm ${selectedConv.is_human_intervened
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200'
+                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200'
+                  }`}
+              >
+                {selectedConv.is_human_intervened ? (
+                  <><Power className="w-4 h-4" /> Bật lại AI</>
+                ) : (
+                  <><Hand className="w-4 h-4" /> Dừng AI - CSKH Chat</>
+                )}
+              </button>
             </div>
 
             {/* Chat Messages */}
@@ -1486,8 +1497,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
                       <div className={`flex flex-col ${isUser ? 'items-start' : 'items-end'}`}>
                         <div className={`p-3 rounded-2xl relative group ${isUser ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm' :
-                            msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm shadow-md' :
-                              'bg-blue-600 text-white rounded-tr-sm shadow-md'
+                          msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm shadow-md' :
+                            'bg-blue-600 text-white rounded-tr-sm shadow-md'
                           }`}>
                           {msg.attachment_type === 'image' && msg.attachment_proxy_url && (
                             <a
@@ -1508,8 +1519,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                           {msg.message_text && msg.message_text !== '[Ảnh]' && (
                             <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
                           )}
-                          
-                          <button 
+
+                          <button
                             onClick={() => handleTranslate(msg.id, msg.message_text)}
                             disabled={translatingId === msg.id}
                             className={`absolute ${isUser ? '-right-10' : '-left-10'} top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 hover:border-blue-200 z-10`}
@@ -1758,44 +1769,44 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 Lên Đơn
               </button>
 
-                <button
-                  onClick={() => {
-                    if (!selectedConv.facebook_uid) {
-                      alert('Chưa có UID thật. Hãy cập nhật Profile Facebook thủ công trước để mở đúng hội thoại trong Meta Inbox.');
-                      return;
-                    }
-                    if (!selectedConv.business_id) {
-                      alert('Fanpage này chưa cấu hình Meta Business ID. Vào Cài đặt Messenger > Fanpage để nhập Business ID trước.');
-                      return;
-                    }
-                    const inboxUrl = new URL('https://business.facebook.com/latest/inbox/all');
-                    inboxUrl.searchParams.set('asset_id', selectedConv.page_id);
-                    inboxUrl.searchParams.set('business_id', selectedConv.business_id);
-                    inboxUrl.searchParams.set('ir_qe_exposed', '1');
-                    inboxUrl.searchParams.set('nav_ref', 'manage_page_ap_plus_default');
-                    inboxUrl.searchParams.set('selected_item_id', selectedConv.facebook_uid);
-                    inboxUrl.searchParams.set('mailbox_id', selectedConv.page_id);
-                    inboxUrl.searchParams.set('thread_type', 'FB_MESSAGE');
-                    window.open(inboxUrl.toString(), '_blank');
-                  }}
-                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
-                  Inbox FB
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedConv.facebook_uid) {
-                      window.open(`https://www.facebook.com/profile.php?id=${selectedConv.facebook_uid}`, '_blank');
-                    } else {
-                      alert('Chưa có UID thật. Hãy dán link Business Suite có selected_item_id để lưu UID trước.');
-                    }
-                  }}
-                  className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
-                >
-                  <User className="w-3.5 h-3.5 text-blue-500" />
-                  Profile FB
-                </button>
+              <button
+                onClick={() => {
+                  if (!selectedConv.facebook_uid) {
+                    alert('Chưa có UID thật. Hãy cập nhật Profile Facebook thủ công trước để mở đúng hội thoại trong Meta Inbox.');
+                    return;
+                  }
+                  if (!selectedConv.business_id) {
+                    alert('Fanpage này chưa cấu hình Meta Business ID. Vào Cài đặt Messenger > Fanpage để nhập Business ID trước.');
+                    return;
+                  }
+                  const inboxUrl = new URL('https://business.facebook.com/latest/inbox/all');
+                  inboxUrl.searchParams.set('asset_id', selectedConv.page_id);
+                  inboxUrl.searchParams.set('business_id', selectedConv.business_id);
+                  inboxUrl.searchParams.set('ir_qe_exposed', '1');
+                  inboxUrl.searchParams.set('nav_ref', 'manage_page_ap_plus_default');
+                  inboxUrl.searchParams.set('selected_item_id', selectedConv.facebook_uid);
+                  inboxUrl.searchParams.set('mailbox_id', selectedConv.page_id);
+                  inboxUrl.searchParams.set('thread_type', 'FB_MESSAGE');
+                  window.open(inboxUrl.toString(), '_blank');
+                }}
+                className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
+                Inbox FB
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedConv.facebook_uid) {
+                    window.open(`https://www.facebook.com/profile.php?id=${selectedConv.facebook_uid}`, '_blank');
+                  } else {
+                    alert('Chưa có UID thật. Hãy dán link Business Suite có selected_item_id để lưu UID trước.');
+                  }
+                }}
+                className="py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 hover:-translate-y-0.5 text-[11px]"
+              >
+                <User className="w-3.5 h-3.5 text-blue-500" />
+                Profile FB
+              </button>
             </div>
 
             {/* Manual Facebook Profile Panel */}
@@ -2037,7 +2048,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <h2 className="text-xl font-bold text-slate-800">Quản lý Fanpage & Dify</h2>
                 <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600 p-2">
-                   <Plus className="w-6 h-6 rotate-45" />
+                  <Plus className="w-6 h-6 rotate-45" />
                 </button>
               </div>
               <div className="p-6 max-h-[80vh] overflow-y-auto">
@@ -2069,24 +2080,24 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                           <div className="flex flex-col gap-1 items-end ml-2" onClick={e => e.stopPropagation()}>
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phân phối</span>
                             <select
-                                className="text-xs bg-white border border-slate-200 rounded-md px-2 py-1 font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500 shadow-sm"
-                                value={editingPage?.id === page.page_id ? (editingPage.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual')}
-                                onChange={(e) => {
-                                  const mode = e.target.value as 'manual' | 'round_robin' | 'ai_first';
-                                  setEditingPage(prev => ({
-                                    id: page.page_id,
-                                    token: prev?.id === page.page_id ? prev.token : '',
-                                    difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
-                                    facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
-                                    businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
-                                    aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
-                                    aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
-                                    aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
-                                    assignedUsers: prev?.id === page.page_id ? prev.assignedUsers : (page.assigned_users || []),
-                                    distributionMode: mode
-                                  }));
-                                }}
-                              >
+                              className="text-xs bg-white border border-slate-200 rounded-md px-2 py-1 font-bold text-slate-700 outline-none cursor-pointer focus:border-blue-500 shadow-sm"
+                              value={editingPage?.id === page.page_id ? (editingPage.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual')}
+                              onChange={(e) => {
+                                const mode = e.target.value as 'manual' | 'round_robin' | 'ai_first';
+                                setEditingPage(prev => ({
+                                  id: page.page_id,
+                                  token: prev?.id === page.page_id ? prev.token : '',
+                                  difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                  facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                  businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
+                                  aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                  aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                  aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                  assignedUsers: prev?.id === page.page_id ? prev.assignedUsers : (page.assigned_users || []),
+                                  distributionMode: mode
+                                }));
+                              }}
+                            >
                               <option value="manual">Thủ công (Manager chia)</option>
                               <option value="round_robin">Chia đều (Round Robin)</option>
                               <option value="ai_first">AI Trả lời trước</option>
@@ -2294,10 +2305,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
                                   {staffList.length > 0 ? staffList.map(staff => (
                                     <label key={staff.email} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 px-2 rounded-lg">
-                                      <input 
-                                        type="checkbox" 
+                                      <input
+                                        type="checkbox"
                                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        checked={editingPage?.id === page.page_id && editingPage.assignedUsers 
+                                        checked={editingPage?.id === page.page_id && editingPage.assignedUsers
                                           ? editingPage.assignedUsers.map(u => u.toLowerCase()).includes(staff.email.toLowerCase())
                                           : (page.assigned_users || []).map(u => u.toLowerCase()).includes(staff.email.toLowerCase())}
                                         onChange={(e) => handleAssignPageUser(page.page_id, staff.email, e.target.checked)}
@@ -2369,7 +2380,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                           className={`text-[11px] rounded-xl p-3 border ${err.severity === 'info'
                                             ? 'text-slate-600 bg-slate-50 border-slate-200'
                                             : 'text-rose-600 bg-rose-50 border-rose-100'
-                                          }`}
+                                            }`}
                                         >
                                           <b>{err.step || 'error'}:</b> {err.message}
                                           {err.detail && <span className="block mt-1 opacity-70">Meta detail: {err.detail}</span>}

@@ -45,6 +45,7 @@ pm2 delete ${PM2_APP_NAME} 2>/dev/null || true
 NPM_BIN="$(command -v npm)"
 echo "Using npm: ${NPM_BIN}"
 pm2 start "$NPM_BIN" --name ${PM2_APP_NAME} -- run api
+pm2 restart skymobile-api
 pm2 list
 pm2 save
 

@@ -445,7 +445,7 @@ router.put('/pages/:page_id', async (req, res) => {
     }
 
     params.push(page_id);
-    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex}`;
+    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour`;
     
     console.log(`📡 Updating Page ${page_id}:`, updates);
     
@@ -457,7 +457,7 @@ router.put('/pages/:page_id', async (req, res) => {
     }
 
     console.log(`✅ Page ${page_id} updated successfully.`);
-    res.json({ success: true, message: 'Settings updated successfully' });
+    res.json({ success: true, page: result.rows[0], message: 'Settings updated successfully' });
   } catch (err: any) {
     console.error('❌ Error updating page:', err);
     res.status(500).json({ error: err.message });
@@ -549,11 +549,14 @@ router.put('/pages/:id/assign-users', async (req, res) => {
     const { id } = req.params;
     const { assigned_users } = req.body;
     
-    await pool.query(
-      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2`,
+    const result = await pool.query(
+      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
       [JSON.stringify(assigned_users || []), id]
     );
-    res.json({ success: true });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+    res.json({ success: true, page: result.rows[0] });
   } catch (err: any) {
     console.error('Error assigning users to page:', err);
     res.status(500).json({ error: err.message });
@@ -1572,8 +1575,10 @@ router.delete('/image-library/:id', async (req, res) => {
 
 router.post('/messages/send-image', async (req, res) => {
   try {
-    const { conversation_id, image_url, library_image_id } = req.body;
+    const { conversation_id, image_url, library_image_id, sender_name, sender_email } = req.body;
     if (!conversation_id) return res.status(400).json({ error: 'conversation_id is required' });
+    const senderName = typeof sender_name === 'string' && sender_name.trim() ? sender_name.trim() : null;
+    const senderEmail = typeof sender_email === 'string' && sender_email.trim() ? sender_email.trim() : null;
 
     const { rows: convs } = await pool.query('SELECT page_id, customer_id FROM fb_conversations WHERE id = $1', [conversation_id]);
     if (convs.length === 0) return res.status(404).json({ error: 'Conversation not found' });
@@ -1595,9 +1600,9 @@ router.post('/messages/send-image', async (req, res) => {
     await sendFacebookImage(pages[0].access_token, conv.customer_id, finalImageUrl);
 
     const { rows: msgRows } = await pool.query(
-      `INSERT INTO fb_messages (conversation_id, sender_type, message_text, attachment_type, attachment_url)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [conversation_id, 'human', '[Ảnh]', 'image', finalImageUrl]
+      `INSERT INTO fb_messages (conversation_id, sender_type, sender_name, sender_email, message_text, attachment_type, attachment_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [conversation_id, 'human', senderName, senderEmail, '[Ảnh]', 'image', finalImageUrl]
     );
 
     await pool.query(
@@ -1616,7 +1621,9 @@ router.post('/messages/send-image', async (req, res) => {
 
 router.post('/messages/send', async (req, res) => {
   try {
-    const { conversation_id, text } = req.body;
+    const { conversation_id, text, sender_name, sender_email } = req.body;
+    const senderName = typeof sender_name === 'string' && sender_name.trim() ? sender_name.trim() : null;
+    const senderEmail = typeof sender_email === 'string' && sender_email.trim() ? sender_email.trim() : null;
 
     // Get conversation info
     const { rows: convs } = await pool.query('SELECT page_id, customer_id FROM fb_conversations WHERE id = $1', [conversation_id]);
@@ -1655,8 +1662,8 @@ router.post('/messages/send', async (req, res) => {
 
     // Save Message and Intervene
     const { rows: msgRows } = await pool.query(
-      `INSERT INTO fb_messages (conversation_id, sender_type, message_text) VALUES ($1, $2, $3) RETURNING *`,
-      [conversation_id, 'human', text]
+      `INSERT INTO fb_messages (conversation_id, sender_type, sender_name, sender_email, message_text) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [conversation_id, 'human', senderName, senderEmail, text]
     );
 
     await pool.query(
@@ -1664,7 +1671,7 @@ router.post('/messages/send', async (req, res) => {
       [text, conversation_id]
     );
 
-    res.json({ success: true, message: msgRows[0] });
+    res.json({ success: true, message: mapMessageRow(msgRows[0]) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

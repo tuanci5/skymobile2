@@ -81,6 +81,8 @@ export interface ConversationAdSource {
 export interface Message {
   id: number;
   sender_type: 'user' | 'ai' | 'human';
+  sender_name?: string | null;
+  sender_email?: string | null;
   message_text: string;
   ai_translation?: string | null;
   ai_translation_language?: string | null;
