@@ -13,6 +13,7 @@ import taskRoutes from './routes/taskRoutes';
 import teamRoutes from './routes/teamRoutes';
 import aiRoutes from './routes/aiRoutes';
 import productRoutes from './routes/productRoutes';
+import customerRoutes from './routes/customerRoutes';
 
 const app = express();
 app.use(cors());
@@ -48,6 +49,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/customers', customerRoutes);
 
 app.get('/api/settings', async (req, res) => {
   try {

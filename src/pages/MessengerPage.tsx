@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  MessageCircle, Settings, Search, Send, User, Bot, Clock, Filter,
+  MessageCircle, Settings, Search, Send, User, Users, UserPlus, Bot, Clock, Filter,
   ChevronRight, MoreVertical, Plus, CreditCard, Target, ExternalLink, Power, Hand,
   ShoppingCart, Package, MapPin, Phone, StickyNote, RefreshCw, Trash2, Activity,
   Languages, Loader2, Facebook, Image as ImageIcon
@@ -234,6 +234,95 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
   const currentUserName = user?.name || user?.email || 'Người dùng hiện tại';
   const currentUserEmail = user?.email || null;
+
+  const [savedCustomer, setSavedCustomer] = useState<any>(null);
+  const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerModalForm, setCustomerModalForm] = useState({
+    phone: '',
+    email: '',
+    nationality: 'Việt Nam',
+    notes: ''
+  });
+
+  const checkSavedCustomerStatus = async (conv: any) => {
+    if (!conv) {
+      setSavedCustomer(null);
+      return;
+    }
+    setIsCheckingCustomer(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customers/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          facebook_uid: conv.facebook_uid || null,
+          conversation_id: conv.conversation_id || null
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exists) {
+          setSavedCustomer(data.customer);
+        } else {
+          setSavedCustomer(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking saved customer status:', error);
+    } finally {
+      setIsCheckingCustomer(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedConv) {
+      checkSavedCustomerStatus(selectedConv);
+      setCustomerModalForm({
+        phone: selectedConv.customer_phone || '',
+        email: '',
+        nationality: 'Việt Nam',
+        notes: `Được thêm từ Ads Messenger. Chiến dịch: ${selectedConv.ads_tracking?.campaign_name || 'Không rõ'}`
+      });
+    } else {
+      setSavedCustomer(null);
+    }
+  }, [selectedConv]);
+
+  const handleSaveCustomer = async () => {
+    if (!selectedConv) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: selectedConv.customer_name,
+          phone_number: customerModalForm.phone,
+          email: customerModalForm.email,
+          avatar: getConversationAvatar(selectedConv),
+          facebook_uid: selectedConv.facebook_uid || null,
+          conversation_id: selectedConv.conversation_id,
+          nationality_name: customerModalForm.nationality,
+          notes: customerModalForm.notes,
+          source: 'messenger'
+        })
+      });
+
+      if (res.ok) {
+        const saved = await res.json();
+        setSavedCustomer(saved);
+        setIsCustomerModalOpen(false);
+        alert('Lưu thông tin khách hàng tiềm năng thành công!');
+      } else {
+        const err = await res.json();
+        alert(`Lỗi: ${err.error || 'Không thể lưu khách hàng'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Không thể kết nối đến máy chủ.');
+    }
+  };
+
   const getConversationPageName = (conv?: Conversation | null) => {
     if (!conv) return '';
     return conv.page_name || pages.find(page => page.page_id === conv.page_id)?.page_name || '';
@@ -1770,6 +1859,51 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               </div>
             </div>
 
+            {/* Khách Hàng Tiềm Năng Card */}
+            <div className="mb-3 p-4 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 border border-indigo-100/70 rounded-2xl shadow-sm text-left">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-800 leading-tight">CRM Khách Hàng</h4>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 block">Đồng bộ tự động</span>
+                  </div>
+                </div>
+                {isCheckingCustomer ? (
+                  <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Kiểm tra...</span>
+                ) : savedCustomer ? (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">Đã lưu CRM</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">Chưa lưu</span>
+                )}
+              </div>
+
+              {!isCheckingCustomer && !savedCustomer && (
+                <button
+                  onClick={() => setIsCustomerModalOpen(true)}
+                  className="w-full mt-3.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm hover:shadow-indigo-100"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Thêm Khách Hàng Tiềm Năng
+                </button>
+              )}
+
+              {savedCustomer && (
+                <div className="mt-3.5 space-y-2 border-t border-slate-100 pt-3">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400 font-bold">Điện thoại:</span>
+                    <span className="text-slate-700 font-black">{savedCustomer.phone_number || 'Chưa cập nhật'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400 font-bold">Quốc tịch:</span>
+                    <span className="text-slate-700 font-black">{savedCustomer.nationality_name || 'Không rõ'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Nút Lên Đơn */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
@@ -2766,6 +2900,63 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               <h2 className="text-xl font-bold mb-4">Lên đơn hàng</h2>
               {/* Order form fields... */}
               <button onClick={() => setIsOrderModalOpen(false)} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl">Đóng</button>
+            </motion.div>
+          </>
+        )}
+
+        {isCustomerModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsCustomerModalOpen(false)}
+              className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2rem] shadow-2xl z-[70] p-6 border border-slate-100 text-left"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><UserPlus className="w-5 h-5 text-indigo-600" /> Lưu Khách Hàng Mới</h3>
+                <button onClick={() => setIsCustomerModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50"><Plus className="w-5 h-6 rotate-45" /></button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Tên khách hàng</label>
+                  <input type="text" disabled value={selectedConv?.customer_name || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Số điện thoại</label>
+                  <input type="text" placeholder="Nhập số điện thoại..." value={customerModalForm.phone} onChange={(e) => setCustomerModalForm({ ...customerModalForm, phone: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Email</label>
+                  <input type="email" placeholder="Nhập email (nếu có)..." value={customerModalForm.email} onChange={(e) => setCustomerModalForm({ ...customerModalForm, email: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Quốc tịch</label>
+                  <select value={customerModalForm.nationality} onChange={(e) => setCustomerModalForm({ ...customerModalForm, nationality: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
+                    <option value="Việt Nam">Việt Nam</option>
+                    <option value="Nhật Bản">Nhật Bản</option>
+                    <option value="Philippines">Philippines</option>
+                    <option value="Nepal">Nepal</option>
+                    <option value="Không rõ">Khác</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Ghi chú chiến dịch / nhu cầu</label>
+                  <textarea rows={2} value={customerModalForm.notes} onChange={(e) => setCustomerModalForm({ ...customerModalForm, notes: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setIsCustomerModalOpen(false)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-colors">Hủy</button>
+                <button onClick={handleSaveCustomer} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-colors shadow-lg shadow-indigo-100">Lưu khách hàng</button>
+              </div>
             </motion.div>
           </>
         )}

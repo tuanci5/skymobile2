@@ -52,9 +52,7 @@ export const HRPage = ({ selectedRole, setSelectedRole, setActiveTab, restricted
           transition={{ duration: 0.25 }}
         >
           <InterviewTab
-            sheetCsvUrl={import.meta.env.VITE_SHEET_CSV_URL}
             appsScriptUrl={import.meta.env.VITE_APPS_SCRIPT_URL}
-            resultSheetCsvUrl={import.meta.env.VITE_RESULT_SHEET_CSV_URL}
             user={user}
           />
         </motion.div>

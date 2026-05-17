@@ -553,7 +553,126 @@ export async function initDBUtils() {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_product_suppliers_name ON product_suppliers(name)');
 
-    
+    // Ensure customers table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id SERIAL PRIMARY KEY,
+        skymobile_customer_id INT UNIQUE,
+        customer_name VARCHAR(255) NOT NULL,
+        phone_number VARCHAR(50),
+        email VARCHAR(255),
+        avatar TEXT,
+        sales_channel_id INT,
+        sales_channel_name VARCHAR(255),
+        sales_channel_type VARCHAR(100),
+        facebook_uid VARCHAR(100),
+        nationality_id INT,
+        nationality_name VARCHAR(255),
+        conversation_id VARCHAR(100),
+        branch_id INT,
+        branch_name VARCHAR(255),
+        created_by VARCHAR(100),
+        created_by_name VARCHAR(255),
+        created_at TIMESTAMP,
+        source VARCHAR(100) DEFAULT 'skymobile',
+        notes TEXT,
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure orders table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        skymobile_order_id INT UNIQUE,
+        customer_id VARCHAR(50),
+        customer_name VARCHAR(255),
+        customer_avatar TEXT,
+        branch_name VARCHAR(255),
+        created_by VARCHAR(100),
+        created_by_name VARCHAR(255),
+        order_status VARCHAR(100),
+        approval_status VARCHAR(100),
+        payment_status VARCHAR(100),
+        fulfillment_status VARCHAR(100),
+        total_amount DECIMAL(15, 2),
+        created_at TIMESTAMP,
+        payment_message_sent BOOLEAN DEFAULT FALSE,
+        sales_type INT,
+        product_quantity INT,
+        commission_total DECIMAL(15, 2),
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure customers table columns exist for pre-existing tables
+    const customerColumnsToEnsure = [
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS skymobile_customer_id INT UNIQUE",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS avatar TEXT",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS sales_channel_id INT",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS sales_channel_name VARCHAR(255)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS sales_channel_type VARCHAR(100)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS facebook_uid VARCHAR(100)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS nationality_id INT",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS nationality_name VARCHAR(255)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(100)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS branch_id INT",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS created_by VARCHAR(100)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS created_by_name VARCHAR(255)",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS source VARCHAR(100) DEFAULT 'skymobile'",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS notes TEXT",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+    ];
+
+    for (const sql of customerColumnsToEnsure) {
+      try {
+        await client.query(sql);
+      } catch (e) {}
+    }
+
+    // Ensure orders table columns exist for pre-existing tables
+    const orderColumnsToEnsure = [
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS skymobile_order_id INT UNIQUE",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_id VARCHAR(50)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_avatar TEXT",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by VARCHAR(100)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by_name VARCHAR(255)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_status VARCHAR(100)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS approval_status VARCHAR(100)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(100)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(100)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(15, 2)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_message_sent BOOLEAN DEFAULT FALSE",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_type INT",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS product_quantity INT",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS commission_total DECIMAL(15, 2)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+    ];
+
+    for (const sql of orderColumnsToEnsure) {
+      try {
+        await client.query(sql);
+      } catch (e) {}
+    }
+
+    // Automatically append 'customers' to role permissions if not present
+    try {
+      await client.query(`
+        UPDATE role_permissions 
+        SET allowed_tabs = allowed_tabs || '["customers"]'::jsonb 
+        WHERE NOT (allowed_tabs @> '["customers"]'::jsonb)
+      `);
+    } catch (e) {
+      console.error('Error updating allowed_tabs in role_permissions:', e);
+    }
+
     console.log('✅ PostgreSQL schema verified.');
   } catch (err: any) {
     console.error('❌ Database Initialization Failed:', err.message);
