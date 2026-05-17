@@ -490,20 +490,69 @@ export const CustomersPage: React.FC = () => {
 
             {/* Pagination */}
             {customerTotalPages > 1 && (
-              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500">Trang {customerPage} / {customerTotalPages}</span>
-                <div className="flex gap-2">
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span className="text-xs font-bold text-slate-500">Hiển thị trang {customerPage} / {customerTotalPages}</span>
+                <div className="flex items-center gap-2">
                   <button
                     disabled={customerPage <= 1}
                     onClick={() => fetchCustomers(customerPage - 1)}
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
                   >
                     Trước
                   </button>
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const delta = 1;
+                      const range = [];
+                      const rangeWithDots: (number | string)[] = [];
+                      let l: number | undefined;
+
+                      for (let i = 1; i <= customerTotalPages; i++) {
+                        if (i === 1 || i === customerTotalPages || (i >= customerPage - delta && i <= customerPage + delta)) {
+                          range.push(i);
+                        }
+                      }
+
+                      for (const i of range) {
+                        if (l) {
+                          if (i - l === 2) {
+                            rangeWithDots.push(l + 1);
+                          } else if (i - l > 2) {
+                            rangeWithDots.push('...');
+                          }
+                        }
+                        rangeWithDots.push(i);
+                        l = i;
+                      }
+
+                      return rangeWithDots.map((p, idx) => {
+                        if (p === '...') {
+                          return (
+                            <span key={`dots-${idx}`} className="w-9 h-9 flex items-center justify-center text-slate-400 font-bold text-xs select-none">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={`page-${p}`}
+                            onClick={() => fetchCustomers(p as number)}
+                            className={`w-9 h-9 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                              p === customerPage
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100 hover:bg-indigo-700'
+                                : 'text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
                   <button
                     disabled={customerPage >= customerTotalPages}
                     onClick={() => fetchCustomers(customerPage + 1)}
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
                   >
                     Sau
                   </button>
@@ -599,20 +648,69 @@ export const CustomersPage: React.FC = () => {
 
             {/* Pagination */}
             {orderTotalPages > 1 && (
-              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500">Trang {orderPage} / {orderTotalPages}</span>
-                <div className="flex gap-2">
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span className="text-xs font-bold text-slate-500">Hiển thị trang {orderPage} / {orderTotalPages}</span>
+                <div className="flex items-center gap-2">
                   <button
                     disabled={orderPage <= 1}
                     onClick={() => fetchOrders(orderPage - 1)}
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
                   >
                     Trước
                   </button>
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const delta = 1;
+                      const range = [];
+                      const rangeWithDots: (number | string)[] = [];
+                      let l: number | undefined;
+
+                      for (let i = 1; i <= orderTotalPages; i++) {
+                        if (i === 1 || i === orderTotalPages || (i >= orderPage - delta && i <= orderPage + delta)) {
+                          range.push(i);
+                        }
+                      }
+
+                      for (const i of range) {
+                        if (l) {
+                          if (i - l === 2) {
+                            rangeWithDots.push(l + 1);
+                          } else if (i - l > 2) {
+                            rangeWithDots.push('...');
+                          }
+                        }
+                        rangeWithDots.push(i);
+                        l = i;
+                      }
+
+                      return rangeWithDots.map((p, idx) => {
+                        if (p === '...') {
+                          return (
+                            <span key={`dots-${idx}`} className="w-9 h-9 flex items-center justify-center text-slate-400 font-bold text-xs select-none">
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={`page-${p}`}
+                            onClick={() => fetchOrders(p as number)}
+                            className={`w-9 h-9 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                              p === orderPage
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100 hover:bg-indigo-700'
+                                : 'text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
                   <button
                     disabled={orderPage >= orderTotalPages}
                     onClick={() => fetchOrders(orderPage + 1)}
-                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 shadow-sm"
                   >
                     Sau
                   </button>

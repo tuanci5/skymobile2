@@ -91,7 +91,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
       const items = data.items || [];
       ordersList.push(...items);
 
-      if (items.length < 100 || !data.hasNextPage) {
+      if (items.length < 100) {
         hasMoreOrders = false;
       } else {
         orderPage++;
@@ -129,7 +129,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
       const items = data.items || [];
       customersList.push(...items);
 
-      if (items.length < 100 || !data.hasNextPage) {
+      if (items.length < 100) {
         hasMoreCustomers = false;
       } else {
         customerPage++;
