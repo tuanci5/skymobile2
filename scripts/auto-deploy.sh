@@ -6,15 +6,6 @@ API_PORT="3006"
 PM2_APP_NAME="skymobile-api"
 DEPLOY_USER="www"
 
-# Nếu webhook/terminal gọi script bằng root, chuyển sang user www để dist/node_modules không bị owner root.
-if [ "$(id -u)" = "0" ]; then
-  echo "🔐 Fixing ownership for ${DEPLOY_USER}:${DEPLOY_USER} before deploy..."
-  chown -R ${DEPLOY_USER}:${DEPLOY_USER} "$PROJECT_DIR"
-  chmod -R u+rwX,g+rwX "$PROJECT_DIR"
-
-  echo "🔁 Re-running deployment as ${DEPLOY_USER} user..."
-  exec su -s /bin/bash ${DEPLOY_USER} -c "cd $PROJECT_DIR && bash scripts/auto-deploy.sh"
-fi
 
 echo "------------------------------------------"
 echo "🚀 Starting Deployment: $(date)"
@@ -50,6 +41,13 @@ sleep 10
 pm2 restart skymobile-api
 pm2 list
 pm2 save
+
+# 6. Sửa lại quyền sở hữu cho user www để Nginx có thể truy cập các file tĩnh
+if [ "$(id -u)" = "0" ]; then
+  echo "🔐 Fixing ownership for ${DEPLOY_USER}:${DEPLOY_USER}..."
+  chown -R ${DEPLOY_USER}:${DEPLOY_USER} "$PROJECT_DIR"
+  chmod -R u+rwX,g+rwX "$PROJECT_DIR"
+fi
 
 echo "------------------------------------------"
 echo "✅ Deployment Successful!"
