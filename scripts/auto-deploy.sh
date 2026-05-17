@@ -31,14 +31,11 @@ echo "🧹 Killing old API process on port ${API_PORT}..."
 fuser -k ${API_PORT}/tcp 2>/dev/null || true
 
 # 5. Khởi động lại Backend bằng PM2
-echo "🔄 Restarting PM2 process (${PM2_APP_NAME})..."
+echo "🔄 Starting PM2 process (${PM2_APP_NAME}) directly with tsx..."
 pm2 delete ${PM2_APP_NAME} 2>/dev/null || true
-NPM_BIN="$(command -v npm)"
-echo "Using npm: ${NPM_BIN}"
-pm2 start "$NPM_BIN" --name ${PM2_APP_NAME} -- run api
+pm2 start ./node_modules/.bin/tsx --name ${PM2_APP_NAME} --cwd "$PROJECT_DIR" -- src/server/server.ts
 echo "⏳ Waiting 10 seconds for the application to fully start..."
 sleep 10
-pm2 restart skymobile-api
 pm2 list
 pm2 save
 
