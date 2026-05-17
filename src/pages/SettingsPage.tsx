@@ -156,6 +156,8 @@ export const SettingsPage: React.FC = () => {
     system_timezone: 'Asia/Ho_Chi_Minh',
     message_templates: JSON.stringify(DEFAULT_MESSAGE_TEMPLATES),
     customer_statuses: JSON.stringify(DEFAULT_CUSTOMER_STATUSES),
+    commission_exchange_rate: '1',
+    commission_currency_unit: 'đ',
   });
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplateMap>(() => normalizeMessageTemplateMap(DEFAULT_MESSAGE_TEMPLATES));
   const [customerStatuses, setCustomerStatuses] = useState<CustomerStatusOption[]>(DEFAULT_CUSTOMER_STATUSES);
@@ -544,6 +546,33 @@ export const SettingsPage: React.FC = () => {
                 onChange={(e) => setSettings({ ...settings, app_name: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Tỷ giá quy đổi (1 JPY = ? VND)</label>
+                <input 
+                  type="number"
+                  step="any"
+                  value={settings.commission_exchange_rate || '1'}
+                  onChange={(e) => setSettings({ ...settings, commission_exchange_rate: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-semibold text-slate-700"
+                  placeholder="165"
+                />
+                <p className="text-[11px] font-medium text-slate-400">Tỷ giá Yên Nhật (JPY) sang Việt Nam Đồng (VND) để hiển thị giá quy đổi doanh thu.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">Đơn vị tiền tệ hoa hồng</label>
+                <input 
+                  type="text"
+                  value={settings.commission_currency_unit || 'đ'}
+                  onChange={(e) => setSettings({ ...settings, commission_currency_unit: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-semibold text-slate-700"
+                  placeholder="đ hoặc VND"
+                />
+                <p className="text-[11px] font-medium text-slate-400">Ký hiệu tiền tệ hiển thị sau số tiền hoa hồng (ví dụ: đ, VND, ¥, $).</p>
+              </div>
             </div>
 
             <div className="space-y-2">

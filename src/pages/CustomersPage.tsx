@@ -23,8 +23,12 @@ import {
   ArrowRight,
   TrendingDown,
   Clock,
-  Sparkles
+  Sparkles,
+  ArrowLeft,
+  Plus,
+  User
 } from 'lucide-react';
+import { settingService } from '../services/api';
 
 let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 if (API_BASE_URL === '/') API_BASE_URL = '';
@@ -74,6 +78,7 @@ interface Order {
   product_quantity: number | null;
   commission_total: number | null;
   synced_at: string;
+  items?: any[];
 }
 
 interface Stats {
@@ -91,6 +96,31 @@ export const CustomersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [nationalityFilter, setNationalityFilter] = useState('');
+
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [currencyUnit, setCurrencyUnit] = useState<string>('đ');
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const data = await settingService.getAll();
+        if (data.commission_exchange_rate) {
+          setExchangeRate(Number(data.commission_exchange_rate) || 1);
+        }
+        if (data.commission_currency_unit) {
+          setCurrencyUnit(data.commission_currency_unit);
+        }
+      } catch (err) {
+        console.error('Failed to load settings in CustomersPage:', err);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const formatCommission = (val: number) => {
+    const formattedNum = new Intl.NumberFormat('vi-VN').format(Math.round(val || 0));
+    return `${formattedNum} ${currencyUnit}`;
+  };
   
   // Customers pagination
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -114,6 +144,18 @@ export const CustomersPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [loadingCustomerOrders, setLoadingCustomerOrders] = useState(false);
+
+  // Order Detail & Create States inside Drawer
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [newOrderBranch, setNewOrderBranch] = useState('Sky Mobile');
+  const [newOrderTotal, setNewOrderTotal] = useState('');
+  const [newOrderQty, setNewOrderQty] = useState('1');
+  const [newOrderCommission, setNewOrderCommission] = useState('');
+  const [newOrderStatus, setNewOrderStatus] = useState('Pending');
+  const [newOrderPaymentStatus, setNewOrderPaymentStatus] = useState('Unpaid');
+  const [newOrderFulfillmentStatus, setNewOrderFulfillmentStatus] = useState('Unfulfilled');
+  const [submittingOrder, setSubmittingOrder] = useState(false);
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
@@ -227,6 +269,8 @@ export const CustomersPage: React.FC = () => {
 
   const handleOpenCustomer = async (cust: Customer) => {
     setSelectedCustomer(cust);
+    setSelectedOrder(null);
+    setIsCreatingOrder(false);
     setLoadingCustomerOrders(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/customers/${cust.id}/orders`);
@@ -237,6 +281,61 @@ export const CustomersPage: React.FC = () => {
       console.error('Error fetching customer orders:', err);
     } finally {
       setLoadingCustomerOrders(false);
+    }
+  };
+
+  const handleCreateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomer) return;
+    setSubmittingOrder(true);
+    try {
+      const customerId = selectedCustomer.skymobile_customer_id || selectedCustomer.id;
+
+      const res = await fetch(`${API_BASE_URL}/api/customers/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customer_id: customerId,
+          customer_name: selectedCustomer.customer_name,
+          customer_avatar: selectedCustomer.avatar,
+          branch_name: newOrderBranch,
+          order_status: newOrderStatus,
+          approval_status: newOrderStatus,
+          payment_status: newOrderPaymentStatus,
+          fulfillment_status: newOrderFulfillmentStatus,
+          total_amount: parseFloat(newOrderTotal) || 0,
+          product_quantity: parseInt(newOrderQty) || 1,
+          commission_total: parseFloat(newOrderCommission) || 0,
+          created_by: 'system',
+          created_by_name: 'Nhân viên',
+        }),
+      });
+
+      if (res.ok) {
+        // Fetch updated orders list for this customer
+        const ordersRes = await fetch(`${API_BASE_URL}/api/customers/${selectedCustomer.id}/orders`);
+        if (ordersRes.ok) {
+          setCustomerOrders(await ordersRes.json());
+        }
+        // Reset form states
+        setIsCreatingOrder(false);
+        setNewOrderTotal('');
+        setNewOrderQty('1');
+        setNewOrderCommission('');
+        setNewOrderStatus('Pending');
+        setNewOrderPaymentStatus('Unpaid');
+        setNewOrderFulfillmentStatus('Unfulfilled');
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Thêm đơn hàng thất bại.');
+      }
+    } catch (err) {
+      console.error('Error creating manual order:', err);
+      alert('Không thể kết nối đến máy chủ.');
+    } finally {
+      setSubmittingOrder(false);
     }
   };
 
@@ -653,12 +752,19 @@ export const CustomersPage: React.FC = () => {
                                 (o.customer_name || 'KH').slice(0, 2).toUpperCase()
                               )}
                             </div>
-                            <span className="font-bold text-slate-700 text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-2">
-                              {o.customer_name}
-                              {loadingCustomerLookup === o.id && (
-                                <span className="text-[10px] font-medium text-indigo-500 animate-pulse">(đang tải...)</span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-700 text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-2">
+                                {o.customer_name}
+                                {loadingCustomerLookup === o.id && (
+                                  <span className="text-[10px] font-medium text-indigo-500 animate-pulse">(đang tải...)</span>
+                                )}
+                              </span>
+                              {o.items && o.items.length > 0 && (
+                                <div className="text-[10px] text-slate-400 font-semibold mt-0.5 max-w-[280px] truncate bg-slate-50 border border-slate-100/50 px-1.5 py-0.5 rounded w-fit" title={o.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}>
+                                  {o.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}
+                                </div>
                               )}
-                            </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-5">
@@ -666,7 +772,7 @@ export const CustomersPage: React.FC = () => {
                           {o.commission_total && (
                             <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
                               <TrendingUp className="w-3 h-3" />
-                              Hoa hồng: {formatCurrency(o.commission_total)}
+                              Hoa hồng: {formatCommission(o.commission_total)}
                             </div>
                           )}
                         </td>
@@ -802,6 +908,11 @@ export const CustomersPage: React.FC = () => {
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Doanh Thu Tích Lũy</p>
                   <h3 className="text-2xl font-black text-slate-900 mt-1">{formatCurrency(stats.totalRevenue)}</h3>
+                  {exchangeRate > 1 && (
+                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                      ~ {formatCommission(stats.totalRevenue * exchangeRate)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -811,7 +922,7 @@ export const CustomersPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tổng Hoa Hồng</p>
-                  <h3 className="text-2xl font-black text-slate-900 mt-1">{formatCurrency(stats.totalCommission)}</h3>
+                  <h3 className="text-2xl font-black text-slate-900 mt-1">{formatCommission(stats.totalCommission)}</h3>
                 </div>
               </div>
             </div>
@@ -898,105 +1009,379 @@ export const CustomersPage: React.FC = () => {
 
               {/* Drawer Content */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Profile Card */}
-                <div className="flex flex-col items-center p-6 bg-gradient-to-br from-indigo-50/50 via-white to-blue-50/30 rounded-3xl border border-indigo-50/50">
-                  <div className="w-20 h-20 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-2xl shadow-sm border-2 border-white overflow-hidden mb-4">
-                    {selectedCustomer.avatar ? <img src={selectedCustomer.avatar} alt="" className="w-full h-full object-cover" /> : selectedCustomer.customer_name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <h4 className="font-black text-slate-800 text-lg leading-tight">{selectedCustomer.customer_name}</h4>
-                  <p className="text-xs text-slate-400 font-bold uppercase mt-1">Sky Mobile ID: {selectedCustomer.skymobile_customer_id || 'Chưa đồng bộ'}</p>
-                  
-                  <div className="mt-4 flex gap-2">
-                    {selectedCustomer.facebook_uid && (
+                {isCreatingOrder ? (
+                  /* ─── CREATE ORDER FORM ─── */
+                  <form onSubmit={handleCreateOrder} className="space-y-5">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-4 mb-4">
                       <button
-                        onClick={() => window.open(`https://www.facebook.com/${selectedCustomer.facebook_uid}`, '_blank')}
-                        className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
+                        type="button"
+                        onClick={() => setIsCreatingOrder(false)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
                       >
-                        <Facebook className="w-3.5 h-3.5" /> Profile FB
+                        <ArrowLeft className="w-4 h-4" />
                       </button>
-                    )}
-                    {selectedCustomer.conversation_id && (
-                      <button
-                        onClick={() => window.open(`https://business.facebook.com/latest/inbox/messenger?selected_item_id=${selectedCustomer.facebook_uid || selectedCustomer.conversation_id}`, '_blank')}
-                        className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
-                      >
-                        <Facebook className="w-3.5 h-3.5" /> Inbox Suite
-                      </button>
-                    )}
-                  </div>
-                </div>
+                      <h4 className="font-bold text-slate-800 text-sm">Tạo đơn hàng mới</h4>
+                    </div>
 
-                {/* Details Section */}
-                <div className="space-y-4">
-                  <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Thông tin chi tiết</h5>
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3.5 text-xs text-slate-700">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Số điện thoại</span>
-                      <span className="font-bold flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.phone_number || 'Chưa cập nhật'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Email</span>
-                      <span className="font-bold flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.email || 'Chưa cập nhật'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Quốc tịch</span>
-                      <span className="font-bold flex items-center gap-1"><Globe className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.nationality_name || 'Chưa cập nhật'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Chi nhánh</span>
-                      <span className="font-bold flex items-center gap-1"><Building2 className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.branch_name || 'Sky Mobile'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Kênh bán</span>
-                      <span className="font-bold">{selectedCustomer.sales_channel_name || 'Không rõ'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 font-bold">Nguồn dữ liệu</span>
-                      <span>{getSourceBadge(selectedCustomer.source)}</span>
-                    </div>
-                  </div>
-                </div>
+                    <div className="space-y-4">
+                      {/* Chi nhánh */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Chi nhánh</label>
+                        <select
+                          value={newOrderBranch}
+                          onChange={(e) => setNewOrderBranch(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-slate-700 text-sm font-semibold outline-none transition-all"
+                        >
+                          <option value="Sky Mobile">Sky Mobile (Trụ sở chính)</option>
+                          <option value="Sky Mobile - Chi nhánh 1">Sky Mobile - Chi nhánh 1</option>
+                          <option value="Sky Mobile - Chi nhánh 2">Sky Mobile - Chi nhánh 2</option>
+                        </select>
+                      </div>
 
-                {/* Orders List */}
-                <div className="space-y-3">
-                  <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex justify-between items-center">
-                    <span>Đơn hàng đã chốt ({customerOrders.length})</span>
-                    <span className="font-bold text-slate-600">{formatCurrency(customerOrders.reduce((acc, cur) => acc + cur.total_amount, 0))}</span>
-                  </h5>
-                  <div className="space-y-3.5">
-                    {loadingCustomerOrders ? (
-                      <div className="text-center py-6 text-xs text-slate-400">Đang tải lịch sử đơn hàng...</div>
-                    ) : customerOrders.length === 0 ? (
-                      <div className="text-center py-6 text-xs text-slate-400 italic bg-slate-50 border border-dashed border-slate-200 rounded-2xl">Chưa có đơn hàng nào được đồng bộ.</div>
-                    ) : (
-                      customerOrders.map(order => (
-                        <div key={order.id} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
-                          <div className="space-y-1">
-                            <span className="text-xs font-bold text-slate-800">Đơn hàng #{order.skymobile_order_id}</span>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(order.created_at).toLocaleDateString('vi-VN')}
-                              <span>• Quantity: {order.product_quantity || 1}</span>
-                            </div>
+                      {/* Số tiền & Số lượng */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Tổng tiền (¥)</label>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            placeholder="Ví dụ: 11480"
+                            value={newOrderTotal}
+                            onChange={(e) => setNewOrderTotal(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-slate-700 text-sm font-semibold outline-none transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Số lượng SP</label>
+                          <input
+                            type="number"
+                            required
+                            min="1"
+                            placeholder="Ví dụ: 1"
+                            value={newOrderQty}
+                            onChange={(e) => setNewOrderQty(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-slate-700 text-sm font-semibold outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tiền hoa hồng */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Tiền hoa hồng (¥)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Ví dụ: 1000"
+                          value={newOrderCommission}
+                          onChange={(e) => setNewOrderCommission(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-slate-700 text-sm font-semibold outline-none transition-all"
+                        />
+                      </div>
+
+                      {/* Các trạng thái */}
+                      <div className="space-y-4 pt-2 border-t border-slate-100">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Trạng thái đơn</label>
+                            <select
+                              value={newOrderStatus}
+                              onChange={(e) => setNewOrderStatus(e.target.value)}
+                              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-700 text-xs font-semibold outline-none transition-all"
+                            >
+                              <option value="Approved">Đã duyệt (Approved)</option>
+                              <option value="Pending">Chờ duyệt (Pending)</option>
+                              <option value="Cancelled">Đã hủy (Cancelled)</option>
+                            </select>
                           </div>
-                          <div className="text-right">
-                            <span className="font-black text-slate-900 text-sm block">{formatCurrency(order.total_amount)}</span>
-                            {getOrderStatusBadge(order.order_status)}
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Thanh toán</label>
+                            <select
+                              value={newOrderPaymentStatus}
+                              onChange={(e) => setNewOrderPaymentStatus(e.target.value)}
+                              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-slate-700 text-xs font-semibold outline-none transition-all"
+                            >
+                              <option value="Paid">Đã thanh toán</option>
+                              <option value="Unpaid">Chưa thanh toán</option>
+                              <option value="Partial">Thanh toán 1 phần</option>
+                            </select>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
 
-                {/* Notes */}
-                {selectedCustomer.notes && (
-                  <div className="space-y-2">
-                    <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Ghi chú từ Messenger/CSKH</h5>
-                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed italic">
-                      "{selectedCustomer.notes}"
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Giao hàng (Fulfillment)</label>
+                          <select
+                            value={newOrderFulfillmentStatus}
+                            onChange={(e) => setNewOrderFulfillmentStatus(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-slate-700 text-sm font-semibold outline-none transition-all"
+                          >
+                            <option value="Fulfilled">Đã giao hàng (Fulfilled)</option>
+                            <option value="Unfulfilled">Chưa giao hàng (Unfulfilled)</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
+
+                    <div className="flex gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingOrder(false)}
+                        className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl text-sm hover:bg-slate-50 transition-all active:scale-98 shadow-sm"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submittingOrder}
+                        className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-bold rounded-2xl text-sm hover:from-indigo-700 hover:to-blue-700 transition-all disabled:opacity-50 active:scale-98 shadow-md flex items-center justify-center gap-2"
+                      >
+                        {submittingOrder ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Đang lưu...
+                          </>
+                        ) : 'Lưu đơn hàng'}
+                      </button>
+                    </div>
+                  </form>
+                ) : selectedOrder ? (
+                  /* ─── ORDER DETAILS VIEW ─── */
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-4 mb-4">
+                      <button
+                        onClick={() => setSelectedOrder(null)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
+                      <h4 className="font-bold text-slate-800 text-sm">Chi tiết Đơn hàng #{selectedOrder.skymobile_order_id}</h4>
+                    </div>
+
+                    {/* Financial Summary Card */}
+                    <div className="p-6 bg-gradient-to-br from-indigo-50/50 via-white to-blue-50/30 border border-indigo-100/50 rounded-3xl space-y-4 shadow-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng giá trị đơn</span>
+                        <span className="text-xl font-black text-slate-900">{formatCurrency(selectedOrder.total_amount)}</span>
+                      </div>
+                      
+                      {selectedOrder.commission_total !== undefined && (
+                        <div className="flex justify-between items-center border-t border-dashed border-indigo-100 pt-3">
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5" /> Tiền hoa hồng</span>
+                          <span className="text-sm font-bold text-emerald-700">{formatCommission(selectedOrder.commission_total)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status Badges Section */}
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-bold">Trạng thái đơn</span>
+                        <span>{getOrderStatusBadge(selectedOrder.order_status)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-bold">Thanh toán</span>
+                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                          selectedOrder.payment_status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                          selectedOrder.payment_status === 'Partial' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                          'bg-rose-50 text-rose-700 border border-rose-100'
+                        }`}>
+                          {selectedOrder.payment_status === 'Paid' ? 'Đã thanh toán' :
+                           selectedOrder.payment_status === 'Partial' ? 'Thanh toán 1 phần' :
+                           'Chưa thanh toán'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-bold">Giao hàng</span>
+                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                          selectedOrder.fulfillment_status === 'Fulfilled' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                          'bg-amber-50 text-amber-700 border border-amber-100'
+                        }`}>
+                          {selectedOrder.fulfillment_status === 'Fulfilled' ? 'Đã giao hàng' : 'Chưa giao hàng'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* System Information */}
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3.5 text-xs text-slate-700">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">Số lượng sản phẩm</span>
+                        <span className="font-bold">{selectedOrder.product_quantity || 1} sản phẩm</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">Chi nhánh</span>
+                        <span className="font-bold flex items-center gap-1"><Building2 className="w-3.5 h-3.5 text-slate-400" /> {selectedOrder.branch_name || 'Sky Mobile'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">Nhân viên chốt</span>
+                        <span className="font-bold flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400" /> {selectedOrder.created_by_name || 'Nhân viên'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">Thời gian tạo</span>
+                        <span className="font-bold flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> {new Date(selectedOrder.created_at).toLocaleString('vi-VN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Products List Breakdown */}
+                    {selectedOrder.items && selectedOrder.items.length > 0 && (
+                      <div className="space-y-3">
+                        <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Sản phẩm trong đơn ({selectedOrder.items.length})</h5>
+                        <div className="space-y-3">
+                          {selectedOrder.items.map((item: any) => (
+                            <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2">
+                              <div className="flex justify-between items-start gap-3">
+                                <span className="font-bold text-slate-800 text-xs leading-relaxed">{item.product_name}</span>
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-black text-[10px] rounded-md shrink-0">x{item.quantity}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100/50 text-[10.5px] font-semibold text-slate-500">
+                                <div>
+                                  Giá bán: <span className="font-bold text-slate-700">{formatCurrency(item.selling_price)}</span>
+                                </div>
+                                {Number(item.billing_rate) > 0 && (
+                                  <div>
+                                    Cước tháng: <span className="font-bold text-slate-700">{formatCurrency(item.billing_rate)}/tháng</span>
+                                  </div>
+                                )}
+                                {Number(item.commission) > 0 && (
+                                  <div className="col-span-2 text-emerald-600 font-bold flex items-center gap-0.5">
+                                    <TrendingUp className="w-3.5 h-3.5" /> Hoa hồng: {formatCommission(item.commission)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setSelectedOrder(null)}
+                      className="w-full py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl text-sm hover:bg-slate-50 transition-all active:scale-98 shadow-sm flex items-center justify-center gap-1.5"
+                    >
+                      Quay lại hồ sơ
+                    </button>
                   </div>
+                ) : (
+                  /* ─── MAIN CUSTOMER PROFILE VIEW ─── */
+                  <>
+                    {/* Profile Card */}
+                    <div className="flex flex-col items-center p-6 bg-gradient-to-br from-indigo-50/50 via-white to-blue-50/30 rounded-3xl border border-indigo-50/50">
+                      <div className="w-20 h-20 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-2xl shadow-sm border-2 border-white overflow-hidden mb-4">
+                        {selectedCustomer.avatar ? <img src={selectedCustomer.avatar} alt="" className="w-full h-full object-cover" /> : selectedCustomer.customer_name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <h4 className="font-black text-slate-800 text-lg leading-tight">{selectedCustomer.customer_name}</h4>
+                      <p className="text-xs text-slate-400 font-bold uppercase mt-1">Sky Mobile ID: {selectedCustomer.skymobile_customer_id || 'Chưa đồng bộ'}</p>
+                      
+                      <div className="mt-4 flex gap-2">
+                        {selectedCustomer.facebook_uid && (
+                          <button
+                            onClick={() => window.open(`https://www.facebook.com/${selectedCustomer.facebook_uid}`, '_blank')}
+                            className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
+                          >
+                            <Facebook className="w-3.5 h-3.5" /> Profile FB
+                          </button>
+                        )}
+                        {selectedCustomer.conversation_id && (
+                          <button
+                            onClick={() => window.open(`https://business.facebook.com/latest/inbox/messenger?selected_item_id=${selectedCustomer.facebook_uid || selectedCustomer.conversation_id}`, '_blank')}
+                            className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5"
+                          >
+                            <Facebook className="w-3.5 h-3.5" /> Inbox Suite
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Details Section */}
+                    <div className="space-y-4">
+                      <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Thông tin chi tiết</h5>
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3.5 text-xs text-slate-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Số điện thoại</span>
+                          <span className="font-bold flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.phone_number || 'Chưa cập nhật'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Email</span>
+                          <span className="font-bold flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.email || 'Chưa cập nhật'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Quốc tịch</span>
+                          <span className="font-bold flex items-center gap-1"><Globe className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.nationality_name || 'Chưa cập nhật'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Chi nhánh</span>
+                          <span className="font-bold flex items-center gap-1"><Building2 className="w-3.5 h-3.5 text-slate-400" />{selectedCustomer.branch_name || 'Sky Mobile'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Kênh bán</span>
+                          <span className="font-bold">{selectedCustomer.sales_channel_name || 'Không rõ'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Nguồn dữ liệu</span>
+                          <span>{getSourceBadge(selectedCustomer.source)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Orders List */}
+                    <div className="space-y-3">
+                      <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex justify-between items-center">
+                        <span>Đơn hàng đã chốt ({customerOrders.length})</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-600 mr-2">{formatCurrency(customerOrders.reduce((acc, cur) => acc + (Number(cur.total_amount) || 0), 0))}</span>
+                          <button
+                            onClick={() => setIsCreatingOrder(true)}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-[10px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" /> Thêm đơn
+                          </button>
+                        </div>
+                      </h5>
+                      <div className="space-y-3.5">
+                        {loadingCustomerOrders ? (
+                          <div className="text-center py-6 text-xs text-slate-400">Đang tải lịch sử đơn hàng...</div>
+                        ) : customerOrders.length === 0 ? (
+                          <div className="text-center py-6 text-xs text-slate-400 italic bg-slate-50 border border-dashed border-slate-200 rounded-2xl">Chưa có đơn hàng nào được đồng bộ.</div>
+                        ) : (
+                          customerOrders.map(order => (
+                            <div
+                              key={order.id}
+                              onClick={() => setSelectedOrder(order)}
+                              className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-slate-200 transition-all cursor-pointer flex items-center justify-between group/order"
+                            >
+                              <div className="space-y-1">
+                                <span className="text-xs font-bold text-slate-800 group-hover/order:text-indigo-600 transition-colors">Đơn hàng #{order.skymobile_order_id}</span>
+                                {order.items && order.items.length > 0 && (
+                                  <div className="text-[10px] text-slate-400 font-semibold max-w-[240px] truncate" title={order.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}>
+                                    Sản phẩm: {order.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                                  <Calendar className="w-3 h-3" />
+                                  {new Date(order.created_at).toLocaleDateString('vi-VN')}
+                                  <span>• Quantity: {order.product_quantity || 1}</span>
+                                </div>
+                              </div>
+                              <div className="text-right flex flex-col items-end">
+                                <span className="font-black text-slate-900 text-sm block group-hover/order:text-indigo-600 transition-colors">{formatCurrency(order.total_amount)}</span>
+                                {getOrderStatusBadge(order.order_status)}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {selectedCustomer.notes && (
+                      <div className="space-y-2">
+                        <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Ghi chú từ Messenger/CSKH</h5>
+                        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed italic">
+                          "{selectedCustomer.notes}"
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </motion.div>

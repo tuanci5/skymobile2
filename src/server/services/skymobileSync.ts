@@ -230,6 +230,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         ordersProcessed++;
 
         const checkRes = await client.query('SELECT id FROM orders WHERE skymobile_order_id = $1', [o.id]);
+        let isNewOrChanged = false;
         
         if (checkRes.rows.length > 0) {
           // Update
@@ -302,6 +303,59 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
             o.commissionTotal
           ]);
           ordersInserted++;
+          isNewOrChanged = true;
+        }
+
+        // Fetch and sync order items for this order!
+        // We sync if it's new/changed, or we don't have any items registered for this order in the DB yet.
+        const itemsCheck = await client.query('SELECT 1 FROM order_items WHERE order_id = $1 LIMIT 1', [o.id]);
+        if (isNewOrChanged || itemsCheck.rows.length === 0) {
+          try {
+            const detailUrl = `https://skymobile.vn/api/orders/${o.id}`;
+            const detailRes = await fetch(detailUrl, {
+              headers: {
+                'authorization': authHeader,
+                'accept': 'application/json, text/plain, */*'
+              }
+            });
+
+            if (detailRes.ok) {
+              const detailData = await detailRes.json() as any;
+              const items = detailData.orderItems || [];
+
+              // Clear old items for this order to avoid duplicates on update
+              await client.query('DELETE FROM order_items WHERE order_id = $1', [o.id]);
+
+              for (const item of items) {
+                if (!item.id) continue;
+                await client.query(`
+                  INSERT INTO order_items (
+                    skymobile_item_id, order_id, product_id, product_name,
+                    quantity, selling_price, billing_rate, commission
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                  ON CONFLICT (skymobile_item_id) DO UPDATE SET
+                    product_id = EXCLUDED.product_id,
+                    product_name = EXCLUDED.product_name,
+                    quantity = EXCLUDED.quantity,
+                    selling_price = EXCLUDED.selling_price,
+                    billing_rate = EXCLUDED.billing_rate,
+                    commission = EXCLUDED.commission,
+                    synced_at = CURRENT_TIMESTAMP
+                `, [
+                  item.id,
+                  o.id,
+                  item.productId,
+                  item.productName,
+                  item.quantity,
+                  item.effectiveSellingPrice || item.sellingPricePromo || 0,
+                  item.effectiveBillingRate || item.billingRatePromo || 0,
+                  item.commission || 0
+                ]);
+              }
+            }
+          } catch (itemErr: any) {
+            console.error(`Error syncing items for order ${o.id}:`, itemErr.message);
+          }
         }
       }
 

@@ -605,6 +605,22 @@ export async function initDBUtils() {
       )
     `);
 
+    // Ensure order_items table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id SERIAL PRIMARY KEY,
+        skymobile_item_id INT UNIQUE,
+        order_id INT REFERENCES orders(skymobile_order_id) ON DELETE CASCADE,
+        product_id INT,
+        product_name VARCHAR(255),
+        quantity INT,
+        selling_price DECIMAL(15, 2),
+        billing_rate DECIMAL(15, 2),
+        commission DECIMAL(15, 2),
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Ensure customers table columns exist for pre-existing tables
     const customerColumnsToEnsure = [
       "ALTER TABLE customers ADD COLUMN IF NOT EXISTS skymobile_customer_id INT UNIQUE",

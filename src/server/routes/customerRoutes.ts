@@ -265,6 +265,27 @@ router.get('/orders', async (req, res) => {
 
     const { rows } = await pool.query(queryParts.join(''), params);
 
+    // Fetch and group related product items for the returned orders
+    if (rows.length > 0) {
+      const orderIds = rows.map(r => r.skymobile_order_id);
+      const itemsRes = await pool.query(
+        'SELECT * FROM order_items WHERE order_id = ANY($1)',
+        [orderIds]
+      );
+      
+      const itemsByOrderId: Record<number, any[]> = {};
+      for (const item of itemsRes.rows) {
+        if (!itemsByOrderId[item.order_id]) {
+          itemsByOrderId[item.order_id] = [];
+        }
+        itemsByOrderId[item.order_id].push(item);
+      }
+      
+      for (const order of rows) {
+        order.items = itemsByOrderId[order.skymobile_order_id] || [];
+      }
+    }
+
     res.json({
       orders: rows,
       pagination: {
@@ -328,6 +349,70 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/customers/orders - Create a new manual order for a customer
+router.post('/orders', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      customer_name,
+      customer_avatar,
+      branch_name,
+      created_by,
+      created_by_name,
+      order_status,
+      approval_status,
+      payment_status,
+      fulfillment_status,
+      total_amount,
+      product_quantity,
+      commission_total,
+      skymobile_order_id
+    } = req.body;
+
+    if (!customer_name) {
+      return res.status(400).json({ error: 'Customer name is required' });
+    }
+
+    // Auto-generate skymobile_order_id if not provided
+    let finalOrderId = skymobile_order_id ? parseInt(skymobile_order_id.toString()) : null;
+    if (!finalOrderId || isNaN(finalOrderId)) {
+      const maxIdRes = await pool.query('SELECT MAX(skymobile_order_id) FROM orders');
+      const maxId = maxIdRes.rows[0].max || 4000;
+      finalOrderId = maxId + 1;
+    }
+
+    const { rows } = await pool.query(`
+      INSERT INTO orders (
+        skymobile_order_id, customer_id, customer_name, customer_avatar,
+        branch_name, created_by, created_by_name, order_status, approval_status,
+        payment_status, fulfillment_status, total_amount, product_quantity,
+        commission_total, created_at, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+    `, [
+      finalOrderId,
+      customer_id ? String(customer_id) : null,
+      customer_name,
+      customer_avatar || null,
+      branch_name || 'Sky Mobile',
+      created_by || 'system',
+      created_by_name || 'Nhân viên',
+      order_status || 'Pending',
+      approval_status || 'Pending',
+      payment_status || 'Unpaid',
+      fulfillment_status || 'Unfulfilled',
+      total_amount ? parseFloat(total_amount.toString()) : 0,
+      product_quantity ? parseInt(product_quantity.toString()) : 1,
+      commission_total ? parseFloat(commission_total.toString()) : 0
+    ]);
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error creating manual order:', error);
+    res.status(500).json({ error: 'Failed to create order', details: error.message });
+  }
+});
+
 // GET /api/customers/:id/orders - Fetch orders belonging to a customer
 router.get('/:id/orders', async (req, res) => {
   try {
@@ -359,6 +444,28 @@ router.get('/:id/orders', async (req, res) => {
     }
 
     const { rows } = await pool.query(orderQuery + ' ORDER BY created_at DESC', params);
+
+    // Attach related product items for the customer's orders
+    if (rows.length > 0) {
+      const orderIds = rows.map(r => r.skymobile_order_id);
+      const itemsRes = await pool.query(
+        'SELECT * FROM order_items WHERE order_id = ANY($1)',
+        [orderIds]
+      );
+      
+      const itemsByOrderId: Record<number, any[]> = {};
+      for (const item of itemsRes.rows) {
+        if (!itemsByOrderId[item.order_id]) {
+          itemsByOrderId[item.order_id] = [];
+        }
+        itemsByOrderId[item.order_id].push(item);
+      }
+      
+      for (const order of rows) {
+        order.items = itemsByOrderId[order.skymobile_order_id] || [];
+      }
+    }
+
     res.json(rows);
   } catch (error) {
     console.error('Error fetching customer orders:', error);
