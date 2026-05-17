@@ -1,4 +1,4 @@
-5
+6
 # Sky Mobile
 
 Ứng dụng gồm frontend Vite/React và backend Express API trong cùng một codebase.
