@@ -280,6 +280,54 @@ router.get('/orders', async (req, res) => {
   }
 });
 
+// GET /api/customers/lookup - Look up a customer by skymobile_customer_id or customer_name
+router.get('/lookup', async (req, res) => {
+  try {
+    const skymobileId = req.query.skymobileId ? parseInt(req.query.skymobileId as string) : null;
+    const name = req.query.name as string;
+
+    let query = 'SELECT * FROM customers WHERE 1=2';
+    const params = [];
+    let pIdx = 1;
+
+    if (skymobileId && !isNaN(skymobileId)) {
+      query += ` OR skymobile_customer_id = $${pIdx}`;
+      params.push(skymobileId);
+      pIdx++;
+    }
+
+    if (name) {
+      query += ` OR customer_name = $${pIdx}`;
+      params.push(name);
+      pIdx++;
+    }
+
+    const { rows } = await pool.query(query + ' LIMIT 1', params);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error looking up customer:', error);
+    res.status(500).json({ error: 'Failed to look up customer' });
+  }
+});
+
+// GET /api/customers/:id - Fetch a single customer's details
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query('SELECT * FROM customers WHERE id = $1', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching customer by id:', error);
+    res.status(500).json({ error: 'Failed to fetch customer' });
+  }
+});
+
 // GET /api/customers/:id/orders - Fetch orders belonging to a customer
 router.get('/:id/orders', async (req, res) => {
   try {

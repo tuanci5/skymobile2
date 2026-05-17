@@ -191,6 +191,40 @@ export const CustomersPage: React.FC = () => {
     }
   }, [activeTab, search, sourceFilter, nationalityFilter, orderStatusFilter, paymentStatusFilter]);
 
+  const [loadingCustomerLookup, setLoadingCustomerLookup] = useState<number | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const handleOpenCustomerByOrder = async (order: Order) => {
+    if (loadingCustomerLookup) return;
+    setLoadingCustomerLookup(order.id);
+    setLookupError(null);
+    try {
+      const params = new URLSearchParams();
+      if (order.customer_id) {
+        params.append('skymobileId', order.customer_id);
+      }
+      if (order.customer_name) {
+        params.append('name', order.customer_name);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/customers/lookup?${params}`);
+      if (res.ok) {
+        const customer = await res.json();
+        handleOpenCustomer(customer);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setLookupError(errData.error || 'Không tìm thấy khách hàng tương ứng.');
+        alert(errData.error || 'Không tìm thấy dữ liệu khách hàng này trong hệ thống. Vui lòng đồng bộ dữ liệu mới nhất.');
+      }
+    } catch (err) {
+      console.error('Error looking up customer from order:', err);
+      setLookupError('Lỗi kết nối máy chủ.');
+      alert('Không thể kết nối đến máy chủ để lấy thông tin khách hàng.');
+    } finally {
+      setLoadingCustomerLookup(null);
+    }
+  };
+
   const handleOpenCustomer = async (cust: Customer) => {
     setSelectedCustomer(cust);
     setLoadingCustomerOrders(true);
@@ -434,7 +468,7 @@ export const CustomersPage: React.FC = () => {
                     </tr>
                   ) : (
                     customers.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <tr key={c.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => handleOpenCustomer(c)}>
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-100 to-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shadow-sm overflow-hidden shrink-0 border border-white">
@@ -455,7 +489,7 @@ export const CustomersPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-5 font-mono text-xs text-slate-600">
                           {c.facebook_uid ? (
-                            <span className="flex items-center gap-1.5 font-bold text-indigo-600 hover:underline cursor-pointer" onClick={() => window.open(`https://www.facebook.com/${c.facebook_uid}`, '_blank')}>
+                            <span className="flex items-center gap-1.5 font-bold text-indigo-600 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); window.open(`https://www.facebook.com/${c.facebook_uid}`, '_blank'); }}>
                               <Facebook className="w-3.5 h-3.5 shrink-0" />
                               {c.facebook_uid}
                             </span>
@@ -475,7 +509,7 @@ export const CustomersPage: React.FC = () => {
                         </td>
                         <td className="px-6 py-5 text-right">
                           <button
-                            onClick={() => handleOpenCustomer(c)}
+                            onClick={(e) => { e.stopPropagation(); handleOpenCustomer(c); }}
                             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
                           >
                             <ChevronRight className="w-5 h-5" />
@@ -604,16 +638,27 @@ export const CustomersPage: React.FC = () => {
                     </tr>
                   ) : (
                     orders.map((o) => (
-                      <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-5 font-bold text-slate-800 text-sm">
+                      <tr key={o.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer group" onClick={() => handleOpenCustomerByOrder(o)}>
+                        <td className="px-6 py-5 font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">
                           #{o.skymobile_order_id}
                         </td>
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-white">
-                              {o.customer_avatar ? <img src={o.customer_avatar} alt={o.customer_name || ''} className="w-full h-full object-cover" /> : (o.customer_name || 'KH').slice(0, 2).toUpperCase()}
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-white shrink-0">
+                              {loadingCustomerLookup === o.id ? (
+                                <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
+                              ) : o.customer_avatar ? (
+                                <img src={o.customer_avatar} alt={o.customer_name || ''} className="w-full h-full object-cover" />
+                              ) : (
+                                (o.customer_name || 'KH').slice(0, 2).toUpperCase()
+                              )}
                             </div>
-                            <span className="font-bold text-slate-700 text-sm">{o.customer_name}</span>
+                            <span className="font-bold text-slate-700 text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-2">
+                              {o.customer_name}
+                              {loadingCustomerLookup === o.id && (
+                                <span className="text-[10px] font-medium text-indigo-500 animate-pulse">(đang tải...)</span>
+                              )}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-5">
