@@ -26,7 +26,8 @@ import {
   Sparkles,
   ArrowLeft,
   Plus,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 import { settingService } from '../services/api';
 
@@ -336,6 +337,72 @@ export const CustomersPage: React.FC = () => {
       alert('Không thể kết nối đến máy chủ.');
     } finally {
       setSubmittingOrder(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (customerId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xoá khách hàng này? Tất cả các đơn hàng liên quan cũng sẽ bị xoá vĩnh viễn và không thể khôi phục.')) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customers/${customerId}`, {
+        method: 'DELETE'
+      });
+      
+      if (res.ok) {
+        alert('Xoá khách hàng thành công!');
+        setSelectedCustomer(null);
+        // Refresh customer list
+        fetchCustomers(customerPage);
+        // If tab orders is active, also refresh orders
+        fetchOrders(orderPage);
+        // Refresh stats
+        fetchStats();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Xoá khách hàng thất bại.');
+      }
+    } catch (err) {
+      console.error('Error deleting customer:', err);
+      alert('Không thể kết nối đến máy chủ.');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xoá đơn hàng này vĩnh viễn?')) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customers/orders/${orderId}`, {
+        method: 'DELETE'
+      });
+      
+      if (res.ok) {
+        alert('Xoá đơn hàng thành công!');
+        setSelectedOrder(null);
+        
+        // Refresh customer orders inside drawer
+        if (selectedCustomer) {
+          const ordersRes = await fetch(`${API_BASE_URL}/api/customers/${selectedCustomer.id}/orders`);
+          if (ordersRes.ok) {
+            setCustomerOrders(await ordersRes.json());
+          }
+        }
+        
+        // Refresh lists in background
+        fetchCustomers(customerPage);
+        fetchOrders(orderPage);
+        // Refresh stats
+        fetchStats();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Xoá đơn hàng thất bại.');
+      }
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      alert('Không thể kết nối đến máy chủ.');
     }
   };
 
@@ -1254,12 +1321,23 @@ export const CustomersPage: React.FC = () => {
                       </div>
                     )}
 
-                    <button
-                      onClick={() => setSelectedOrder(null)}
-                      className="w-full py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl text-sm hover:bg-slate-50 transition-all active:scale-98 shadow-sm flex items-center justify-center gap-1.5"
-                    >
-                      Quay lại hồ sơ
-                    </button>
+                    <div className="flex gap-3 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOrder(selectedOrder.id)}
+                        className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 font-bold rounded-2xl text-sm transition-all active:scale-98 flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Xoá đơn hàng
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrder(null)}
+                        className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl text-sm hover:bg-slate-50 transition-all active:scale-98 shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        Quay lại hồ sơ
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   /* ─── MAIN CUSTOMER PROFILE VIEW ─── */
@@ -1362,9 +1440,22 @@ export const CustomersPage: React.FC = () => {
                                   <span>• Quantity: {order.product_quantity || 1}</span>
                                 </div>
                               </div>
-                              <div className="text-right flex flex-col items-end">
-                                <span className="font-black text-slate-900 text-sm block group-hover/order:text-indigo-600 transition-colors">{formatCurrency(order.total_amount)}</span>
-                                {getOrderStatusBadge(order.order_status)}
+                              <div className="flex items-center gap-3">
+                                <div className="text-right flex flex-col items-end">
+                                  <span className="font-black text-slate-900 text-sm block group-hover/order:text-indigo-600 transition-colors">{formatCurrency(order.total_amount)}</span>
+                                  {getOrderStatusBadge(order.order_status)}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteOrder(order.id);
+                                  }}
+                                  className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer opacity-0 group-hover/order:opacity-100 flex items-center justify-center border border-transparent hover:border-rose-100 shadow-sm shrink-0"
+                                  title="Xoá đơn hàng này"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
                           ))
@@ -1381,6 +1472,18 @@ export const CustomersPage: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Delete Customer Button */}
+                    <div className="pt-4 border-t border-slate-100 mt-6">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomer(selectedCustomer.id)}
+                        className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 font-bold rounded-2xl text-xs transition-all active:scale-98 flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Xoá hồ sơ khách hàng này
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

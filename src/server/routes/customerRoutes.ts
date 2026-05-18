@@ -366,7 +366,11 @@ router.post('/orders', async (req, res) => {
       total_amount,
       product_quantity,
       commission_total,
-      skymobile_order_id
+      skymobile_order_id,
+      product_name,
+      selling_price,
+      billing_rate,
+      commission
     } = req.body;
 
     if (!customer_name) {
@@ -381,32 +385,66 @@ router.post('/orders', async (req, res) => {
       finalOrderId = maxId + 1;
     }
 
-    const { rows } = await pool.query(`
-      INSERT INTO orders (
-        skymobile_order_id, customer_id, customer_name, customer_avatar,
-        branch_name, created_by, created_by_name, order_status, approval_status,
-        payment_status, fulfillment_status, total_amount, product_quantity,
-        commission_total, created_at, synced_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING *
-    `, [
-      finalOrderId,
-      customer_id ? String(customer_id) : null,
-      customer_name,
-      customer_avatar || null,
-      branch_name || 'Sky Mobile',
-      created_by || 'system',
-      created_by_name || 'Nhân viên',
-      order_status || 'Pending',
-      approval_status || 'Pending',
-      payment_status || 'Unpaid',
-      fulfillment_status || 'Unfulfilled',
-      total_amount ? parseFloat(total_amount.toString()) : 0,
-      product_quantity ? parseInt(product_quantity.toString()) : 1,
-      commission_total ? parseFloat(commission_total.toString()) : 0
-    ]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const { rows } = await client.query(`
+        INSERT INTO orders (
+          skymobile_order_id, customer_id, customer_name, customer_avatar,
+          branch_name, created_by, created_by_name, order_status, approval_status,
+          payment_status, fulfillment_status, total_amount, product_quantity,
+          commission_total, created_at, synced_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING *
+      `, [
+        finalOrderId,
+        customer_id ? String(customer_id) : null,
+        customer_name,
+        customer_avatar || null,
+        branch_name || 'Sky Mobile',
+        created_by || 'system',
+        created_by_name || 'Nhân viên',
+        order_status || 'Pending',
+        approval_status || 'Pending',
+        payment_status || 'Unpaid',
+        fulfillment_status || 'Unfulfilled',
+        total_amount ? parseFloat(total_amount.toString()) : 0,
+        product_quantity ? parseInt(product_quantity.toString()) : 1,
+        commission_total ? parseFloat(commission_total.toString()) : 0
+      ]);
 
-    res.json(rows[0]);
+      const createdOrder = rows[0];
+
+      // If product_name is provided, also insert into order_items
+      if (product_name) {
+        const maxItemRes = await client.query('SELECT MAX(skymobile_item_id) FROM order_items');
+        const maxItemId = maxItemRes.rows[0].max || 10000;
+        const finalItemId = maxItemId + 1;
+
+        await client.query(`
+          INSERT INTO order_items (
+            skymobile_item_id, order_id, product_name, quantity, selling_price, billing_rate, commission, synced_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+        `, [
+          finalItemId,
+          finalOrderId,
+          product_name,
+          product_quantity ? parseInt(product_quantity.toString()) : 1,
+          selling_price ? parseFloat(selling_price.toString()) : (total_amount ? parseFloat(total_amount.toString()) : 0),
+          billing_rate ? parseFloat(billing_rate.toString()) : 0,
+          commission ? parseFloat(commission.toString()) : (commission_total ? parseFloat(commission_total.toString()) : 0)
+        ]);
+      }
+
+      await client.query('COMMIT');
+      res.json(createdOrder);
+    } catch (e: any) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   } catch (error: any) {
     console.error('Error creating manual order:', error);
     res.status(500).json({ error: 'Failed to create order', details: error.message });
@@ -500,6 +538,129 @@ router.get('/sync', async (req, res) => {
     console.error('API sync error:', error);
     res.write(`data: ${JSON.stringify({ status: 'error', error: error.message })}\n\n`);
     res.end();
+  }
+});
+
+// DELETE /api/customers/orders/:orderId - Delete a single manual or synced order
+router.delete('/orders/:orderId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { orderId } = req.params;
+    
+    // Parse orderId to integer
+    const parsedId = parseInt(orderId);
+    if (isNaN(parsedId)) {
+      client.release();
+      return res.status(400).json({ error: 'Mã đơn hàng không hợp lệ' });
+    }
+    
+    await client.query('BEGIN');
+    
+    // Fetch the order to get both its auto-increment id and skymobile_order_id
+    const orderRes = await client.query(
+      'SELECT id, skymobile_order_id FROM orders WHERE id = $1 OR skymobile_order_id = $1',
+      [parsedId]
+    );
+    
+    if (orderRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+    
+    const order = orderRes.rows[0];
+    
+    // Explicitly delete from order_items first to avoid any foreign key constraint issues
+    if (order.skymobile_order_id) {
+      await client.query('DELETE FROM order_items WHERE order_id = $1', [order.skymobile_order_id]);
+    }
+    
+    // Delete from orders
+    await client.query('DELETE FROM orders WHERE id = $1', [order.id]);
+    
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Đã xoá đơn hàng thành công.' });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting order:', error);
+    res.status(500).json({ error: 'Failed to delete order', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/customers/:id - Delete a customer and their linked orders
+router.delete('/:id', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    
+    // Get customer info first
+    const custRes = await client.query('SELECT id, skymobile_customer_id, customer_name FROM customers WHERE id = $1', [id]);
+    if (custRes.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    }
+    
+    const customer = custRes.rows[0];
+    
+    await client.query('BEGIN');
+    
+    // Explicitly select all matching orders to delete their order_items manually first (prevent FK violation on older DB schemas)
+    let ordersQuery = 'SELECT id, skymobile_order_id FROM orders WHERE customer_id = $1';
+    const ordersParams = [String(customer.id)];
+    let pIdx = 2;
+    
+    if (customer.skymobile_customer_id) {
+      ordersQuery += ` OR customer_id = $${pIdx}`;
+      ordersParams.push(String(customer.skymobile_customer_id));
+      pIdx++;
+    }
+    
+    if (customer.customer_name) {
+      ordersQuery += ` OR customer_name = $${pIdx}`;
+      ordersParams.push(customer.customer_name);
+      pIdx++;
+    }
+    
+    const ordersRes = await client.query(ordersQuery, ordersParams);
+    const orderIds = ordersRes.rows.map(r => r.skymobile_order_id).filter(oid => oid !== null);
+    
+    if (orderIds.length > 0) {
+      // Manual cascade delete from order_items
+      await client.query('DELETE FROM order_items WHERE order_id = ANY($1)', [orderIds]);
+    }
+    
+    // Delete associated orders
+    let deleteOrdersQuery = 'DELETE FROM orders WHERE customer_id = $1';
+    const deleteOrdersParams = [String(customer.id)];
+    let dpIdx = 2;
+    
+    if (customer.skymobile_customer_id) {
+      deleteOrdersQuery += ` OR customer_id = $${dpIdx}`;
+      deleteOrdersParams.push(String(customer.skymobile_customer_id));
+      dpIdx++;
+    }
+    
+    if (customer.customer_name) {
+      deleteOrdersQuery += ` OR customer_name = $${dpIdx}`;
+      deleteOrdersParams.push(customer.customer_name);
+      dpIdx++;
+    }
+    
+    await client.query(deleteOrdersQuery, deleteOrdersParams);
+    
+    // Delete the customer
+    await client.query('DELETE FROM customers WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Đã xoá khách hàng và các đơn hàng liên quan thành công.' });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting customer:', error);
+    res.status(500).json({ error: 'Failed to delete customer', details: error.message });
+  } finally {
+    client.release();
   }
 });
 

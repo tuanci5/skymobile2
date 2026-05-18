@@ -3,7 +3,7 @@ import {
   MessageCircle, Settings, Search, Send, User, Users, UserPlus, Bot, Clock, Filter,
   ChevronRight, MoreVertical, Plus, CreditCard, Target, ExternalLink, Power, Hand,
   ShoppingCart, Package, MapPin, Phone, StickyNote, RefreshCw, Trash2, Activity,
-  Languages, Loader2, Facebook, Image as ImageIcon
+  Languages, Loader2, Facebook, Image as ImageIcon, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PRODUCTS } from '../data/productData';
@@ -200,6 +200,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     address: '',
     product: '',
     price: '',
+    quantity: '1',
+    commission: '0',
+    branch: 'Sky Mobile',
+    orderStatus: 'Pending',
+    paymentStatus: 'Unpaid',
+    fulfillmentStatus: 'Unfulfilled',
     note: ''
   });
 
@@ -238,6 +244,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [savedCustomer, setSavedCustomer] = useState<any>(null);
   const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isOrderEnabled, setIsOrderEnabled] = useState(true);
   const [customerModalForm, setCustomerModalForm] = useState({
     phone: '',
     email: '',
@@ -1016,37 +1023,102 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
-  const handleCreateOrder = async (e: React.FormEvent) => {
+  const handleSaveCustomerAndCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedConv) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_name: selectedConv.customer_name,
-          customer_id: selectedConv.customer_id,
-          page_id: selectedConv.page_id,
-          phone: orderForm.phone,
-          address: orderForm.address,
-          product_name: orderForm.product,
-          amount: parseFloat(orderForm.price.replace(/[^0-9.]/g, '')) || 0,
-          note: orderForm.note,
-          assigned_to: user?.email || 'N/A'
-        })
-      });
+      let currentCustomer = savedCustomer;
 
-      if (res.ok) {
-        alert('Đã tạo đơn hàng thành công!');
-        setIsOrderModalOpen(false);
-        setOrderForm({ phone: '', address: '', product: '', price: '', note: '' });
-      } else {
-        const data = await res.json();
-        alert('Lỗi khi tạo đơn hàng: ' + (data.error || 'Lỗi không xác định'));
+      // Step 1: Save customer if not already saved in CRM
+      if (!currentCustomer) {
+        const customerRes = await fetch(`${API_BASE_URL}/api/customers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_name: selectedConv.customer_name,
+            phone_number: customerModalForm.phone,
+            email: customerModalForm.email,
+            avatar: getConversationAvatar(selectedConv),
+            facebook_uid: selectedConv.facebook_uid || null,
+            conversation_id: selectedConv.conversation_id,
+            nationality_name: customerModalForm.nationality,
+            notes: customerModalForm.notes,
+            source: 'messenger'
+          })
+        });
+
+        if (!customerRes.ok) {
+          const err = await customerRes.json();
+          alert(`Lỗi khi lưu thông tin khách hàng: ${err.error || 'Không thể lưu'}`);
+          return;
+        }
+
+        currentCustomer = await customerRes.json();
+        setSavedCustomer(currentCustomer);
       }
+
+      // Step 2: Create order if order is enabled
+      if (isOrderEnabled) {
+        const customerId = currentCustomer.skymobile_customer_id || currentCustomer.id;
+        const totalAmount = parseFloat(String(orderForm.price).replace(/[^0-9.]/g, '')) || 0;
+        const commissionTotal = parseFloat(String(orderForm.commission).replace(/[^0-9.]/g, '')) || 0;
+
+        const orderRes = await fetch(`${API_BASE_URL}/api/customers/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: customerId,
+            customer_name: currentCustomer.customer_name,
+            customer_avatar: currentCustomer.avatar || getConversationAvatar(selectedConv),
+            branch_name: orderForm.branch,
+            order_status: orderForm.orderStatus,
+            approval_status: orderForm.orderStatus,
+            payment_status: orderForm.paymentStatus,
+            fulfillment_status: orderForm.fulfillmentStatus,
+            total_amount: totalAmount,
+            product_quantity: parseInt(orderForm.quantity) || 1,
+            commission_total: commissionTotal,
+            created_by: user?.email || 'system',
+            created_by_name: user?.name || 'Nhân viên',
+            product_name: orderForm.product,
+            selling_price: totalAmount / (parseInt(orderForm.quantity) || 1),
+            commission: commissionTotal / (parseInt(orderForm.quantity) || 1),
+            billing_rate: 0
+          })
+        });
+
+        if (orderRes.ok) {
+          alert('Lưu thông tin khách hàng và lên đơn thành công!');
+          setIsOrderModalOpen(false);
+          // Reset states
+          setOrderForm({
+            phone: '',
+            address: '',
+            product: '',
+            price: '',
+            quantity: '1',
+            commission: '0',
+            branch: 'Sky Mobile',
+            orderStatus: 'Pending',
+            paymentStatus: 'Unpaid',
+            fulfillmentStatus: 'Unfulfilled',
+            note: ''
+          });
+        } else {
+          const err = await orderRes.json();
+          alert(`Lưu khách hàng thành công nhưng lên đơn thất bại: ${err.error || 'Lỗi không xác định'}`);
+        }
+      } else {
+        // Only customer was saved
+        alert('Lưu thông tin khách hàng tiềm năng thành công!');
+        setIsOrderModalOpen(false);
+      }
+
+      // Sync customer status
+      checkSavedCustomerStatus(selectedConv);
     } catch (err) {
-      console.error('Error creating order:', err);
+      console.error('Error in handleSaveCustomerAndCreateOrder:', err);
       alert('Lỗi kết nối máy chủ!');
     }
   };
@@ -1860,37 +1932,21 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             </div>
 
             {/* Khách Hàng Tiềm Năng Card */}
-            <div className="mb-3 p-4 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 border border-indigo-100/70 rounded-2xl shadow-sm text-left">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                    <Users className="w-4 h-4" />
+            {savedCustomer && (
+              <div className="mb-3 p-4 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 border border-indigo-100/70 rounded-2xl shadow-sm text-left">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 leading-tight">CRM Khách Hàng</h4>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 block">Đồng bộ tự động</span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-black text-slate-800 leading-tight">CRM Khách Hàng</h4>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 block">Đồng bộ tự động</span>
-                  </div>
-                </div>
-                {isCheckingCustomer ? (
-                  <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Kiểm tra...</span>
-                ) : savedCustomer ? (
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">Đã lưu CRM</span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-slate-100 text-slate-500 border border-slate-200">Chưa lưu</span>
-                )}
-              </div>
+                </div>
 
-              {!isCheckingCustomer && !savedCustomer && (
-                <button
-                  onClick={() => setIsCustomerModalOpen(true)}
-                  className="w-full mt-3.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm hover:shadow-indigo-100"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Thêm Khách Hàng Tiềm Năng
-                </button>
-              )}
-
-              {savedCustomer && (
                 <div className="mt-3.5 space-y-2 border-t border-slate-100 pt-3">
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="text-slate-400 font-bold">Điện thoại:</span>
@@ -1901,17 +1957,20 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     <span className="text-slate-700 font-black">{savedCustomer.nationality_name || 'Không rõ'}</span>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Nút Lên Đơn */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
-                onClick={() => setIsOrderModalOpen(true)}
+                onClick={() => {
+                  setIsOrderEnabled(true);
+                  setIsOrderModalOpen(true);
+                }}
                 className="col-span-2 w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 text-sm"
               >
                 <ShoppingCart className="w-4 h-4" />
-                Lên Đơn
+                {savedCustomer ? 'Lên Đơn Hàng' : 'Thêm khách hàng & lên đơn'}
               </button>
 
               <button
@@ -2889,74 +2948,308 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         {isOrderModalOpen && (
           <>
             <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               onClick={() => setIsOrderModalOpen(false)}
               className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60]"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-3xl shadow-2xl z-[70] p-6"
-            >
-              <h2 className="text-xl font-bold mb-4">Lên đơn hàng</h2>
-              {/* Order form fields... */}
-              <button onClick={() => setIsOrderModalOpen(false)} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl">Đóng</button>
-            </motion.div>
-          </>
-        )}
-
-        {isCustomerModalOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsCustomerModalOpen(false)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60]"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2rem] shadow-2xl z-[70] p-6 border border-slate-100 text-left"
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-[2.5rem] shadow-2xl z-[70] p-7 border border-slate-100 text-left scrollbar-thin"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><UserPlus className="w-5 h-5 text-indigo-600" /> Lưu Khách Hàng Mới</h3>
-                <button onClick={() => setIsCustomerModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50"><Plus className="w-5 h-6 rotate-45" /></button>
+                <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-indigo-600" />
+                  {savedCustomer ? 'Lên Đơn Hàng CRM' : 'Lên Đơn & Lưu Khách Hàng CRM'}
+                </h3>
+                <button
+                  onClick={() => setIsOrderModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  <Plus className="w-5 h-5 rotate-45" />
+                </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Tên khách hàng</label>
-                  <input type="text" disabled value={selectedConv?.customer_name || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none" />
+              <form onSubmit={handleSaveCustomerAndCreateOrder} className="space-y-6">
+                {/* PART 1: CRM CUSTOMER DETAILS */}
+                <div className="bg-slate-50/50 border border-slate-100 rounded-3xl p-5 space-y-4">
+                  <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <Users className="w-4 h-4" /> CRM Thông Tin Khách Hàng
+                  </h4>
+
+                  {savedCustomer ? (
+                    // Customer already saved card
+                    <div className="p-4 bg-white border border-emerald-100 rounded-2xl flex items-center justify-between shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden">
+                          {savedCustomer.avatar ? (
+                            <img src={savedCustomer.avatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            savedCustomer.customer_name.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{savedCustomer.customer_name}</p>
+                          <p className="text-xs text-slate-400 font-semibold mt-0.5">SĐT: {savedCustomer.phone_number || 'Chưa cập nhật'} • Quốc tịch: {savedCustomer.nationality_name || 'Không rõ'}</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        Đã Lưu CRM
+                      </span>
+                    </div>
+                  ) : (
+                    // Customer registration fields
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Tên khách hàng</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={selectedConv?.customer_name || ''}
+                          className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-bold text-slate-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Số điện thoại</label>
+                        <input
+                          type="text"
+                          required={!savedCustomer}
+                          placeholder="Nhập số điện thoại..."
+                          value={customerModalForm.phone}
+                          onChange={(e) => setCustomerModalForm({ ...customerModalForm, phone: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Quốc tịch</label>
+                        <select
+                          value={customerModalForm.nationality}
+                          onChange={(e) => setCustomerModalForm({ ...customerModalForm, nationality: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                        >
+                          <option value="Việt Nam">Việt Nam</option>
+                          <option value="Nhật Bản">Nhật Bản</option>
+                          <option value="Philippines">Philippines</option>
+                          <option value="Nepal">Nepal</option>
+                          <option value="Không rõ">Khác</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Email (tùy chọn)</label>
+                        <input
+                          type="email"
+                          placeholder="Nhập email..."
+                          value={customerModalForm.email}
+                          onChange={(e) => setCustomerModalForm({ ...customerModalForm, email: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Ghi chú nhu cầu / Ads</label>
+                        <input
+                          type="text"
+                          placeholder="Ghi chú thêm..."
+                          value={customerModalForm.notes}
+                          onChange={(e) => setCustomerModalForm({ ...customerModalForm, notes: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Số điện thoại</label>
-                  <input type="text" placeholder="Nhập số điện thoại..." value={customerModalForm.phone} onChange={(e) => setCustomerModalForm({ ...customerModalForm, phone: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
+                {/* TOGGLE FOR CREATING ORDER SIMULTANEOUSLY */}
+                {!savedCustomer && (
+                  <div className="flex items-center gap-2.5 px-1">
+                    <input
+                      type="checkbox"
+                      id="isOrderEnabled"
+                      checked={isOrderEnabled}
+                      onChange={(e) => setIsOrderEnabled(e.target.checked)}
+                      className="w-4.5 h-4.5 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="isOrderEnabled" className="text-xs font-bold text-slate-700 select-none cursor-pointer hover:text-indigo-600 transition-colors">
+                      Đồng thời tạo đơn hàng chốt deal cho khách hàng này
+                    </label>
+                  </div>
+                )}
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Email</label>
-                  <input type="email" placeholder="Nhập email (nếu có)..." value={customerModalForm.email} onChange={(e) => setCustomerModalForm({ ...customerModalForm, email: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
+                {/* PART 2: ORDER DETAILS */}
+                {(savedCustomer || isOrderEnabled) && (
+                  <div className="bg-slate-50/50 border border-slate-100 rounded-3xl p-5 space-y-4">
+                    <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                      <ShoppingCart className="w-4 h-4" /> Chi Tiết Đơn Hàng Mới
+                    </h4>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Quốc tịch</label>
-                  <select value={customerModalForm.nationality} onChange={(e) => setCustomerModalForm({ ...customerModalForm, nationality: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer">
-                    <option value="Việt Nam">Việt Nam</option>
-                    <option value="Nhật Bản">Nhật Bản</option>
-                    <option value="Philippines">Philippines</option>
-                    <option value="Nepal">Nepal</option>
-                    <option value="Không rõ">Khác</option>
-                  </select>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Chi nhánh</label>
+                        <select
+                          value={orderForm.branch}
+                          onChange={(e) => setOrderForm({ ...orderForm, branch: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                        >
+                          <option value="Sky Mobile">Sky Mobile</option>
+                          <option value="Sky Mobile Tokyo">Sky Mobile Tokyo</option>
+                          <option value="Sky Mobile Osaka">Sky Mobile Osaka</option>
+                        </select>
+                      </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Ghi chú chiến dịch / nhu cầu</label>
-                  <textarea rows={2} value={customerModalForm.notes} onChange={(e) => setCustomerModalForm({ ...customerModalForm, notes: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
-                </div>
-              </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Sản phẩm (kho suggestions)</label>
+                        <input
+                          type="text"
+                          list="warehouse-products-suggestions"
+                          placeholder="Chọn hoặc gõ sản phẩm..."
+                          required={savedCustomer || isOrderEnabled}
+                          value={orderForm.product}
+                          onChange={(e) => {
+                            const selectedVal = e.target.value;
+                            const foundProd = warehouseProducts.find(p => p.name === selectedVal);
+                            setOrderForm({
+                              ...orderForm,
+                              product: selectedVal,
+                              price: foundProd ? String(foundProd.sale_price) : orderForm.price
+                            });
+                          }}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                        <datalist id="warehouse-products-suggestions">
+                          {warehouseProducts.map(p => (
+                            <option key={p.id} value={p.name}>
+                              {new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(p.sale_price)}
+                            </option>
+                          ))}
+                        </datalist>
+                      </div>
 
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setIsCustomerModalOpen(false)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-colors">Hủy</button>
-                <button onClick={handleSaveCustomer} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-colors shadow-lg shadow-indigo-100">Lưu khách hàng</button>
-              </div>
+                      <div className="col-span-2 grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Đơn giá bán (¥)</label>
+                          <input
+                            type="text"
+                            required={savedCustomer || isOrderEnabled}
+                            placeholder="Nhập giá..."
+                            value={orderForm.price}
+                            onChange={(e) => setOrderForm({ ...orderForm, price: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Số lượng</label>
+                          <input
+                            type="number"
+                            min="1"
+                            required={savedCustomer || isOrderEnabled}
+                            value={orderForm.quantity}
+                            onChange={(e) => setOrderForm({ ...orderForm, quantity: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Hoa hồng (¥)</label>
+                          <input
+                            type="text"
+                            placeholder="Nhập hoa hồng..."
+                            value={orderForm.commission}
+                            onChange={(e) => setOrderForm({ ...orderForm, commission: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Trạng thái đơn</label>
+                          <select
+                            value={orderForm.orderStatus}
+                            onChange={(e) => setOrderForm({ ...orderForm, orderStatus: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                          >
+                            <option value="Pending">Chờ duyệt</option>
+                            <option value="Approved">Đã duyệt</option>
+                            <option value="Rejected">Từ chối</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Thanh toán</label>
+                          <select
+                            value={orderForm.paymentStatus}
+                            onChange={(e) => setOrderForm({ ...orderForm, paymentStatus: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                          >
+                            <option value="Unpaid">Chưa thanh toán</option>
+                            <option value="Paid">Đã thanh toán</option>
+                            <option value="Partial">Một phần</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Giao hàng</label>
+                          <select
+                            value={orderForm.fulfillmentStatus}
+                            onChange={(e) => setOrderForm({ ...orderForm, fulfillmentStatus: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                          >
+                            <option value="Unfulfilled">Chưa giao</option>
+                            <option value="Fulfilled">Đã giao</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Địa chỉ giao nhận hàng</label>
+                        <input
+                          type="text"
+                          placeholder="Nhập địa chỉ giao hàng chi tiết..."
+                          value={orderForm.address}
+                          onChange={(e) => setOrderForm({ ...orderForm, address: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Ghi chú giao vận / yêu cầu đơn hàng</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Nhập ghi chú chi tiết cho đơn hàng..."
+                          value={orderForm.note}
+                          onChange={(e) => setOrderForm({ ...orderForm, note: e.target.value })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* FORM ACTIONS */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOrderModalOpen(false)}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-colors text-center"
+                  >
+                    Hủy Bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-2xl font-bold text-sm transition-all hover:from-indigo-700 hover:to-blue-700 shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {savedCustomer
+                      ? 'Xác Nhận Lên Đơn'
+                      : isOrderEnabled
+                        ? 'Lưu Khách Hàng & Lên Đơn'
+                        : 'Lưu Khách Hàng CRM'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </>
         )}
