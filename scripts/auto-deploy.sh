@@ -36,9 +36,6 @@ pm2 delete ${PM2_APP_NAME} 2>/dev/null || true
 pm2 start ./node_modules/.bin/tsx --name ${PM2_APP_NAME} --cwd "$PROJECT_DIR" -- src/server/server.ts
 echo "⏳ Waiting 10 seconds for the application to fully start..."
 sleep 10
-pm2 list
-pm2 save
-
 # 6. Sửa lại quyền sở hữu cho user www để Nginx có thể truy cập các file tĩnh
 if [ "$(id -u)" = "0" ]; then
   echo "🔐 Fixing ownership for ${DEPLOY_USER}:${DEPLOY_USER}..."
@@ -46,6 +43,8 @@ if [ "$(id -u)" = "0" ]; then
   chmod -R u+rwX,g+rwX "$PROJECT_DIR"
 fi
 pm2 restart skymobile-api
+pm2 list
+pm2 save
 echo "------------------------------------------"
 echo "✅ Deployment Successful!"
 echo "------------------------------------------"

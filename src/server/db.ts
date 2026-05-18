@@ -621,6 +621,33 @@ export async function initDBUtils() {
       )
     `);
 
+    // Ensure promotions table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promotions (
+        id SERIAL PRIMARY KEY,
+        skymobile_promo_id INT UNIQUE,
+        promotion_type VARCHAR(100),
+        product_id INT,
+        product_name VARCHAR(255),
+        fixed_broadband_product_id INT,
+        fixed_broadband_product_name VARCHAR(255),
+        branch_shipping_method_id INT,
+        branch_shipping_method_name VARCHAR(255),
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        discount_amount DECIMAL(15, 2),
+        discount_type VARCHAR(100),
+        branch_id INT,
+        branch_name VARCHAR(255),
+        is_active BOOLEAN DEFAULT TRUE,
+        created_by VARCHAR(100),
+        created_at TIMESTAMP,
+        updated_at TIMESTAMP,
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_promotions_product_name ON promotions(product_name)`);
+
     // Ensure customers table columns exist for pre-existing tables
     const customerColumnsToEnsure = [
       "ALTER TABLE customers ADD COLUMN IF NOT EXISTS skymobile_customer_id INT UNIQUE",

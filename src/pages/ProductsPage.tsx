@@ -6,7 +6,7 @@ import {
   PackageSearch, X, Eye, Info, Plus, Edit2, Trash2, Save,
   Calendar, Tag, User, DollarSign, ArrowLeft, MoreVertical,
   Layers, Package, TrendingUp, AlertCircle, RefreshCw, Building2,
-  Phone, Mail, MapPin
+  Phone, Mail, MapPin, Sparkles
 } from 'lucide-react';
 import { PRODUCTS, ProductItem } from '../data/productData';
 import { SUB_PRODUCTS_DATA } from '../data/subProductsData';
@@ -97,7 +97,7 @@ const itemVariants = {
 };
 
 export const ProductsPage: React.FC = () => {
-  const [view, setView] = useState<'overview' | 'inventory' | 'suppliers'>('overview');
+  const [view, setView] = useState<'overview' | 'inventory' | 'suppliers' | 'promotions'>('overview');
   const [search, setSearch] = useState('');
   const [filterObj, setFilterObj] = useState<string>('Tất cả');
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
@@ -121,6 +121,15 @@ export const ProductsPage: React.FC = () => {
     notes: ''
   });
   const [supplierFormData, setSupplierFormData] = useState(defaultSupplierFormData());
+
+  // Promotions states
+  const [promotions, setPromotions] = useState<any[]>([]);
+  const [promotionsLoading, setPromotionsLoading] = useState(false);
+  const [promotionsSearch, setPromotionsSearch] = useState('');
+  const [promotionsTypeFilter, setPromotionsTypeFilter] = useState('');
+  const [promotionsPage, setPromotionsPage] = useState(1);
+  const [promotionsTotalPages, setPromotionsTotalPages] = useState(1);
+  const [isSyncingPromotions, setIsSyncingPromotions] = useState(false);
 
   const defaultProductFormData = () => ({
     name: '',
@@ -174,6 +183,52 @@ export const ProductsPage: React.FC = () => {
       fetchSuppliers();
     }
   }, [view]);
+
+  const fetchPromotions = async (page = 1, searchVal = '', typeVal = '') => {
+    setPromotionsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '9',
+        search: searchVal,
+        type: typeVal
+      });
+      const res = await fetch(`${API_BASE_URL}/api/products/promotions?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPromotions(data.items || []);
+        setPromotionsTotalPages(data.totalPages || 1);
+        setPromotionsPage(data.currentPage || 1);
+      }
+    } catch (err) {
+      console.error('Error fetching promotions:', err);
+    } finally {
+      setPromotionsLoading(false);
+    }
+  };
+
+  const handleSyncPromotions = async () => {
+    setIsSyncingPromotions(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/promotions/sync`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        // Reload promotions
+        await fetchPromotions(1, promotionsSearch, promotionsTypeFilter);
+      }
+    } catch (err) {
+      console.error('Error syncing promotions:', err);
+    } finally {
+      setIsSyncingPromotions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'promotions') {
+      fetchPromotions(1, promotionsSearch, promotionsTypeFilter);
+    }
+  }, [view, promotionsSearch, promotionsTypeFilter]);
 
   const handleOpenModal = (product?: DetailedProduct) => {
     fetchSuppliers();
@@ -417,17 +472,26 @@ export const ProductsPage: React.FC = () => {
                 <Building2 className="w-3.5 h-3.5" />
                 Người bán / Nhà cung cấp
               </button>
+              <button 
+                onClick={() => setView('promotions')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${view === 'promotions' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Khuyến mại
+              </button>
             </div>
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
             {view === 'overview' && 'Danh Mục Khai Thác'}
             {view === 'inventory' && 'Quản Lý Kho Sản Phẩm'}
             {view === 'suppliers' && 'Người Bán / Nhà Cung Cấp'}
+            {view === 'promotions' && 'Khuyến Mại & Ưu Đãi'}
           </h1>
           <p className="text-slate-500 mt-2 max-w-xl text-sm md:text-base leading-relaxed">
             {view === 'overview' && 'Danh sách các sản phẩm/dịch vụ cốt lõi mà công ty đang triển khai, cùng các định hướng mục tiêu và đánh giá thị trường cụ thể.'}
             {view === 'inventory' && 'Quản lý chi tiết từng sản phẩm nhập kho, theo dõi giá nhập, giá bán, nhà cung cấp và ngày nhập hàng.'}
             {view === 'suppliers' && 'Quản lý danh sách người bán, đối tác và nhà cung cấp để dùng trực tiếp trong form thêm sản phẩm mới.'}
+            {view === 'promotions' && 'Đồng bộ và quản lý các chương trình khuyến mại, chiết khấu giá cước hoặc giảm giá bán từ hệ thống Sky Mobile.'}
           </p>
         </div>
 
@@ -451,13 +515,33 @@ export const ProductsPage: React.FC = () => {
               Thêm nhà cung cấp
             </button>
           )}
+          {view === 'promotions' && (
+            <button 
+              onClick={() => handleSyncPromotions()}
+              disabled={isSyncingPromotions}
+              className="flex items-center gap-2 px-6 py-3.5 bg-amber-600 text-white rounded-2xl font-bold hover:bg-amber-700 disabled:bg-slate-100 disabled:text-slate-400 transition-all shadow-lg shadow-amber-200"
+            >
+              <RefreshCw className={`w-5 h-5 ${isSyncingPromotions ? 'animate-spin' : ''}`} />
+              {isSyncingPromotions ? 'Đang đồng bộ...' : 'Đồng bộ Khuyến mại'}
+            </button>
+          )}
           <div className="hidden sm:flex gap-4">
             <div className="bg-slate-50 rounded-2xl p-4 min-w-[120px] border border-slate-100">
               <p className="text-2xl font-black text-slate-800">
-                {view === 'overview' ? PRODUCTS.length : view === 'inventory' ? detailedProducts.length : suppliers.length}
+                {view === 'overview' 
+                  ? PRODUCTS.length 
+                  : view === 'inventory' 
+                  ? detailedProducts.length 
+                  : view === 'suppliers' 
+                  ? suppliers.length 
+                  : promotions.length}
               </p>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">
-                {view === 'suppliers' ? 'Nhà cung cấp' : 'Sản phẩm'}
+                {view === 'suppliers' 
+                  ? 'Nhà cung cấp' 
+                  : view === 'promotions' 
+                  ? 'Khuyến mại' 
+                  : 'Sản phẩm'}
               </p>
             </div>
             {view === 'overview' && (
@@ -686,7 +770,7 @@ export const ProductsPage: React.FC = () => {
               </table>
             </div>
           </motion.div>
-        ) : (
+        ) : view === 'suppliers' ? (
           <motion.div
             key="suppliers"
             initial={{ opacity: 0 }}
@@ -763,6 +847,171 @@ export const ProductsPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </motion.div>
+        ) : (
+          // Promotions tab
+          <motion.div
+            key="promotions"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            {/* Promotions filter & actions */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm theo tên sản phẩm khuyến mại..."
+                  value={promotionsSearch}
+                  onChange={(e) => setPromotionsSearch(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
+                />
+              </div>
+              <div className="relative min-w-[200px]">
+                <select
+                  value={promotionsTypeFilter}
+                  onChange={(e) => setPromotionsTypeFilter(e.target.value)}
+                  className="w-full pl-4 pr-10 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent appearance-none shadow-sm font-bold"
+                >
+                  <option value="">Tất cả loại hình</option>
+                  <option value="BillingRate">Chiết khấu giá cước</option>
+                  <option value="SellingPrice">Giảm giá bán sản phẩm</option>
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+              <button 
+                onClick={() => fetchPromotions(1, promotionsSearch, promotionsTypeFilter)}
+                className="p-3.5 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-blue-600 transition-colors shadow-sm"
+                title="Làm mới"
+              >
+                <RefreshCw className={`w-5 h-5 ${promotionsLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {/* Promotions Content */}
+            {promotionsLoading ? (
+              <div className="bg-white rounded-[2rem] border border-slate-100 p-20 text-center shadow-sm">
+                <div className="flex flex-col items-center gap-3">
+                  <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+                  <p className="text-slate-500 font-medium">Đang tải danh sách khuyến mại...</p>
+                </div>
+              </div>
+            ) : promotions.length === 0 ? (
+              <div className="bg-white rounded-[2rem] border border-slate-100 p-20 text-center shadow-sm">
+                <div className="flex flex-col items-center gap-3">
+                  <Sparkles className="w-12 h-12 text-slate-300 animate-pulse" />
+                  <p className="text-slate-500 font-medium">Không tìm thấy khuyến mại nào.</p>
+                  <button 
+                    onClick={() => handleSyncPromotions()} 
+                    disabled={isSyncingPromotions}
+                    className="text-blue-600 font-bold hover:underline text-sm disabled:text-slate-400"
+                  >
+                    {isSyncingPromotions ? 'Đang đồng bộ...' : 'Đồng bộ dữ liệu từ Sky Mobile'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {promotions.map((p) => {
+                  const isActive = new Date(p.end_date) >= new Date() && p.is_active !== false;
+                  const discountDisplay = p.promotion_type === 'BillingRate' 
+                    ? `Chiết khấu cước: -￥${Number(p.discount_amount).toLocaleString()}` 
+                    : `Giảm giá bán: -￥${Number(p.discount_amount).toLocaleString()}`;
+                  
+                  return (
+                    <div 
+                      key={p.id}
+                      className="group bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full relative overflow-hidden"
+                    >
+                      {/* Gradient Accent line */}
+                      <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${p.promotion_type === 'BillingRate' ? 'from-indigo-500 to-indigo-600' : 'from-emerald-500 to-emerald-600'}`} />
+
+                      <div className="flex justify-between items-start gap-4 mb-4">
+                        <span className={`px-3 py-1.5 rounded-xl text-xs font-bold ${
+                          p.promotion_type === 'BillingRate' 
+                            ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        }`}>
+                          {p.promotion_type === 'BillingRate' ? 'Cước hàng tháng' : 'Giá bán thiết bị'}
+                        </span>
+                        
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                          isActive 
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                            : 'bg-slate-100 text-slate-400 border border-slate-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                          {isActive ? 'Đang chạy' : 'Hết hạn'}
+                        </span>
+                      </div>
+
+                      <h3 className="text-lg font-black text-slate-800 leading-tight mb-2 flex-1 group-hover:text-blue-600 transition-colors duration-300">
+                        {p.product_name}
+                      </h3>
+
+                      <div className="space-y-3 pt-4 border-t border-dashed border-slate-100 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 font-bold">Mức ưu đãi:</span>
+                          <span className={`text-base font-black ${p.promotion_type === 'BillingRate' ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                            {discountDisplay}
+                          </span>
+                        </div>
+
+                        {p.branch_shipping_method_name && p.branch_shipping_method_name !== 'N/A' && (
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span className="font-bold">Hình thức ship:</span>
+                            <span className="font-bold bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{p.branch_shipping_method_name}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2.5 rounded-2xl border border-slate-100 mt-2">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          <div>
+                            <p className="font-bold text-slate-600">Thời gian diễn ra:</p>
+                            <p className="text-[10px] mt-0.5">
+                              {new Date(p.start_date).toLocaleDateString('vi-VN')} - {new Date(p.end_date).toLocaleDateString('vi-VN')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-slate-400 text-right italic pt-2">
+                          Đồng bộ: {new Date(p.synced_at).toLocaleString('vi-VN')}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {promotionsTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-6 border-t border-dashed border-slate-100 bg-white p-6 rounded-[2rem] shadow-sm">
+                <p className="text-xs font-bold text-slate-500">
+                  Trang {promotionsPage} trên {promotionsTotalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={promotionsPage <= 1}
+                    onClick={() => fetchPromotions(promotionsPage - 1, promotionsSearch, promotionsTypeFilter)}
+                    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    disabled={promotionsPage >= promotionsTotalPages}
+                    onClick={() => fetchPromotions(promotionsPage + 1, promotionsSearch, promotionsTypeFilter)}
+                    className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,5 +1,6 @@
 import express from 'express';
 import { pool } from '../db';
+import { syncFromSkyMobile } from '../services/skymobileSync';
 
 const router = express.Router();
 
@@ -232,6 +233,66 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting product:', error);
     res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
+// GET promotions list with searching, type filter and pagination
+router.get('/promotions', async (req, res) => {
+  try {
+    const search = req.query.search ? String(req.query.search).trim() : '';
+    const type = req.query.type ? String(req.query.type).trim() : '';
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.max(1, Number(req.query.limit) || 10);
+    const offset = (page - 1) * limit;
+
+    let countQuery = 'SELECT COUNT(*) FROM promotions WHERE 1=1';
+    let dataQuery = 'SELECT * FROM promotions WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (search) {
+      countQuery += ` AND product_name ILIKE $${paramIndex}`;
+      dataQuery += ` AND product_name ILIKE $${paramIndex}`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (type) {
+      countQuery += ` AND promotion_type = $${paramIndex}`;
+      dataQuery += ` AND promotion_type = $${paramIndex}`;
+      params.push(type);
+      paramIndex++;
+    }
+
+    dataQuery += ` ORDER BY start_date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    
+    const countRes = await pool.query(countQuery, params);
+    const totalItems = parseInt(countRes.rows[0].count, 10);
+    const totalPages = Math.ceil(totalItems / limit);
+
+    const dataParams = [...params, limit, offset];
+    const dataRes = await pool.query(dataQuery, dataParams);
+
+    res.json({
+      items: dataRes.rows,
+      totalItems,
+      totalPages,
+      currentPage: page
+    });
+  } catch (error) {
+    console.error('Error fetching promotions:', error);
+    res.status(500).json({ error: 'Failed to fetch promotions' });
+  }
+});
+
+// POST trigger promotions synchronization on-demand
+router.post('/promotions/sync', async (req, res) => {
+  try {
+    const result = await syncFromSkyMobile();
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error syncing promotions:', error);
+    res.status(500).json({ error: 'Failed to synchronize promotions', details: error.message });
   }
 });
 

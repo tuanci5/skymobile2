@@ -9,6 +9,9 @@ export interface SyncResult {
   customersProcessed: number;
   customersInserted: number;
   customersUpdated: number;
+  promotionsProcessed?: number;
+  promotionsInserted?: number;
+  promotionsUpdated?: number;
   error?: string;
 }
 
@@ -137,6 +140,44 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
     }
 
     log(`🎉 Tìm thấy tổng cộng ${customersList.length} khách hàng. Đang cập nhật vào cơ sở dữ liệu...`);
+
+    // Fetch and sync Promotions
+    log('📡 Bắt đầu tải danh sách khuyến mại từ Sky Mobile API...');
+    let promotionsProcessed = 0;
+    let promotionsInserted = 0;
+    let promotionsUpdated = 0;
+
+    let promoPage = 1;
+    let hasMorePromotions = true;
+    const promotionsList: any[] = [];
+
+    while (hasMorePromotions) {
+      log(`📡 Đang tải trang khuyến mại ${promoPage}...`);
+      const url = `https://skymobile.vn/api/promotions?pageNumber=${promoPage}&pageSize=100`;
+
+      const res = await fetch(url, {
+        headers: {
+          'authorization': authHeader,
+          'accept': 'application/json, text/plain, */*'
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Sky Mobile Promotions API returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json() as any;
+      const items = data.items || [];
+      promotionsList.push(...items);
+
+      if (items.length < 100) {
+        hasMorePromotions = false;
+      } else {
+        promoPage++;
+      }
+    }
+
+    log(`🎉 Tìm thấy tổng cộng ${promotionsList.length} khuyến mại. Đang cập nhật vào cơ sở dữ liệu...`);
 
     // Database Connection & Operations
     const client = await pool.connect();
@@ -359,8 +400,95 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         }
       }
 
+      // 3. Process Promotions
+      log('💾 Đang lưu dữ liệu khuyến mại vào cơ sở dữ liệu...');
+      for (const p of promotionsList) {
+        if (!p.id) continue;
+        promotionsProcessed++;
+
+        const checkRes = await client.query('SELECT id FROM promotions WHERE skymobile_promo_id = $1', [p.id]);
+
+        if (checkRes.rows.length > 0) {
+          // Update
+          await client.query(`
+            UPDATE promotions SET
+              promotion_type = $2,
+              product_id = $3,
+              product_name = $4,
+              fixed_broadband_product_id = $5,
+              fixed_broadband_product_name = $6,
+              branch_shipping_method_id = $7,
+              branch_shipping_method_name = $8,
+              start_date = $9,
+              end_date = $10,
+              discount_amount = $11,
+              discount_type = $12,
+              branch_id = $13,
+              branch_name = $14,
+              is_active = $15,
+              created_by = $16,
+              created_at = $17,
+              updated_at = $18,
+              synced_at = CURRENT_TIMESTAMP
+            WHERE skymobile_promo_id = $1
+          `, [
+            p.id,
+            p.promotionType,
+            p.productId,
+            p.productName,
+            p.fixedBroadbandProductId,
+            p.fixedBroadbandProductName,
+            p.branchShippingMethodId,
+            p.branchShippingMethodName,
+            p.startDate,
+            p.endDate,
+            p.discountAmount,
+            p.discountType,
+            p.branchId,
+            p.branchName,
+            p.isActive,
+            p.createdBy,
+            p.createdAt,
+            p.updatedAt
+          ]);
+          promotionsUpdated++;
+        } else {
+          // Insert
+          await client.query(`
+            INSERT INTO promotions (
+              skymobile_promo_id, promotion_type, product_id, product_name,
+              fixed_broadband_product_id, fixed_broadband_product_name,
+              branch_shipping_method_id, branch_shipping_method_name,
+              start_date, end_date, discount_amount, discount_type,
+              branch_id, branch_name, is_active, created_by,
+              created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          `, [
+            p.id,
+            p.promotionType,
+            p.productId,
+            p.productName,
+            p.fixedBroadbandProductId,
+            p.fixedBroadbandProductName,
+            p.branchShippingMethodId,
+            p.branchShippingMethodName,
+            p.startDate,
+            p.endDate,
+            p.discountAmount,
+            p.discountType,
+            p.branchId,
+            p.branchName,
+            p.isActive,
+            p.createdBy,
+            p.createdAt,
+            p.updatedAt
+          ]);
+          promotionsInserted++;
+        }
+      }
+
       await client.query('COMMIT');
-      log(`🎉 Đồng bộ hoàn tất! Cập nhật thành công ${customersProcessed} khách hàng & ${ordersProcessed} đơn hàng.`);
+      log(`🎉 Đồng bộ hoàn tất! Cập nhật thành công ${customersProcessed} khách hàng, ${ordersProcessed} đơn hàng & ${promotionsProcessed} khuyến mại.`);
       
       return {
         success: true,
@@ -369,7 +497,10 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         ordersUpdated,
         customersProcessed,
         customersInserted,
-        customersUpdated
+        customersUpdated,
+        promotionsProcessed,
+        promotionsInserted,
+        promotionsUpdated
       };
     } catch (dbErr: any) {
       await client.query('ROLLBACK');
