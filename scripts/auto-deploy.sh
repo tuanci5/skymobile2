@@ -45,7 +45,7 @@ if [ "$(id -u)" = "0" ]; then
   chown -R ${DEPLOY_USER}:${DEPLOY_USER} "$PROJECT_DIR"
   chmod -R u+rwX,g+rwX "$PROJECT_DIR"
 fi
-
+pm2 restart skymobile-api
 echo "------------------------------------------"
 echo "✅ Deployment Successful!"
 echo "------------------------------------------"
