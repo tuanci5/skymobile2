@@ -12,6 +12,9 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  realUser: User | null;
+  simulatedRole: string | null;
+  setSimulatedRole: (role: string | null) => void;
   login: (userData: any) => void;
   logout: () => void;
   hasPermission: (tab: string) => boolean;
@@ -26,6 +29,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
+  });
+  const [simulatedRole, setSimulatedRoleState] = useState<string | null>(() => {
+    return localStorage.getItem('simulatedRole') || null;
   });
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,14 +65,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
+    setSimulatedRoleState(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('simulatedRole');
   };
 
-  const hasPermission = (tab: string) => {
-    if (!user) return false;
-    if (isAdminRole(user.role)) return true;
+  const setSimulatedRole = (role: string | null) => {
+    setSimulatedRoleState(role);
+    if (role) {
+      localStorage.setItem('simulatedRole', role);
+    } else {
+      localStorage.removeItem('simulatedRole');
+    }
+  };
 
-    const roleConfig = rolePermissions.find(rp => rp.role === user.role);
+  const isRealAdmin = user ? isAdminRole(user.role) : false;
+  const effectiveUser = user ? {
+    ...user,
+    role: (isRealAdmin && simulatedRole) ? simulatedRole : user.role
+  } : null;
+
+  const hasPermission = (tab: string) => {
+    if (!effectiveUser) return false;
+    if (isAdminRole(effectiveUser.role)) return true;
+
+    const roleConfig = rolePermissions.find(rp => rp.role === effectiveUser.role);
     if (!roleConfig) return false;
 
     try {
@@ -82,11 +105,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      logout, 
-      hasPermission, 
-      rolePermissions, 
+      user: effectiveUser,
+      realUser: user,
+      simulatedRole: isRealAdmin ? simulatedRole : null,
+      setSimulatedRole,
+      login,
+      logout,
+      hasPermission,
+      rolePermissions,
       refreshPermissions: fetchPermissions,
       loading 
     }}>
