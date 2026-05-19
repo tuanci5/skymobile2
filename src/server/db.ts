@@ -601,6 +601,9 @@ export async function initDBUtils() {
         sales_type INT,
         product_quantity INT,
         commission_total DECIMAL(15, 2),
+        approved_by VARCHAR(255),
+        approved_by_name VARCHAR(255),
+        approved_at TIMESTAMP,
         synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -696,6 +699,9 @@ export async function initDBUtils() {
       "ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_type INT",
       "ALTER TABLE orders ADD COLUMN IF NOT EXISTS product_quantity INT",
       "ALTER TABLE orders ADD COLUMN IF NOT EXISTS commission_total DECIMAL(15, 2)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_by VARCHAR(255)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_by_name VARCHAR(255)",
+      "ALTER TABLE orders ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
       "ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
     ];
 
@@ -705,12 +711,25 @@ export async function initDBUtils() {
       } catch (e) {}
     }
 
-    // Automatically append 'customers' to role permissions if not present
+    // Automatically ensure customer/order approval permissions for core roles
     try {
       await client.query(`
-        UPDATE role_permissions 
-        SET allowed_tabs = allowed_tabs || '["customers"]'::jsonb 
+        INSERT INTO role_permissions (role, allowed_tabs)
+        VALUES
+          ('Quản trị', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb),
+          ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb)
+        ON CONFLICT (role) DO NOTHING
+      `);
+      await client.query(`
+        UPDATE role_permissions
+        SET allowed_tabs = allowed_tabs || '["customers"]'::jsonb
         WHERE NOT (allowed_tabs @> '["customers"]'::jsonb)
+      `);
+      await client.query(`
+        UPDATE role_permissions
+        SET allowed_tabs = allowed_tabs || '["order-approvals"]'::jsonb
+        WHERE role IN ('Quản trị', 'Trưởng phòng Kinh doanh Marketing')
+          AND NOT (allowed_tabs @> '["order-approvals"]'::jsonb)
       `);
     } catch (e) {
       console.error('Error updating allowed_tabs in role_permissions:', e);

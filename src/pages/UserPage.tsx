@@ -21,6 +21,7 @@ else if (API_BASE_URL.endsWith('/')) API_BASE_URL = API_BASE_URL.slice(0, -1);
 
 const ROLE_OPTIONS = [
   'Quản trị',
+  'Trưởng phòng Kinh doanh Marketing',
   'Trưởng nhóm Marketing',
   'Trưởng nhóm Sale',
   'Trưởng nhóm CSKH',
@@ -221,6 +222,8 @@ export const UserPage = () => {
     { id: 'tasks', label: 'Quản lý công việc' },
     { id: 'messenger', label: 'CSKH Messenger' },
     { id: 'revenue', label: 'Báo cáo doanh thu' },
+    { id: 'customers', label: 'Quản lý khách hàng' },
+    { id: 'order-approvals', label: 'Phê duyệt đơn hàng' },
     { id: 'settings', label: 'Cài đặt hệ thống' },
   ];
 

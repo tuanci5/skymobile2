@@ -225,6 +225,7 @@ router.get('/orders', async (req, res) => {
     const search = String(req.query.search || '').trim();
     const orderStatus = String(req.query.orderStatus || '').trim();
     const paymentStatus = String(req.query.paymentStatus || '').trim();
+    const approvalStatus = String(req.query.approvalStatus || '').trim();
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = (page - 1) * limit;
@@ -252,6 +253,13 @@ router.get('/orders', async (req, res) => {
       queryParts.push(` AND payment_status = $${paramIndex}`);
       countParts.push(` AND payment_status = $${paramIndex}`);
       params.push(paymentStatus);
+      paramIndex++;
+    }
+
+    if (approvalStatus) {
+      queryParts.push(` AND COALESCE(approval_status, order_status, 'Pending') = $${paramIndex}`);
+      countParts.push(` AND COALESCE(approval_status, order_status, 'Pending') = $${paramIndex}`);
+      params.push(approvalStatus);
       paramIndex++;
     }
 
@@ -538,6 +546,53 @@ router.get('/sync', async (req, res) => {
     console.error('API sync error:', error);
     res.write(`data: ${JSON.stringify({ status: 'error', error: error.message })}\n\n`);
     res.end();
+  }
+});
+
+// PATCH /api/customers/orders/:orderId/approval - Approve or reject an order
+router.patch('/orders/:orderId/approval', async (req, res) => {
+  try {
+    const parsedId = parseInt(req.params.orderId);
+    const { approval_status, approved_by, approved_by_name } = req.body;
+    const allowedStatuses = ['Approved', 'Rejected', 'Cancelled', 'Pending'];
+
+    if (isNaN(parsedId)) {
+      return res.status(400).json({ error: 'Mã đơn hàng không hợp lệ' });
+    }
+
+    if (!allowedStatuses.includes(approval_status)) {
+      return res.status(400).json({ error: 'Trạng thái phê duyệt không hợp lệ' });
+    }
+
+    const orderStatus = approval_status === 'Rejected' ? 'Cancelled' : approval_status;
+    const approvedAtExpr = approval_status === 'Pending' ? 'NULL' : 'CURRENT_TIMESTAMP';
+
+    const { rows } = await pool.query(`
+      UPDATE orders
+      SET approval_status = $1,
+          order_status = $2,
+          approved_by = $3,
+          approved_by_name = $4,
+          approved_at = ${approvedAtExpr},
+          synced_at = CURRENT_TIMESTAMP
+      WHERE id = $5 OR skymobile_order_id = $5
+      RETURNING *
+    `, [
+      approval_status,
+      orderStatus,
+      approved_by || null,
+      approved_by_name || null,
+      parsedId
+    ]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating order approval:', error);
+    res.status(500).json({ error: 'Failed to update order approval', details: error.message });
   }
 });
 

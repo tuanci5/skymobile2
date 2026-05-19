@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users,
@@ -8,21 +8,15 @@ import {
   FileText,
   DollarSign,
   TrendingUp,
-  MapPin,
   Mail,
   Phone,
   Facebook,
   Globe,
-  ExternalLink,
   ChevronRight,
   X,
   Calendar,
-  AlertCircle,
   Building2,
   CheckCircle,
-  ArrowRight,
-  TrendingDown,
-  Clock,
   Sparkles,
   ArrowLeft,
   Plus,
@@ -30,6 +24,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { settingService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 let API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 if (API_BASE_URL === '/') API_BASE_URL = '';
@@ -78,6 +73,9 @@ interface Order {
   sales_type: number | null;
   product_quantity: number | null;
   commission_total: number | null;
+  approved_by: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
   synced_at: string;
   items?: any[];
 }
@@ -93,7 +91,9 @@ interface Stats {
 }
 
 export const CustomersPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'customers' | 'orders' | 'analytics'>('customers');
+  const { user } = useAuth();
+  const canApproveOrders = user?.role === 'Quản trị' || user?.role === 'Trưởng phòng Kinh doanh Marketing';
+  const [activeTab, setActiveTab] = useState<'customers' | 'orders' | 'approvals' | 'analytics'>('customers');
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [nationalityFilter, setNationalityFilter] = useState('');
@@ -196,6 +196,9 @@ export const CustomersPage: React.FC = () => {
         page: page.toString(),
         limit: '15'
       });
+      if (activeTab === 'approvals') {
+        params.set('approvalStatus', 'Pending');
+      }
       const res = await fetch(`${API_BASE_URL}/api/customers/orders?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -227,12 +230,18 @@ export const CustomersPage: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'customers') {
       fetchCustomers(1);
-    } else if (activeTab === 'orders') {
+    } else if (activeTab === 'orders' || activeTab === 'approvals') {
       fetchOrders(1);
     } else {
       fetchStats();
     }
   }, [activeTab, search, sourceFilter, nationalityFilter, orderStatusFilter, paymentStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'approvals' && !canApproveOrders) {
+      setActiveTab('customers');
+    }
+  }, [activeTab, canApproveOrders]);
 
   const [loadingCustomerLookup, setLoadingCustomerLookup] = useState<number | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -406,6 +415,46 @@ export const CustomersPage: React.FC = () => {
     }
   };
 
+  const handleUpdateOrderApproval = async (order: Order, approvalStatus: 'Approved' | 'Rejected' | 'Cancelled') => {
+    if (!canApproveOrders) {
+      alert('Bạn không có quyền phê duyệt đơn hàng.');
+      return;
+    }
+
+    const actionLabel = approvalStatus === 'Approved' ? 'duyệt' : 'từ chối';
+    if (!window.confirm(`Bạn có chắc chắn muốn ${actionLabel} đơn hàng #${order.skymobile_order_id}?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/customers/orders/${order.id}/approval`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          approval_status: approvalStatus,
+          approved_by: user?.email || null,
+          approved_by_name: user?.name || null,
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Cập nhật trạng thái phê duyệt thất bại.');
+      }
+
+      const updatedOrder = await res.json();
+      setOrders(prev => prev.map(item => item.id === updatedOrder.id ? updatedOrder : item).filter(item => activeTab !== 'approvals' || item.id !== updatedOrder.id));
+      if (selectedOrder?.id === updatedOrder.id) setSelectedOrder(updatedOrder);
+      if (selectedCustomer) {
+        setCustomerOrders(prev => prev.map(item => item.id === updatedOrder.id ? updatedOrder : item));
+      }
+      alert(approvalStatus === 'Approved' ? 'Đã duyệt đơn hàng thành công!' : 'Đã từ chối đơn hàng.');
+    } catch (err: any) {
+      console.error('Error updating order approval:', err);
+      alert(err.message || 'Không thể kết nối đến máy chủ.');
+    }
+  };
+
   const handleSync = () => {
     setIsSyncing(true);
     setSyncLogs([]);
@@ -469,7 +518,21 @@ export const CustomersPage: React.FC = () => {
     if (s.includes('approve') || s.includes('đã') || s.includes('complete') || s.includes('success')) {
       return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Hoàn thành</span>;
     }
+    if (s.includes('reject') || s.includes('cancel') || s.includes('hủy')) {
+      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã hủy</span>;
+    }
     return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-50 text-slate-700 border border-slate-200">{status || 'Chờ'}</span>;
+  };
+
+  const getApprovalStatusBadge = (status: string | null) => {
+    const s = String(status || 'Pending').toLowerCase();
+    if (s.includes('approve')) {
+      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Đã phê duyệt</span>;
+    }
+    if (s.includes('reject') || s.includes('cancel')) {
+      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã từ chối</span>;
+    }
+    return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Chờ phê duyệt</span>;
   };
 
   return (
@@ -499,6 +562,15 @@ export const CustomersPage: React.FC = () => {
                 <FileText className="w-3.5 h-3.5" />
                 Đơn hàng
               </button>
+              {canApproveOrders && (
+                <button
+                  onClick={() => setActiveTab('approvals')}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'approvals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Phê duyệt đơn hàng
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('analytics')}
                 className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -511,11 +583,13 @@ export const CustomersPage: React.FC = () => {
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
             {activeTab === 'customers' && 'Quản Lý Khách Hàng'}
             {activeTab === 'orders' && 'Lịch Sử Đơn Hàng'}
+            {activeTab === 'approvals' && 'Phê Duyệt Đơn Hàng'}
             {activeTab === 'analytics' && 'Hiệu Suất Kinh Doanh'}
           </h1>
           <p className="text-slate-500 mt-2 max-w-xl text-sm md:text-base leading-relaxed">
             {activeTab === 'customers' && 'Theo dõi danh sách khách hàng từ các kênh quảng cáo Messenger Ads và hệ thống bán hàng Sky Mobile.'}
             {activeTab === 'orders' && 'Lịch sử mua hàng, doanh số và hoa hồng nhận được từ đơn hàng đã chốt trực tiếp trên Sky Mobile.'}
+            {activeTab === 'approvals' && 'Kiểm tra, phê duyệt hoặc từ chối các đơn hàng đang chờ xác nhận từ đội kinh doanh.'}
             {activeTab === 'analytics' && 'Phân tích cơ cấu khách hàng tiềm năng, hiệu suất kênh bán hàng và hoa hồng tích lũy.'}
           </p>
         </div>
@@ -762,9 +836,9 @@ export const CustomersPage: React.FC = () => {
           </motion.div>
         )}
 
-        {activeTab === 'orders' && (
+        {(activeTab === 'orders' || activeTab === 'approvals') && (
           <motion.div
-            key="orders"
+            key={activeTab}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
@@ -780,7 +854,9 @@ export const CustomersPage: React.FC = () => {
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Trạng thái</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Chi nhánh</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Người tạo</th>
+                    {activeTab === 'approvals' && <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Phê duyệt</th>}
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Ngày chốt</th>
+                    {activeTab === 'approvals' && <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Thao tác</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -854,9 +930,32 @@ export const CustomersPage: React.FC = () => {
                         <td className="px-6 py-5 text-xs text-slate-600 font-medium">
                           {o.created_by_name || 'Nhân viên'}
                         </td>
+                        {activeTab === 'approvals' && (
+                          <td className="px-6 py-5">
+                            {getApprovalStatusBadge(o.approval_status || o.order_status)}
+                          </td>
+                        )}
                         <td className="px-6 py-5 text-xs text-slate-500 font-medium">
                           {new Date(o.created_at).toLocaleDateString('vi-VN')}
                         </td>
+                        {activeTab === 'approvals' && (
+                          <td className="px-6 py-5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderApproval(o, 'Approved'); }}
+                                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all active:scale-95"
+                              >
+                                Duyệt
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUpdateOrderApproval(o, 'Rejected'); }}
+                                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all active:scale-95"
+                              >
+                                Từ chối
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
