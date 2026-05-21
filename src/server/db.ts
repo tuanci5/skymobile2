@@ -723,7 +723,9 @@ export async function initDBUtils() {
         INSERT INTO role_permissions (role, allowed_tabs)
         VALUES
           ('Quản trị', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb),
-          ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb)
+          ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb),
+          ('Nhân viên CSKH', '["model", "tasks", "messenger", "revenue"]'::jsonb),
+          ('Nhân viên Chăm sóc khách hàng', '["model", "tasks", "messenger", "revenue"]'::jsonb)
         ON CONFLICT (role) DO NOTHING
       `);
       await client.query(`
@@ -736,6 +738,12 @@ export async function initDBUtils() {
         SET allowed_tabs = allowed_tabs || '["order-approvals"]'::jsonb
         WHERE role IN ('Quản trị', 'Trưởng phòng Kinh doanh Marketing')
           AND NOT (allowed_tabs @> '["order-approvals"]'::jsonb)
+      `);
+      await client.query(`
+        UPDATE role_permissions
+        SET allowed_tabs = allowed_tabs || '["revenue"]'::jsonb
+        WHERE role IN ('Nhân viên CSKH', 'Nhân viên Chăm sóc khách hàng')
+          AND NOT (allowed_tabs @> '["revenue"]'::jsonb)
       `);
     } catch (e) {
       console.error('Error updating allowed_tabs in role_permissions:', e);

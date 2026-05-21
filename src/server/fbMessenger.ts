@@ -70,6 +70,9 @@ const getReportDateFilter = (range?: string | null, column = 'm.created_at') => 
   }
 };
 
+const isTruthyQueryValue = (value: unknown) =>
+  ['1', 'true', 'yes'].includes(String(value || '').trim().toLowerCase());
+
 const graphGet = async (path: string, accessToken: string, params: Record<string, string> = {}) => {
   const url = new URL(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${path.replace(/^\//, '')}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
@@ -991,28 +994,385 @@ router.post('/webhook', (req, res) => {
 
 // ─── FETCH CONVERSATIONS & MESSAGES ───
 
+router.get('/reports/cskh-personal', async (req, res) => {
+  try {
+    const range = String(req.query.range || 'Tháng này').trim();
+    const email = String(req.query.email || '').trim().toLowerCase();
+    const name = String(req.query.name || '').trim().toLowerCase() || email;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email nhân viên là bắt buộc.' });
+    }
+
+    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at');
+    const messageDateFilter = getReportDateFilter(range, 'm.created_at');
+    const noteDateFilter = getReportDateFilter(range, 'n.created_at');
+    const orderDateFilter = getReportDateFilter(range, 'o.created_at');
+    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at');
+    const params = [email, name];
+
+    const staffAssignmentFilter = `
+      (
+        LOWER(COALESCE(c.assigned_to, '')) IN ($1, $2)
+        OR LOWER(COALESCE(u.email, '')) = $1
+        OR LOWER(COALESCE(u.name, '')) = $2
+      )
+    `;
+    const staffMessageFilter = `
+      (
+        LOWER(COALESCE(m.sender_email, '')) = $1
+        OR LOWER(COALESCE(m.sender_name, '')) = $2
+      )
+    `;
+    const staffNoteFilter = `
+      (
+        LOWER(COALESCE(n.author_email, '')) = $1
+        OR LOWER(COALESCE(n.author_name, '')) = $2
+      )
+    `;
+    const staffOrderFilter = `
+      (
+        LOWER(COALESCE(o.created_by, '')) = $1
+        OR LOWER(COALESCE(o.created_by_name, '')) = $2
+      )
+    `;
+
+    const summaryResult = await pool.query(
+      `
+        WITH assigned_conversations AS (
+          SELECT DISTINCT
+            c.id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name
+          FROM fb_conversations c
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE ${staffAssignmentFilter}
+            AND ${conversationDateFilter}
+        ),
+        customer_first_messages AS (
+          SELECT
+            c.id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            MIN(m.created_at) AS first_message_at
+          FROM fb_messages m
+          JOIN fb_conversations c ON c.id = m.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE m.sender_type = 'user'
+            AND ${staffAssignmentFilter}
+          GROUP BY c.id, c.page_id, p.page_name
+        ),
+        new_customer_conversations AS (
+          SELECT id, page_id, page_name
+          FROM customer_first_messages
+          WHERE ${firstMessageDateFilter}
+        ),
+        staff_messages AS (
+          SELECT
+            m.id,
+            m.conversation_id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name
+          FROM fb_messages m
+          JOIN fb_conversations c ON c.id = m.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          WHERE m.sender_type = 'human'
+            AND ${staffMessageFilter}
+            AND ${messageDateFilter}
+        ),
+        staff_notes AS (
+          SELECT
+            n.id,
+            n.conversation_id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name
+          FROM fb_conversation_notes n
+          JOIN fb_conversations c ON c.id = n.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          WHERE ${staffNoteFilter}
+            AND ${noteDateFilter}
+        ),
+        staff_orders AS (
+          SELECT o.id, COALESCE(o.total_amount, 0) AS total_amount
+          FROM orders o
+          WHERE ${staffOrderFilter}
+            AND ${orderDateFilter}
+        ),
+        active_conversations AS (
+          SELECT id, page_id, page_name FROM assigned_conversations
+          UNION
+          SELECT conversation_id AS id, page_id, page_name FROM staff_messages
+          UNION
+          SELECT conversation_id AS id, page_id, page_name FROM staff_notes
+        )
+        SELECT
+          (SELECT COUNT(*)::int FROM assigned_conversations) AS assigned_conversation_count,
+          (SELECT COUNT(*)::int FROM new_customer_conversations) AS new_customer_count,
+          (SELECT COUNT(DISTINCT conversation_id)::int FROM staff_messages) AS handled_conversation_count,
+          (SELECT COUNT(*)::int FROM staff_messages) AS sent_message_count,
+          (SELECT COUNT(*)::int FROM staff_notes) AS note_count,
+          (SELECT COUNT(*)::int FROM staff_orders) AS order_count,
+          (SELECT COALESCE(SUM(total_amount), 0) FROM staff_orders) AS revenue,
+          (SELECT COUNT(DISTINCT id)::int FROM active_conversations) AS active_conversation_count,
+          (SELECT COUNT(DISTINCT page_id)::int FROM active_conversations) AS page_count
+      `,
+      params
+    );
+
+    const byPageResult = await pool.query(
+      `
+        WITH assigned_conversations AS (
+          SELECT DISTINCT
+            c.id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            c.last_message_at AS activity_at
+          FROM fb_conversations c
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE ${staffAssignmentFilter}
+            AND ${conversationDateFilter}
+        ),
+        customer_first_messages AS (
+          SELECT
+            c.id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            MIN(m.created_at) AS first_message_at
+          FROM fb_messages m
+          JOIN fb_conversations c ON c.id = m.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE m.sender_type = 'user'
+            AND ${staffAssignmentFilter}
+          GROUP BY c.id, c.page_id, p.page_name
+        ),
+        new_customer_conversations AS (
+          SELECT id, page_id, page_name, first_message_at AS activity_at
+          FROM customer_first_messages
+          WHERE ${firstMessageDateFilter}
+        ),
+        staff_messages AS (
+          SELECT
+            m.id,
+            m.conversation_id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            m.created_at AS activity_at
+          FROM fb_messages m
+          JOIN fb_conversations c ON c.id = m.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          WHERE m.sender_type = 'human'
+            AND ${staffMessageFilter}
+            AND ${messageDateFilter}
+        ),
+        staff_notes AS (
+          SELECT
+            n.id,
+            n.conversation_id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            n.created_at AS activity_at
+          FROM fb_conversation_notes n
+          JOIN fb_conversations c ON c.id = n.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          WHERE ${staffNoteFilter}
+            AND ${noteDateFilter}
+        ),
+        active_conversations AS (
+          SELECT id, page_id, page_name, activity_at FROM assigned_conversations
+          UNION
+          SELECT conversation_id AS id, page_id, page_name, activity_at FROM staff_messages
+          UNION
+          SELECT conversation_id AS id, page_id, page_name, activity_at FROM staff_notes
+        ),
+        page_metrics AS (
+          SELECT
+            page_id,
+            page_name,
+            COUNT(DISTINCT id)::int AS active_conversation_count,
+            0::int AS new_customer_count,
+            0::int AS sent_message_count,
+            0::int AS note_count,
+            MAX(activity_at) AS last_activity_at
+          FROM active_conversations
+          GROUP BY page_id, page_name
+          UNION ALL
+          SELECT
+            page_id,
+            page_name,
+            0::int,
+            COUNT(DISTINCT id)::int,
+            0::int,
+            0::int,
+            MAX(activity_at)
+          FROM new_customer_conversations
+          GROUP BY page_id, page_name
+          UNION ALL
+          SELECT
+            page_id,
+            page_name,
+            0::int,
+            0::int,
+            COUNT(*)::int,
+            0::int,
+            MAX(activity_at)
+          FROM staff_messages
+          GROUP BY page_id, page_name
+          UNION ALL
+          SELECT
+            page_id,
+            page_name,
+            0::int,
+            0::int,
+            0::int,
+            COUNT(*)::int,
+            MAX(activity_at)
+          FROM staff_notes
+          GROUP BY page_id, page_name
+        )
+        SELECT
+          page_id,
+          page_name,
+          SUM(new_customer_count)::int AS new_customer_count,
+          SUM(active_conversation_count)::int AS active_conversation_count,
+          SUM(sent_message_count)::int AS sent_message_count,
+          SUM(note_count)::int AS note_count,
+          MAX(last_activity_at) AS last_activity_at
+        FROM page_metrics
+        GROUP BY page_id, page_name
+        ORDER BY sent_message_count DESC, new_customer_count DESC, page_name ASC
+      `,
+      params
+    );
+
+    const recentResult = await pool.query(
+      `
+        WITH assigned_conversations AS (
+          SELECT DISTINCT c.id
+          FROM fb_conversations c
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE ${staffAssignmentFilter}
+            AND ${conversationDateFilter}
+        ),
+        staff_messages AS (
+          SELECT
+            m.conversation_id,
+            COUNT(*)::int AS sent_message_count,
+            MAX(m.created_at) AS last_staff_message_at
+          FROM fb_messages m
+          WHERE m.sender_type = 'human'
+            AND ${staffMessageFilter}
+            AND ${messageDateFilter}
+          GROUP BY m.conversation_id
+        ),
+        staff_notes AS (
+          SELECT
+            n.conversation_id,
+            COUNT(*)::int AS note_count,
+            MAX(n.created_at) AS last_note_at
+          FROM fb_conversation_notes n
+          WHERE ${staffNoteFilter}
+            AND ${noteDateFilter}
+          GROUP BY n.conversation_id
+        ),
+        active_ids AS (
+          SELECT id FROM assigned_conversations
+          UNION
+          SELECT conversation_id AS id FROM staff_messages
+          UNION
+          SELECT conversation_id AS id FROM staff_notes
+        )
+        SELECT
+          c.id,
+          c.customer_name,
+          c.customer_id,
+          c.page_id,
+          COALESCE(p.page_name, c.page_id) AS page_name,
+          c.customer_status,
+          c.last_message_at,
+          COALESCE(sm.sent_message_count, 0)::int AS sent_message_count,
+          COALESCE(sn.note_count, 0)::int AS note_count,
+          GREATEST(
+            COALESCE(sm.last_staff_message_at, TIMESTAMP '1970-01-01'),
+            COALESCE(sn.last_note_at, TIMESTAMP '1970-01-01'),
+            COALESCE(c.last_message_at, TIMESTAMP '1970-01-01')
+          ) AS last_activity_at
+        FROM active_ids a
+        JOIN fb_conversations c ON c.id = a.id
+        LEFT JOIN fb_pages p ON p.page_id = c.page_id
+        LEFT JOIN staff_messages sm ON sm.conversation_id = c.id
+        LEFT JOIN staff_notes sn ON sn.conversation_id = c.id
+        ORDER BY last_activity_at DESC
+        LIMIT 8
+      `,
+      params
+    );
+
+    const summary = summaryResult.rows[0] || {};
+    res.json({
+      range: range || 'Tháng này',
+      staff: {
+        email,
+        name: req.query.name ? String(req.query.name).trim() : email
+      },
+      summary: {
+        assigned_conversation_count: Number(summary.assigned_conversation_count || 0),
+        active_conversation_count: Number(summary.active_conversation_count || 0),
+        handled_conversation_count: Number(summary.handled_conversation_count || 0),
+        new_customer_count: Number(summary.new_customer_count || 0),
+        sent_message_count: Number(summary.sent_message_count || 0),
+        note_count: Number(summary.note_count || 0),
+        order_count: Number(summary.order_count || 0),
+        revenue: Number(summary.revenue || 0),
+        page_count: Number(summary.page_count || 0)
+      },
+      byPage: byPageResult.rows,
+      recentConversations: recentResult.rows
+    });
+  } catch (err: any) {
+    console.error('Error fetching CSKH personal report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/reports/new-messages', async (req, res) => {
   try {
     const range = String(req.query.range || 'Tháng này').trim();
     const email = String(req.query.email || '').trim().toLowerCase();
     const name = String(req.query.name || '').trim().toLowerCase();
     const role = String(req.query.role || '').trim();
+    const personalOnly = isTruthyQueryValue(req.query.personal);
     const dateFilter = getReportDateFilter(range, 'first_message_at');
+
+    if (personalOnly && !email) {
+      return res.status(400).json({ error: 'Email nhân viên là bắt buộc.' });
+    }
 
     const params: any[] = [];
     let scopeFilter = '';
-    if (email && !canViewAllMessengerReports(role)) {
+    if (email && (personalOnly || !canViewAllMessengerReports(role))) {
       params.push(email);
       const emailParam = `$${params.length}`;
       params.push(name || email);
       const nameParam = `$${params.length}`;
-      scopeFilter = `
-        AND (
-          LOWER(COALESCE(assigned_to, '')) IN (${emailParam}, ${nameParam})
-          OR assigned_users ? ${emailParam}
-          OR assigned_ads_users ? ${emailParam}
-        )
-      `;
+      scopeFilter = personalOnly
+        ? `
+          AND (
+            LOWER(COALESCE(staff_email, '')) = ${emailParam}
+            OR LOWER(COALESCE(staff_name, '')) = ${nameParam}
+            OR LOWER(COALESCE(assigned_to, '')) IN (${emailParam}, ${nameParam})
+          )
+        `
+        : `
+          AND (
+            LOWER(COALESCE(assigned_to, '')) IN (${emailParam}, ${nameParam})
+            OR assigned_users ? ${emailParam}
+            OR assigned_ads_users ? ${emailParam}
+          )
+        `;
     }
 
     const { rows } = await pool.query(

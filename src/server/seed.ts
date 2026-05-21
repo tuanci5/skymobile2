@@ -42,7 +42,8 @@ async function seed() {
       { role: 'Trưởng nhóm Sale', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers'] },
       { role: 'Trưởng nhóm CSKH', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers'] },
       { role: 'Nhân viên Sale', allowed_tabs: ['model', 'tasks', 'messenger'] },
-      { role: 'Nhân viên Chăm sóc khách hàng', allowed_tabs: ['model', 'tasks', 'messenger'] }
+      { role: 'Nhân viên CSKH', allowed_tabs: ['model', 'tasks', 'messenger', 'revenue'] },
+      { role: 'Nhân viên Chăm sóc khách hàng', allowed_tabs: ['model', 'tasks', 'messenger', 'revenue'] }
     ];
 
     for (const r of roles) {
