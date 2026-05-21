@@ -4,6 +4,83 @@ import { syncFromSkyMobile } from '../services/skymobileSync';
 
 const router = express.Router();
 
+type RevenueReportRange = 'today' | 'week' | 'month' | 'year';
+
+const normalizeReportRange = (range: unknown): RevenueReportRange => {
+  const normalized = String(range || 'month')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .trim()
+    .toLowerCase();
+
+  if (normalized === 'today' || normalized.includes('hom nay')) return 'today';
+  if (normalized === 'week' || normalized.includes('tuan nay')) return 'week';
+  if (normalized === 'year' || normalized.includes('nam nay')) return 'year';
+  return 'month';
+};
+
+const getRevenueReportConfig = (range: RevenueReportRange) => {
+  const now = "timezone('Asia/Ho_Chi_Minh', now())";
+
+  switch (range) {
+    case 'today':
+      return {
+        range,
+        currentStartSql: `date_trunc('day', ${now})`,
+        currentEndSql: now,
+        previousStartSql: `date_trunc('day', ${now}) - interval '1 day'`,
+        seriesStep: '1 hour',
+        truncUnit: 'hour',
+        labelFormat: 'HH24:MI'
+      };
+    case 'week':
+      return {
+        range,
+        currentStartSql: `date_trunc('week', ${now})`,
+        currentEndSql: now,
+        previousStartSql: `date_trunc('week', ${now}) - interval '1 week'`,
+        seriesStep: '1 day',
+        truncUnit: 'day',
+        labelFormat: 'DD/MM'
+      };
+    case 'year':
+      return {
+        range,
+        currentStartSql: `date_trunc('year', ${now})`,
+        currentEndSql: now,
+        previousStartSql: `date_trunc('year', ${now}) - interval '1 year'`,
+        seriesStep: '1 month',
+        truncUnit: 'month',
+        labelFormat: 'MM/YYYY'
+      };
+    case 'month':
+    default:
+      return {
+        range: 'month' as const,
+        currentStartSql: `date_trunc('month', ${now})`,
+        currentEndSql: now,
+        previousStartSql: `date_trunc('month', ${now}) - interval '1 month'`,
+        seriesStep: '1 day',
+        truncUnit: 'day',
+        labelFormat: 'DD/MM'
+      };
+  }
+};
+
+const buildRevenueBoundsCte = (config: ReturnType<typeof getRevenueReportConfig>) => `
+  bounds AS (
+    SELECT
+      ${config.currentStartSql} AS current_start,
+      ${config.currentEndSql} AS current_end,
+      ${config.previousStartSql} AS previous_start,
+      ${config.previousStartSql} + (${config.currentEndSql} - ${config.currentStartSql}) AS previous_end
+  )
+`;
+
+const toFloat = (value: unknown) => Number.parseFloat(String(value || '0')) || 0;
+const toInt = (value: unknown) => Number.parseInt(String(value || '0'), 10) || 0;
+
 // GET /api/customers - Get paginated customers with search & filters
 router.get('/', async (req, res) => {
   try {
@@ -102,6 +179,170 @@ router.get('/stats', async (req, res) => {
   } catch (error) {
     console.error('Error fetching customer stats:', error);
     res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// GET /api/customers/revenue-report - Revenue report backed by real orders/customers data
+router.get('/revenue-report', async (req, res) => {
+  try {
+    const range = normalizeReportRange(req.query.range);
+    const config = getRevenueReportConfig(range);
+    const boundsCte = buildRevenueBoundsCte(config);
+
+    const metricsRes = await pool.query(`
+      WITH ${boundsCte},
+      order_metrics AS (
+        SELECT
+          COALESCE(SUM(COALESCE(o.total_amount, 0)) FILTER (WHERE o.created_at >= b.current_start AND o.created_at < b.current_end), 0) AS current_revenue,
+          COALESCE(SUM(COALESCE(o.total_amount, 0)) FILTER (WHERE o.created_at >= b.previous_start AND o.created_at < b.previous_end), 0) AS previous_revenue,
+          COUNT(o.id) FILTER (WHERE o.created_at >= b.current_start AND o.created_at < b.current_end) AS current_orders,
+          COUNT(o.id) FILTER (WHERE o.created_at >= b.previous_start AND o.created_at < b.previous_end) AS previous_orders
+        FROM bounds b
+        LEFT JOIN orders o
+          ON o.created_at >= b.previous_start
+          AND o.created_at < b.current_end
+      ),
+      customer_metrics AS (
+        SELECT
+          COUNT(c.id) FILTER (WHERE c.created_at >= b.current_start AND c.created_at < b.current_end) AS current_customers,
+          COUNT(c.id) FILTER (WHERE c.created_at >= b.previous_start AND c.created_at < b.previous_end) AS previous_customers
+        FROM bounds b
+        LEFT JOIN customers c
+          ON c.created_at >= b.previous_start
+          AND c.created_at < b.current_end
+      )
+      SELECT * FROM order_metrics, customer_metrics
+    `);
+
+    const chartRes = await pool.query(`
+      WITH ${boundsCte},
+      series AS (
+        SELECT generate_series(
+          b.current_start,
+          date_trunc('${config.truncUnit}', b.current_end),
+          interval '${config.seriesStep}'
+        ) AS bucket
+        FROM bounds b
+      ),
+      order_buckets AS (
+        SELECT
+          date_trunc('${config.truncUnit}', o.created_at) AS bucket,
+          COALESCE(SUM(COALESCE(o.total_amount, 0)), 0) AS revenue,
+          COUNT(o.id) AS orders
+        FROM bounds b
+        JOIN orders o
+          ON o.created_at >= b.current_start
+          AND o.created_at < b.current_end
+        GROUP BY 1
+      )
+      SELECT
+        to_char(s.bucket, '${config.labelFormat}') AS label,
+        COALESCE(ob.revenue, 0) AS revenue,
+        COALESCE(ob.orders, 0) AS orders
+      FROM series s
+      LEFT JOIN order_buckets ob ON ob.bucket = s.bucket
+      ORDER BY s.bucket
+    `);
+
+    const topProductsRes = await pool.query(`
+      WITH ${boundsCte}
+      SELECT
+        COALESCE(NULLIF(oi.product_name, ''), 'Không rõ sản phẩm') AS name,
+        COUNT(DISTINCT o.id) AS sales,
+        COALESCE(SUM(COALESCE(oi.selling_price, 0) * GREATEST(COALESCE(oi.quantity, 1), 1)), 0) AS revenue
+      FROM bounds b
+      JOIN orders o
+        ON o.created_at >= b.current_start
+        AND o.created_at < b.current_end
+      JOIN order_items oi ON oi.order_id = o.skymobile_order_id
+      GROUP BY 1
+      ORDER BY revenue DESC, sales DESC, name ASC
+      LIMIT 6
+    `);
+
+    const recentOrdersRes = await pool.query(`
+      WITH ${boundsCte}
+      SELECT
+        o.id,
+        o.skymobile_order_id,
+        COALESCE(NULLIF(o.customer_name, ''), 'Khách hàng') AS customer,
+        COALESCE((
+          SELECT string_agg(NULLIF(oi.product_name, ''), ', ' ORDER BY oi.id)
+          FROM order_items oi
+          WHERE oi.order_id = o.skymobile_order_id
+        ), '-') AS product,
+        COALESCE(o.total_amount, 0) AS amount,
+        COALESCE(o.approval_status, o.order_status, 'Pending') AS status,
+        o.created_at AS date
+      FROM bounds b
+      JOIN orders o
+        ON o.created_at >= b.current_start
+        AND o.created_at < b.current_end
+      ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+      LIMIT 8
+    `);
+
+    const metrics = metricsRes.rows[0] || {};
+    const currentRevenue = toFloat(metrics.current_revenue);
+    const previousRevenue = toFloat(metrics.previous_revenue);
+    const currentOrders = toInt(metrics.current_orders);
+    const previousOrders = toInt(metrics.previous_orders);
+    const currentCustomers = toInt(metrics.current_customers);
+    const previousCustomers = toInt(metrics.previous_customers);
+    const currentAverageOrderValue = currentOrders > 0 ? currentRevenue / currentOrders : 0;
+    const previousAverageOrderValue = previousOrders > 0 ? previousRevenue / previousOrders : 0;
+    const currentConversion = currentCustomers > 0 ? (currentOrders / currentCustomers) * 100 : 0;
+    const previousConversion = previousCustomers > 0 ? (previousOrders / previousCustomers) * 100 : 0;
+
+    const rawTopProducts = topProductsRes.rows.map(row => ({
+      name: row.name,
+      sales: toInt(row.sales),
+      revenue: toFloat(row.revenue)
+    }));
+    const maxProductRevenue = Math.max(0, ...rawTopProducts.map(item => item.revenue));
+    const maxProductSales = Math.max(0, ...rawTopProducts.map(item => item.sales));
+    const topProducts = rawTopProducts.map(item => ({
+      ...item,
+      percent: maxProductRevenue > 0
+        ? Math.round((item.revenue / maxProductRevenue) * 100)
+        : maxProductSales > 0
+          ? Math.round((item.sales / maxProductSales) * 100)
+          : 0
+    }));
+
+    res.json({
+      range: config.range,
+      summary: {
+        revenue: { current: currentRevenue, previous: previousRevenue },
+        orders: { current: currentOrders, previous: previousOrders },
+        customers: { current: currentCustomers, previous: previousCustomers },
+        averageOrderValue: {
+          current: Number(currentAverageOrderValue.toFixed(0)),
+          previous: Number(previousAverageOrderValue.toFixed(0))
+        },
+        conversion: {
+          current: Number(currentConversion.toFixed(1)),
+          previous: Number(previousConversion.toFixed(1))
+        }
+      },
+      chart: chartRes.rows.map(row => ({
+        label: row.label,
+        revenue: toFloat(row.revenue),
+        orders: toInt(row.orders)
+      })),
+      topProducts,
+      recentOrders: recentOrdersRes.rows.map(row => ({
+        id: row.skymobile_order_id ? `#${row.skymobile_order_id}` : `#${row.id}`,
+        customer: row.customer,
+        product: row.product,
+        amount: toFloat(row.amount),
+        status: row.status,
+        date: row.date
+      }))
+    });
+  } catch (error: any) {
+    console.error('Error fetching revenue report:', error);
+    res.status(500).json({ error: 'Failed to fetch revenue report', details: error.message });
   }
 });
 

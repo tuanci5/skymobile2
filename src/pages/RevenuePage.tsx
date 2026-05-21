@@ -18,33 +18,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { API_BASE_URL } from '../components/messenger/api';
-
-const PERIOD_DATA: Record<string, any> = {
-  'Hôm nay': {
-    revenue: { current: 150000, previous: 120000 },
-    orders: { current: 24, previous: 20 },
-    customers: { current: 12, previous: 15 },
-    conversion: { current: 4.2, previous: 3.8 }
-  },
-  'Tuần này': {
-    revenue: { current: 1250000, previous: 1100000 },
-    orders: { current: 185, previous: 160 },
-    customers: { current: 85, previous: 70 },
-    conversion: { current: 4.5, previous: 4.2 }
-  },
-  'Tháng này': {
-    revenue: { current: 2450000, previous: 2100000 },
-    orders: { current: 342, previous: 310 },
-    customers: { current: 128, previous: 140 },
-    conversion: { current: 4.8, previous: 4.6 }
-  },
-  'Năm nay': {
-    revenue: { current: 28450000, previous: 25000000 },
-    orders: { current: 4200, previous: 3800 },
-    customers: { current: 1540, previous: 1400 },
-    conversion: { current: 5.1, previous: 4.9 }
-  }
-};
+import {
+  EMPTY_REVENUE_REPORT,
+  calculateGrowth,
+  fetchRevenueReport,
+  formatYen,
+  getOrderStatusBadgeClass,
+  getOrderStatusLabel
+} from '../services/revenueReport';
 
 type ReportType = 'revenue' | 'page_messages';
 
@@ -136,14 +117,6 @@ const getAllowedReports = (user?: any) => {
   return reports.length > 0 ? reports : [REPORTS[0]];
 };
 
-const calculateGrowth = (current: number, previous: number) => {
-  const growth = previous === 0 ? 0 : ((current - previous) / previous) * 100;
-  return {
-    change: `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`,
-    isPositive: growth >= 0
-  };
-};
-
 const formatDateTime = (value?: string | null) => {
   if (!value) return '-';
   return new Date(value).toLocaleString('vi-VN', {
@@ -158,6 +131,9 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const [dateRange, setDateRange] = useState('Tháng này');
   const allowedReports = useMemo(() => getAllowedReports(user), [user]);
   const [selectedReport, setSelectedReport] = useState<ReportType>(allowedReports[0]?.id || 'revenue');
+  const [revenueReport, setRevenueReport] = useState(EMPTY_REVENUE_REPORT);
+  const [isLoadingRevenue, setIsLoadingRevenue] = useState(false);
+  const [revenueReportError, setRevenueReportError] = useState<string | null>(null);
   const [messageReport, setMessageReport] = useState<MessageReportData | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messageReportError, setMessageReportError] = useState<string | null>(null);
@@ -167,6 +143,35 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       setSelectedReport(allowedReports[0]?.id || 'revenue');
     }
   }, [allowedReports, selectedReport]);
+
+  useEffect(() => {
+    if (selectedReport !== 'revenue') return;
+
+    const controller = new AbortController();
+    let isActive = true;
+
+    setIsLoadingRevenue(true);
+    setRevenueReportError(null);
+    fetchRevenueReport(dateRange, controller.signal)
+      .then(data => {
+        if (!isActive) return;
+        setRevenueReport(data);
+      })
+      .catch(err => {
+        if (!isActive || err.name === 'AbortError') return;
+        console.error('Error loading revenue report:', err);
+        setRevenueReportError(err.message || 'Không thể tải báo cáo doanh thu.');
+        setRevenueReport(EMPTY_REVENUE_REPORT);
+      })
+      .finally(() => {
+        if (isActive) setIsLoadingRevenue(false);
+      });
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [selectedReport, dateRange]);
 
   useEffect(() => {
     if (selectedReport !== 'page_messages') return;
@@ -192,13 +197,15 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       .finally(() => setIsLoadingMessages(false));
   }, [selectedReport, dateRange, user?.email, user?.name, user?.role]);
 
-  const currentData = PERIOD_DATA[dateRange] || PERIOD_DATA['Tháng này'];
+  const currentData = revenueReport.summary;
   const selectedReportInfo = REPORTS.find(report => report.id === selectedReport) || REPORTS[0];
+  const maxChartRevenue = Math.max(1, ...revenueReport.chart.map(item => item.revenue));
+  const chartHasRevenue = revenueReport.chart.some(item => item.revenue > 0);
 
   const revenueStats = [
     {
       title: 'Tổng doanh thu',
-      value: `${currentData.revenue.current.toLocaleString()} ¥`,
+      value: formatYen(currentData.revenue.current),
       ...calculateGrowth(currentData.revenue.current, currentData.revenue.previous),
       icon: <DollarSign className="w-6 h-6 text-emerald-600" />,
       color: 'bg-emerald-100'
@@ -218,20 +225,12 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       color: 'bg-rose-100'
     },
     {
-      title: 'Tỷ lệ chuyển đổi',
-      value: `${currentData.conversion.current}%`,
-      ...calculateGrowth(currentData.conversion.current, currentData.conversion.previous),
+      title: 'Giá trị đơn TB',
+      value: formatYen(currentData.averageOrderValue.current),
+      ...calculateGrowth(currentData.averageOrderValue.current, currentData.averageOrderValue.previous),
       icon: <Activity className="w-6 h-6 text-amber-600" />,
       color: 'bg-amber-100'
     }
-  ];
-
-  const recentOrders = [
-    { id: 'ORD-001', customer: 'Nguyễn Văn A', product: 'Sim Data SoftBank', amount: '3500 ¥', status: 'Hoàn thành', date: '04/05/2026' },
-    { id: 'ORD-002', customer: 'Trần Thị B', product: 'Pocket Wifi', amount: '4200 ¥', status: 'Đang xử lý', date: '04/05/2026' },
-    { id: 'ORD-003', customer: 'Lê Văn C', product: 'Wifi Cố Định', amount: '5000 ¥', status: 'Hoàn thành', date: '03/05/2026' },
-    { id: 'ORD-004', customer: 'Phạm Thị D', product: 'Combo Sim + Điện Thoại', amount: '12000 ¥', status: 'Đã hủy', date: '02/05/2026' },
-    { id: 'ORD-005', customer: 'Hoàng Văn E', product: 'Sim Data SoftBank', amount: '3500 ¥', status: 'Hoàn thành', date: '01/05/2026' },
   ];
 
   const messageRows = messageReport?.rows || [];
@@ -264,6 +263,12 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
 
   const renderRevenueReport = () => (
     <>
+      {revenueReportError && (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-medium text-rose-700">
+          {revenueReportError}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {revenueStats.map((stat, idx) => (
           <motion.div
@@ -302,36 +307,66 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               <Filter className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 bg-slate-50 rounded-2xl border border-slate-100 border-dashed flex flex-col items-center justify-center text-slate-400">
-            <Activity className="w-12 h-12 mb-3 text-slate-300" />
-            <p className="font-medium">Khu vực hiển thị biểu đồ</p>
-            <p className="text-xs mt-1">Sử dụng Recharts hoặc Chart.js để render</p>
+          <div className="flex-1 bg-slate-50 rounded-2xl border border-slate-100 p-4">
+            {isLoadingRevenue ? (
+              <div className="h-full flex items-center justify-center text-slate-500">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải dữ liệu...
+              </div>
+            ) : revenueReport.chart.length === 0 || !chartHasRevenue ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <Activity className="w-12 h-12 mb-3 text-slate-300" />
+                <p className="font-medium">Chưa có doanh thu trong kỳ này.</p>
+              </div>
+            ) : (
+              <div className="h-full flex items-end gap-2">
+                {revenueReport.chart.map(point => {
+                  const height = Math.max(4, (point.revenue / maxChartRevenue) * 100);
+                  return (
+                    <div key={point.label} className="flex-1 min-w-0 h-full flex flex-col justify-end gap-2 group">
+                      <div className="relative flex-1 flex items-end">
+                        <div
+                          className="w-full rounded-t-lg bg-blue-500/80 group-hover:bg-blue-600 transition-colors"
+                          style={{ height: `${height}%` }}
+                          title={`${point.label}: ${formatYen(point.revenue)} (${point.orders} đơn)`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 truncate text-center">{point.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8">
           <h3 className="font-bold text-slate-800 text-lg mb-6">Sản phẩm bán chạy</h3>
-          <div className="space-y-6">
-            {[
-              { name: 'Sim Data SoftBank', sales: '156', revenue: '546.000 ¥', percent: 85 },
-              { name: 'Pocket Wifi', sales: '89', revenue: '373.800 ¥', percent: 60 },
-              { name: 'Wifi Cố Định', sales: '45', revenue: '225.000 ¥', percent: 35 },
-              { name: 'Combo Sim + ĐT', sales: '24', revenue: '288.000 ¥', percent: 20 },
-            ].map(prod => (
-              <div key={prod.name}>
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <p className="font-bold text-slate-700 text-sm">{prod.name}</p>
-                    <p className="text-xs text-slate-500">{prod.sales} đơn hàng</p>
+          {isLoadingRevenue ? (
+            <div className="h-52 flex items-center justify-center text-slate-500">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải dữ liệu...
+            </div>
+          ) : revenueReport.topProducts.length === 0 ? (
+            <div className="h-52 flex items-center justify-center text-sm text-slate-400 text-center">
+              Chưa có sản phẩm bán trong kỳ này.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {revenueReport.topProducts.map(prod => (
+                <div key={prod.name}>
+                  <div className="flex justify-between items-center mb-2 gap-4">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-700 text-sm truncate">{prod.name}</p>
+                      <p className="text-xs text-slate-500">{prod.sales.toLocaleString('vi-VN')} đơn hàng</p>
+                    </div>
+                    <p className="font-bold text-slate-900 text-sm whitespace-nowrap">{formatYen(prod.revenue)}</p>
                   </div>
-                  <p className="font-bold text-slate-900 text-sm">{prod.revenue}</p>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${prod.percent}%` }} />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${prod.percent}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -356,7 +391,19 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {recentOrders.map(order => (
+              {isLoadingRevenue ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                    <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> Đang tải dữ liệu...
+                  </td>
+                </tr>
+              ) : revenueReport.recentOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    Chưa có đơn hàng trong kỳ này.
+                  </td>
+                </tr>
+              ) : revenueReport.recentOrders.map(order => (
                 <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-800">{order.id}</td>
                   <td className="px-6 py-4">
@@ -368,15 +415,11 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600">{order.product}</td>
-                  <td className="px-6 py-4 text-slate-600">{order.date}</td>
-                  <td className="px-6 py-4 font-bold text-emerald-600">{order.amount}</td>
+                  <td className="px-6 py-4 text-slate-600">{formatDateTime(order.date)}</td>
+                  <td className="px-6 py-4 font-bold text-emerald-600">{formatYen(order.amount)}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                      order.status === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-700' :
-                      order.status === 'Đang xử lý' ? 'bg-amber-100 text-amber-700' :
-                      'bg-rose-100 text-rose-700'
-                    }`}>
-                      {order.status}
+                    <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${getOrderStatusBadgeClass(order.status)}`}>
+                      {getOrderStatusLabel(order.status)}
                     </span>
                   </td>
                 </tr>

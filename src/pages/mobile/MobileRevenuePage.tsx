@@ -1,31 +1,51 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TrendingUp, DollarSign, ShoppingCart, Users, Activity, ArrowUpRight, ArrowDownRight, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const PERIOD_DATA: Record<string, any> = {
-  'Hôm nay': { revenue: { current: 150000, previous: 120000 }, orders: { current: 24, previous: 20 }, customers: { current: 12, previous: 15 }, conversion: { current: 4.2, previous: 3.8 } },
-  'Tuần này': { revenue: { current: 1250000, previous: 1100000 }, orders: { current: 185, previous: 160 }, customers: { current: 85, previous: 70 }, conversion: { current: 4.5, previous: 4.2 } },
-  'Tháng này': { revenue: { current: 2450000, previous: 2100000 }, orders: { current: 342, previous: 310 }, customers: { current: 128, previous: 140 }, conversion: { current: 4.8, previous: 4.6 } },
-  'Năm nay': { revenue: { current: 28450000, previous: 25000000 }, orders: { current: 4200, previous: 3800 }, customers: { current: 1540, previous: 1400 }, conversion: { current: 5.1, previous: 4.9 } },
-};
+import { EMPTY_REVENUE_REPORT, calculateGrowth, fetchRevenueReport, formatYen } from '../../services/revenueReport';
 
 export const MobileRevenuePage = ({ user }: { user?: any }) => {
   const [range, setRange] = useState('Tháng này');
-  const d = PERIOD_DATA[range] || PERIOD_DATA['Tháng này'];
-  const growth = (c: number, p: number) => { const g = ((c - p) / p) * 100; return { change: `${g >= 0 ? '+' : ''}${g.toFixed(1)}%`, up: g >= 0 }; };
+  const [report, setReport] = useState(EMPTY_REVENUE_REPORT);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const d = report.summary;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let isActive = true;
+
+    setIsLoading(true);
+    setError(null);
+    fetchRevenueReport(range, controller.signal)
+      .then(data => {
+        if (isActive) setReport(data);
+      })
+      .catch(err => {
+        if (!isActive || err.name === 'AbortError') return;
+        console.error('Error loading mobile revenue report:', err);
+        setError(err.message || 'Không thể tải báo cáo doanh thu.');
+        setReport(EMPTY_REVENUE_REPORT);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [range]);
+
+  const growth = (current: number, previous: number) => {
+    const result = calculateGrowth(current, previous);
+    return { change: result.change, up: result.isPositive };
+  };
 
   const stats = [
-    { title: 'Doanh thu', value: `${d.revenue.current.toLocaleString()} ¥`, ...growth(d.revenue.current, d.revenue.previous), icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
+    { title: 'Doanh thu', value: formatYen(d.revenue.current), ...growth(d.revenue.current, d.revenue.previous), icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
     { title: 'Đơn hàng', value: d.orders.current.toLocaleString(), ...growth(d.orders.current, d.orders.previous), icon: ShoppingCart, color: 'bg-blue-100 text-blue-600' },
     { title: 'Khách mới', value: d.customers.current.toLocaleString(), ...growth(d.customers.current, d.customers.previous), icon: Users, color: 'bg-rose-100 text-rose-600' },
-    { title: 'Chuyển đổi', value: `${d.conversion.current}%`, ...growth(d.conversion.current, d.conversion.previous), icon: Activity, color: 'bg-amber-100 text-amber-600' },
-  ];
-
-  const topProducts = [
-    { name: 'Sim Data SoftBank', sales: 156, revenue: '546.000 ¥', pct: 85 },
-    { name: 'Pocket Wifi', sales: 89, revenue: '373.800 ¥', pct: 60 },
-    { name: 'Wifi Cố Định', sales: 45, revenue: '225.000 ¥', pct: 35 },
-    { name: 'Combo Sim + ĐT', sales: 24, revenue: '288.000 ¥', pct: 20 },
+    { title: 'Đơn TB', value: formatYen(d.averageOrderValue.current), ...growth(d.averageOrderValue.current, d.averageOrderValue.previous), icon: Activity, color: 'bg-amber-100 text-amber-600' },
   ];
 
   return (
@@ -46,6 +66,12 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
       </div>
 
       <div className="p-4 space-y-4">
+        {error && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs font-bold text-rose-700">
+            {error}
+          </div>
+        )}
+
         {/* KPI Grid */}
         <div className="grid grid-cols-2 gap-3">
           {stats.map((s, i) => {
@@ -69,19 +95,28 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
         {/* Top Products */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <h3 className="font-bold text-sm text-slate-800 mb-4">Sản phẩm bán chạy</h3>
-          <div className="space-y-4">
-            {topProducts.map((p, i) => (
-              <div key={i}>
-                <div className="flex justify-between items-center mb-1.5">
-                  <div><p className="font-bold text-xs text-slate-700">{p.name}</p><p className="text-[10px] text-slate-400">{p.sales} đơn</p></div>
-                  <p className="font-bold text-xs text-slate-900">{p.revenue}</p>
+          {isLoading ? (
+            <div className="py-10 text-center text-xs font-bold text-slate-400">Đang tải dữ liệu...</div>
+          ) : report.topProducts.length === 0 ? (
+            <div className="py-10 text-center text-xs font-bold text-slate-400">Chưa có sản phẩm bán trong kỳ này.</div>
+          ) : (
+            <div className="space-y-4">
+              {report.topProducts.map((p, i) => (
+                <div key={`${p.name}-${i}`}>
+                  <div className="flex justify-between items-center mb-1.5 gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-xs text-slate-700 truncate">{p.name}</p>
+                      <p className="text-[10px] text-slate-400">{p.sales.toLocaleString('vi-VN')} đơn</p>
+                    </div>
+                    <p className="font-bold text-xs text-slate-900 whitespace-nowrap">{formatYen(p.revenue)}</p>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${p.percent}%` }} />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${p.pct}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
