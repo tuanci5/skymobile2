@@ -104,6 +104,7 @@ export async function initDBUtils() {
         business_id VARCHAR(100),
         distribution_mode VARCHAR(50) DEFAULT 'manual', -- 'manual', 'round_robin', 'ai_first'
         assigned_users JSONB DEFAULT '[]'::jsonb,
+        assigned_ads_users JSONB DEFAULT '[]'::jsonb,
         ai_reply_delay INT DEFAULT 5,
         ai_start_hour INT DEFAULT 0,
         ai_end_hour INT DEFAULT 24,
@@ -128,6 +129,11 @@ export async function initDBUtils() {
     // Add assigned_users if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN assigned_users JSONB DEFAULT '[]'::jsonb");
+    } catch (e) {}
+
+    // Add assigned_ads_users if missing
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN assigned_ads_users JSONB DEFAULT '[]'::jsonb");
     } catch (e) {}
 
     // Add ai_reply_delay if missing

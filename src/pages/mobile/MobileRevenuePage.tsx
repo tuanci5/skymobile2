@@ -9,7 +9,7 @@ const PERIOD_DATA: Record<string, any> = {
   'Năm nay': { revenue: { current: 28450000, previous: 25000000 }, orders: { current: 4200, previous: 3800 }, customers: { current: 1540, previous: 1400 }, conversion: { current: 5.1, previous: 4.9 } },
 };
 
-export const MobileRevenuePage = () => {
+export const MobileRevenuePage = ({ user }: { user?: any }) => {
   const [range, setRange] = useState('Tháng này');
   const d = PERIOD_DATA[range] || PERIOD_DATA['Tháng này'];
   const growth = (c: number, p: number) => { const g = ((c - p) / p) * 100; return { change: `${g >= 0 ? '+' : ''}${g.toFixed(1)}%`, up: g >= 0 }; };

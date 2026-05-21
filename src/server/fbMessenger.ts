@@ -37,6 +37,39 @@ const normalizeAdAccountId = (value?: string | null) => {
   return cleaned.startsWith('act_') ? cleaned : `act_${cleaned}`;
 };
 
+const normalizeRoleText = (role?: string | null) =>
+  String(role || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const canViewAllMessengerReports = (role?: string | null) => {
+  const normalizedRole = normalizeRoleText(role);
+  return normalizedRole === 'quan tri'
+    || normalizedRole === 'admin'
+    || normalizedRole === 'head'
+    || normalizedRole.includes('truong phong')
+    || normalizedRole.includes('truong nhom');
+};
+
+const getReportDateFilter = (range?: string | null, column = 'm.created_at') => {
+  switch (range) {
+    case 'Hôm nay':
+      return `${column} >= CURRENT_DATE`;
+    case 'Tuần này':
+      return `${column} >= date_trunc('week', CURRENT_DATE)`;
+    case 'Năm nay':
+      return `${column} >= date_trunc('year', CURRENT_DATE)`;
+    case 'Tháng này':
+    default:
+      return `${column} >= date_trunc('month', CURRENT_DATE)`;
+  }
+};
+
 const graphGet = async (path: string, accessToken: string, params: Record<string, string> = {}) => {
   const url = new URL(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${path.replace(/^\//, '')}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
@@ -370,7 +403,7 @@ async function resolveFacebookUidFromConversationGraph(pageId: string, psid: str
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -413,7 +446,8 @@ router.put('/pages/:page_id', async (req, res) => {
       ai_start_hour: 'ai_start_hour',
       ai_end_hour: 'ai_end_hour',
       distribution_mode: 'distribution_mode',
-      assigned_users: 'assigned_users'
+      assigned_users: 'assigned_users',
+      assigned_ads_users: 'assigned_ads_users'
     };
 
     const setClauses: string[] = [];
@@ -422,7 +456,7 @@ router.put('/pages/:page_id', async (req, res) => {
 
     for (const [key, dbField] of Object.entries(fieldMap)) {
       if (updates[key] !== undefined) {
-        if (key === 'assigned_users') {
+        if (key === 'assigned_users' || key === 'assigned_ads_users') {
           setClauses.push(`${dbField} = $${paramIndex}::jsonb`);
           params.push(JSON.stringify(updates[key] || []));
         } else if (key === 'access_token') {
@@ -445,7 +479,7 @@ router.put('/pages/:page_id', async (req, res) => {
     }
 
     params.push(page_id);
-    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour`;
+    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`;
     
     console.log(`📡 Updating Page ${page_id}:`, updates);
     
@@ -550,7 +584,7 @@ router.put('/pages/:id/assign-users', async (req, res) => {
     const { assigned_users } = req.body;
     
     const result = await pool.query(
-      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
+      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
       [JSON.stringify(assigned_users || []), id]
     );
     if (result.rowCount === 0) {
@@ -559,6 +593,25 @@ router.put('/pages/:id/assign-users', async (req, res) => {
     res.json({ success: true, page: result.rows[0] });
   } catch (err: any) {
     console.error('Error assigning users to page:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/pages/:id/assign-ads-users', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assigned_ads_users } = req.body;
+
+    const result = await pool.query(
+      `UPDATE fb_pages SET assigned_ads_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
+      [JSON.stringify(assigned_ads_users || []), id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+    res.json({ success: true, page: result.rows[0] });
+  } catch (err: any) {
+    console.error('Error assigning ads users to page:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -937,6 +990,131 @@ router.post('/webhook', (req, res) => {
 });
 
 // ─── FETCH CONVERSATIONS & MESSAGES ───
+
+router.get('/reports/new-messages', async (req, res) => {
+  try {
+    const range = String(req.query.range || 'Tháng này').trim();
+    const email = String(req.query.email || '').trim().toLowerCase();
+    const name = String(req.query.name || '').trim().toLowerCase();
+    const role = String(req.query.role || '').trim();
+    const dateFilter = getReportDateFilter(range, 'first_message_at');
+
+    const params: any[] = [];
+    let scopeFilter = '';
+    if (email && !canViewAllMessengerReports(role)) {
+      params.push(email);
+      const emailParam = `$${params.length}`;
+      params.push(name || email);
+      const nameParam = `$${params.length}`;
+      scopeFilter = `
+        AND (
+          LOWER(COALESCE(assigned_to, '')) IN (${emailParam}, ${nameParam})
+          OR assigned_users ? ${emailParam}
+          OR assigned_ads_users ? ${emailParam}
+        )
+      `;
+    }
+
+    const { rows } = await pool.query(
+      `
+        WITH customer_first_messages AS (
+          SELECT
+            c.id AS conversation_id,
+            c.page_id,
+            COALESCE(p.page_name, c.page_id) AS page_name,
+            c.customer_id,
+            c.assigned_to,
+            COALESCE(NULLIF(c.assigned_to, ''), 'Chưa giao') AS staff_key,
+            COALESCE(u.name, NULLIF(c.assigned_to, ''), 'Chưa giao') AS staff_name,
+            CASE
+              WHEN c.assigned_to IS NULL OR c.assigned_to = '' THEN NULL
+              WHEN POSITION('@' IN c.assigned_to) > 0 THEN LOWER(c.assigned_to)
+              ELSE LOWER(u.email)
+            END AS staff_email,
+            COALESCE(u.role, '') AS staff_role,
+            COALESCE(p.assigned_users, '[]'::jsonb) AS assigned_users,
+            COALESCE(p.assigned_ads_users, '[]'::jsonb) AS assigned_ads_users,
+            COUNT(m.id)::int AS message_count,
+            MIN(m.created_at) AS first_message_at,
+            MAX(m.created_at) AS last_message_at
+          FROM fb_messages m
+          JOIN fb_conversations c ON c.id = m.conversation_id
+          LEFT JOIN fb_pages p ON p.page_id = c.page_id
+          LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to) OR LOWER(u.name) = LOWER(c.assigned_to)
+          WHERE m.sender_type = 'user'
+          GROUP BY
+            c.id,
+            c.page_id,
+            p.page_name,
+            c.customer_id,
+            c.assigned_to,
+            u.name,
+            u.email,
+            u.role,
+            p.assigned_users,
+            p.assigned_ads_users
+        )
+        SELECT
+          page_id,
+          page_name,
+          staff_key,
+          staff_name,
+          staff_email,
+          staff_role,
+          COUNT(*)::int AS customer_count,
+          COUNT(*)::int AS conversation_count,
+          SUM(message_count)::int AS message_count,
+          MIN(first_message_at) AS first_message_at,
+          MAX(first_message_at) AS last_message_at
+        FROM customer_first_messages
+        WHERE ${dateFilter}
+          ${scopeFilter}
+        GROUP BY
+          page_id,
+          page_name,
+          staff_key,
+          staff_name,
+          staff_email,
+          staff_role
+        ORDER BY customer_count DESC, page_name ASC, staff_name ASC
+      `,
+      params
+    );
+
+    const totals = rows.reduce((acc: any, row: any) => {
+      acc.customer_count += Number(row.customer_count || 0);
+      acc.conversation_count += Number(row.conversation_count || 0);
+      acc.message_count += Number(row.message_count || 0);
+      if (row.staff_key === 'Chưa giao') acc.unassigned_customer_count += Number(row.customer_count || 0);
+      acc.page_ids.add(row.page_id);
+      acc.staff_keys.add(row.staff_key);
+      return acc;
+    }, {
+      customer_count: 0,
+      conversation_count: 0,
+      message_count: 0,
+      unassigned_customer_count: 0,
+      page_ids: new Set<string>(),
+      staff_keys: new Set<string>()
+    });
+
+    res.json({
+      range: range || 'Tháng này',
+      rows,
+      summary: {
+        customer_count: totals.customer_count,
+        conversation_count: totals.conversation_count,
+        message_count: totals.message_count,
+        unassigned_customer_count: totals.unassigned_customer_count,
+        page_count: totals.page_ids.size,
+        staff_count: totals.staff_keys.size
+      }
+    });
+  } catch (err: any) {
+    console.error('Error fetching new message report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/conversations', async (req, res) => {
   try {

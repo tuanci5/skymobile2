@@ -8,13 +8,16 @@ interface User {
   picture?: string;
   role: string;
   permissions?: string[];
+  manager_email?: string;
+  created_at?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   realUser: User | null;
   simulatedRole: string | null;
-  setSimulatedRole: (role: string | null) => void;
+  simulatedUser: User | null;
+  setSimulatedUser: (user: User | null) => void;
   login: (userData: any) => void;
   logout: () => void;
   hasPermission: (tab: string) => boolean;
@@ -25,14 +28,26 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getStoredSimulatedUser = (): User | null => {
+  const saved = localStorage.getItem('simulatedUser');
+  if (!saved) return null;
+
+  try {
+    return JSON.parse(saved);
+  } catch (error) {
+    console.error('Invalid simulated user in localStorage:', error);
+    localStorage.removeItem('simulatedUser');
+    localStorage.removeItem('simulatedRole');
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [simulatedRole, setSimulatedRoleState] = useState<string | null>(() => {
-    return localStorage.getItem('simulatedRole') || null;
-  });
+  const [simulatedUser, setSimulatedUserState] = useState<User | null>(() => getStoredSimulatedUser());
   const [rolePermissions, setRolePermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,25 +80,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
-    setSimulatedRoleState(null);
+    setSimulatedUserState(null);
     localStorage.removeItem('user');
     localStorage.removeItem('simulatedRole');
+    localStorage.removeItem('simulatedUser');
   };
 
-  const setSimulatedRole = (role: string | null) => {
-    setSimulatedRoleState(role);
-    if (role) {
-      localStorage.setItem('simulatedRole', role);
+  const setSimulatedUser = (nextUser: User | null) => {
+    setSimulatedUserState(nextUser);
+    if (nextUser) {
+      localStorage.setItem('simulatedUser', JSON.stringify(nextUser));
+      localStorage.setItem('simulatedRole', nextUser.role);
     } else {
+      localStorage.removeItem('simulatedUser');
       localStorage.removeItem('simulatedRole');
     }
   };
 
   const isRealAdmin = user ? isAdminRole(user.role) : false;
-  const effectiveUser = user ? {
-    ...user,
-    role: (isRealAdmin && simulatedRole) ? simulatedRole : user.role
-  } : null;
+  const activeSimulatedUser = isRealAdmin ? simulatedUser : null;
+  const effectiveUser = user ? (activeSimulatedUser || user) : null;
 
   const hasPermission = (tab: string) => {
     if (!effectiveUser) return false;
@@ -107,8 +123,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider value={{ 
       user: effectiveUser,
       realUser: user,
-      simulatedRole: isRealAdmin ? simulatedRole : null,
-      setSimulatedRole,
+      simulatedRole: activeSimulatedUser?.role || null,
+      simulatedUser: activeSimulatedUser,
+      setSimulatedUser,
       login,
       logout,
       hasPermission,

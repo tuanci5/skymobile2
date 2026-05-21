@@ -8,6 +8,7 @@ export interface FBPage {
   facebook_ad_account_id?: string | null;
   business_id?: string | null;
   assigned_users?: string[];
+  assigned_ads_users?: string[];
   ai_reply_delay?: number;
   ai_start_hour?: number;
   ai_end_hour?: number;

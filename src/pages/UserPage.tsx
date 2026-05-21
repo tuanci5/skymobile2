@@ -221,7 +221,7 @@ export const UserPage = () => {
     { id: 'users', label: 'Quản lý người dùng' },
     { id: 'tasks', label: 'Quản lý công việc' },
     { id: 'messenger', label: 'CSKH Messenger' },
-    { id: 'revenue', label: 'Báo cáo doanh thu' },
+    { id: 'revenue', label: 'Báo cáo' },
     { id: 'customers', label: 'Quản lý khách hàng' },
     { id: 'order-approvals', label: 'Phê duyệt đơn hàng' },
     { id: 'settings', label: 'Cài đặt hệ thống' },

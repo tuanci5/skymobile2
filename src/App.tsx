@@ -136,7 +136,7 @@ function AppContent() {
             {activeTab === 'messenger' && <MobileMessengerPage user={user} />}
             {activeTab === 'tasks' && <MobileTaskPage currentUser={user} />}
             {activeTab === 'products' && <MobileProductsPage />}
-            {activeTab === 'revenue' && <MobileRevenuePage />}
+            {activeTab === 'revenue' && <MobileRevenuePage user={user} />}
             {/* Fallback: desktop pages rendered on mobile for other tabs */}
             {activeTab === 'model' && !isMobileMenu && (
               <div className="p-4 pb-24">
@@ -217,7 +217,7 @@ function AppContent() {
           {activeTab === 'products' && <ProductsPage />}
           {activeTab === 'users' && <UserPage />}
           {activeTab === 'messenger' && <MessengerPage user={user} />}
-          {activeTab === 'revenue' && <RevenuePage />}
+          {activeTab === 'revenue' && <RevenuePage user={user} />}
           {activeTab === 'customers' && <CustomersPage />}
           {activeTab === 'settings' && <SettingsPage />}
         </>

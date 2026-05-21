@@ -130,6 +130,36 @@ type ImageLibraryItem = {
   tags?: string[] | null;
 };
 
+const normalizeEmailList = (emails?: string[] | null) =>
+  (Array.isArray(emails) ? emails : [])
+    .filter((email): email is string => typeof email === 'string')
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+
+const isAdsStaffRole = (role?: string | null) => {
+  const normalizedRole = (role || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  return normalizedRole === 'quan tri'
+    || normalizedRole === 'admin'
+    || normalizedRole === 'mkt_ads'
+    || normalizedRole === 'mkt_lead'
+    || normalizedRole === 'head'
+    || normalizedRole.includes('quang cao')
+    || normalizedRole.includes('ads')
+    || (normalizedRole.includes('marketing') && (
+      normalizedRole.includes('truong phong')
+      || normalizedRole.includes('truong nhom')
+      || normalizedRole.includes('kinh doanh')
+    ));
+};
+
 // ─── Avatar Helper ─────────────────────────────────────────────────────────
 export const MessengerPage = ({ user }: { user?: any }) => {
   const [pages, setPages] = useState<FBPage[]>([]);
@@ -228,12 +258,15 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     aiStartHour?: number,
     aiEndHour?: number,
     distributionMode?: 'manual' | 'round_robin' | 'ai_first',
-    assignedUsers?: string[]
+    assignedUsers?: string[],
+    assignedAdsUsers?: string[]
   } | null>(null);
   const assignmentDraftRef = useRef<Record<string, string[]>>({});
+  const adsAssignmentDraftRef = useRef<Record<string, string[]>>({});
 
   const isManager = user?.role === 'Quản trị';
   const [staffList, setStaffList] = useState<{ name: string, email: string, role: string }[]>([]);
+  const adsStaffList = staffList.filter(staff => isAdsStaffRole(staff.role));
   const [isEditingProfileUrl, setIsEditingProfileUrl] = useState(false);
   const [profileUrlInput, setProfileUrlInput] = useState('');
   const [isSavingProfileUrl, setIsSavingProfileUrl] = useState(false);
@@ -1214,10 +1247,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     const page = pages.find(p => p.page_id === pageId);
     if (!page) return;
 
-    const email = userEmail.toLowerCase();
-    let currentAssigned = (editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || []));
-    // Ensure all items are lowercased for comparison
-    currentAssigned = currentAssigned.map(u => u.toLowerCase());
+    const email = userEmail.trim().toLowerCase();
+    const currentAssigned = normalizeEmailList(
+      editingPage?.id === pageId ? (editingPage.assignedUsers || page.assigned_users || []) : (page.assigned_users || [])
+    );
 
     let newUsers = [...currentAssigned];
     if (isChecked) {
@@ -1237,7 +1270,40 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       aiStartHour: prev?.id === pageId ? prev.aiStartHour : (page.ai_start_hour ?? 0),
       aiEndHour: prev?.id === pageId ? prev.aiEndHour : (page.ai_end_hour ?? 24),
       distributionMode: prev?.id === pageId ? (prev.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual'),
-      assignedUsers: newUsers
+      assignedUsers: newUsers,
+      assignedAdsUsers: prev?.id === pageId ? prev.assignedAdsUsers : (page.assigned_ads_users || [])
+    }));
+  };
+
+  const handleAssignPageAdsUser = (pageId: string, userEmail: string, isChecked: boolean) => {
+    const page = pages.find(p => p.page_id === pageId);
+    if (!page) return;
+
+    const email = userEmail.trim().toLowerCase();
+    const currentAssigned = normalizeEmailList(
+      editingPage?.id === pageId ? (editingPage.assignedAdsUsers || page.assigned_ads_users || []) : (page.assigned_ads_users || [])
+    );
+
+    let newUsers = [...currentAssigned];
+    if (isChecked) {
+      if (!newUsers.includes(email)) newUsers.push(email);
+    } else {
+      newUsers = newUsers.filter(u => u !== email);
+    }
+    adsAssignmentDraftRef.current[pageId] = newUsers;
+
+    setEditingPage(prev => ({
+      id: pageId,
+      token: prev?.id === pageId ? prev.token : '',
+      difyKey: prev?.id === pageId ? prev.difyKey : (page.dify_api_key || ''),
+      facebookAdAccountId: prev?.id === pageId ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+      businessId: prev?.id === pageId ? prev.businessId : (page.business_id || ''),
+      aiReplyDelay: prev?.id === pageId ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+      aiStartHour: prev?.id === pageId ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+      aiEndHour: prev?.id === pageId ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+      distributionMode: prev?.id === pageId ? (prev.distributionMode || page.distribution_mode || 'manual') : (page.distribution_mode || 'manual'),
+      assignedUsers: prev?.id === pageId ? prev.assignedUsers : (page.assigned_users || []),
+      assignedAdsUsers: newUsers
     }));
   };
 
@@ -1305,6 +1371,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     if (editingPage.distributionMode !== undefined) updates.distribution_mode = editingPage.distributionMode;
     const assignedUsersDraft = assignmentDraftRef.current[pageId] ?? editingPage.assignedUsers;
     if (assignedUsersDraft !== undefined) updates.assigned_users = assignedUsersDraft;
+    const assignedAdsUsersDraft = adsAssignmentDraftRef.current[pageId] ?? editingPage.assignedAdsUsers;
+    if (assignedAdsUsersDraft !== undefined) updates.assigned_ads_users = assignedAdsUsersDraft;
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/fb/pages/${pageId}`, {
@@ -1319,7 +1387,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         setPages(prev => prev.map(p => p.page_id === pageId ? (updatedPage ? {
           ...p,
           ...updatedPage,
-          assigned_users: Array.isArray(updatedPage.assigned_users) ? updatedPage.assigned_users : (updates.assigned_users || p.assigned_users)
+          assigned_users: Array.isArray(updatedPage.assigned_users) ? updatedPage.assigned_users : (updates.assigned_users || p.assigned_users),
+          assigned_ads_users: Array.isArray(updatedPage.assigned_ads_users) ? updatedPage.assigned_ads_users : (updates.assigned_ads_users || p.assigned_ads_users)
         } : {
           ...p,
           dify_api_key: updates.dify_api_key !== undefined ? updates.dify_api_key : p.dify_api_key,
@@ -1329,9 +1398,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           ai_start_hour: updates.ai_start_hour !== undefined ? updates.ai_start_hour : p.ai_start_hour,
           ai_end_hour: updates.ai_end_hour !== undefined ? updates.ai_end_hour : p.ai_end_hour,
           distribution_mode: updates.distribution_mode !== undefined ? updates.distribution_mode : p.distribution_mode,
-          assigned_users: updates.assigned_users !== undefined ? updates.assigned_users : p.assigned_users
+          assigned_users: updates.assigned_users !== undefined ? updates.assigned_users : p.assigned_users,
+          assigned_ads_users: updates.assigned_ads_users !== undefined ? updates.assigned_ads_users : p.assigned_ads_users
         }) : p));
         delete assignmentDraftRef.current[pageId];
+        delete adsAssignmentDraftRef.current[pageId];
         setEditingPage(null);
         alert("Đã cập nhật cài đặt Fanpage thành công!");
       } else {
@@ -1410,12 +1481,23 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const displayedConversations = conversations.filter(conv => {
     if (!isManager) {
       const page = pages.find(p => p.page_id === conv.page_id);
-      const isPageUnassigned = !page?.assigned_users || page.assigned_users.length === 0;
-      const isAssignedToPage = page?.assigned_users?.includes(user?.email || '');
-      const isAssignedToConv = conv.assigned_to && (conv.assigned_to === user?.email || conv.assigned_to === user?.name || conv.assigned_to.includes(user?.name || ''));
+      const pageAssignedUsers = normalizeEmailList(page?.assigned_users);
+      const pageAssignedAdsUsers = normalizeEmailList(page?.assigned_ads_users);
+      const userEmail = (user?.email || '').toLowerCase();
+      const userName = user?.name || '';
+      const isCurrentUserAds = isAdsStaffRole(user?.role);
+      const isPageUnassigned = isCurrentUserAds ? pageAssignedAdsUsers.length === 0 : pageAssignedUsers.length === 0;
+      const isAssignedToPage = pageAssignedUsers.includes(userEmail);
+      const isAssignedToAds = pageAssignedAdsUsers.includes(userEmail);
+      const assignedTo = conv.assigned_to || '';
+      const isAssignedToConv = !!assignedTo && (
+        assignedTo.toLowerCase() === userEmail ||
+        (userName ? (assignedTo === userName || assignedTo.includes(userName)) : false)
+      );
 
-      // CSKH can see if they are assigned to the page OR assigned to the conversation OR the page has no one assigned
-      if (!isAssignedToPage && !isAssignedToConv && !isPageUnassigned) return false;
+      // Staff can see conversations for pages they manage, ads pages assigned to them,
+      // conversations assigned directly to them, or pages with no relevant owner yet.
+      if (!isAssignedToPage && !isAssignedToAds && !isAssignedToConv && !isPageUnassigned) return false;
     }
 
     if (conversationFilter === 'unread' && (conv.unread_count || 0) <= 0) return false;
@@ -2298,6 +2380,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                   aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                   aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                   assignedUsers: prev?.id === page.page_id ? prev.assignedUsers : (page.assigned_users || []),
+                                  assignedAdsUsers: prev?.id === page.page_id ? prev.assignedAdsUsers : (page.assigned_ads_users || []),
                                   distributionMode: mode
                                 }));
                               }}
@@ -2341,7 +2424,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   />
@@ -2365,7 +2449,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   />
@@ -2390,7 +2475,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   />
@@ -2418,7 +2504,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   />
@@ -2444,7 +2531,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   />
@@ -2467,7 +2555,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: val,
                                         aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   >
@@ -2493,7 +2582,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                         aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
                                         aiEndHour: val,
                                         distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
-                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
                                       }));
                                     }}
                                   >
@@ -2504,24 +2594,47 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 </div>
                               </div>
 
-                              <div className="mb-5">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nhân sự quản lý Page</p>
-                                <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
-                                  {staffList.length > 0 ? staffList.map(staff => (
-                                    <label key={staff.email} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 px-2 rounded-lg">
-                                      <input
-                                        type="checkbox"
-                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                        checked={editingPage?.id === page.page_id && editingPage.assignedUsers
-                                          ? editingPage.assignedUsers.map(u => u.toLowerCase()).includes(staff.email.toLowerCase())
-                                          : (page.assigned_users || []).map(u => u.toLowerCase()).includes(staff.email.toLowerCase())}
-                                        onChange={(e) => handleAssignPageUser(page.page_id, staff.email, e.target.checked)}
-                                      />
-                                      <span className="text-sm text-slate-700">{staff.name} <span className="text-xs text-slate-400">({staff.role || 'Thành viên'})</span></span>
-                                    </label>
-                                  )) : (
-                                    <div className="text-xs text-slate-400 italic py-2">Chưa tải được danh sách nhân sự.</div>
-                                  )}
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nhân sự quản lý Page</p>
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
+                                    {staffList.length > 0 ? staffList.map(staff => (
+                                      <label key={staff.email} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-slate-50 px-2 rounded-lg">
+                                        <input
+                                          type="checkbox"
+                                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                          checked={normalizeEmailList(editingPage?.id === page.page_id && editingPage.assignedUsers
+                                            ? editingPage.assignedUsers
+                                            : page.assigned_users).includes(staff.email.trim().toLowerCase())}
+                                          onChange={(e) => handleAssignPageUser(page.page_id, staff.email, e.target.checked)}
+                                        />
+                                        <span className="text-sm text-slate-700">{staff.name} <span className="text-xs text-slate-400">({staff.role || 'Thành viên'})</span></span>
+                                      </label>
+                                    )) : (
+                                      <div className="text-xs text-slate-400 italic py-2">Chưa tải được danh sách nhân sự.</div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nhân sự phụ trách Ads</p>
+                                  <div className="bg-white border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto">
+                                    {adsStaffList.length > 0 ? adsStaffList.map(staff => (
+                                      <label key={staff.email} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-purple-50 px-2 rounded-lg">
+                                        <input
+                                          type="checkbox"
+                                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                          checked={normalizeEmailList(editingPage?.id === page.page_id && editingPage.assignedAdsUsers
+                                            ? editingPage.assignedAdsUsers
+                                            : page.assigned_ads_users).includes(staff.email.trim().toLowerCase())}
+                                          onChange={(e) => handleAssignPageAdsUser(page.page_id, staff.email, e.target.checked)}
+                                        />
+                                        <span className="text-sm text-slate-700">{staff.name} <span className="text-xs text-slate-400">({staff.role || 'Thành viên'})</span></span>
+                                      </label>
+                                    )) : (
+                                      <div className="text-xs text-slate-400 italic py-2">Chưa có nhân sự Ads trong danh sách nhân sự.</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
