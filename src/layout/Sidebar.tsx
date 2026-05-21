@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   ChevronRight,
@@ -44,8 +44,12 @@ export const Sidebar = ({
   isSystemAdmin,
 }: SidebarProps) => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const settingsSubPage = pathname === '/users' || pathname === '/settings/users' || pathname.startsWith('/settings/users/')
+    ? 'users'
+    : 'general';
 
   const baseMenuItems = [
     { id: 'model', label: 'Mô hình Vận hành', icon: <Users className="w-5 h-5" /> },
@@ -55,10 +59,9 @@ export const Sidebar = ({
     { id: 'tasks', label: 'Quản lý công việc', icon: <CheckCircle2 className="w-5 h-5" /> },
     { id: 'messenger', label: 'CSKH Messenger', icon: <MessageSquare className="w-5 h-5" /> },
     { id: 'revenue', label: 'Báo cáo', icon: <PieChart className="w-5 h-5" /> },
-    { id: 'users', label: 'Quản lý người dùng', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
     { id: 'customers', label: 'Quản lý khách hàng', icon: <Users className="w-5 h-5" /> },
-    { id: 'settings', label: 'Cài đặt hệ thống', icon: <Settings className="w-5 h-5" />, adminOnly: true },
+    { id: 'settings', label: 'Cài đặt', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   ];
 
   const deptLinks = DEPARTMENTS.map(dept => ({
@@ -85,6 +88,17 @@ export const Sidebar = ({
     { id: 'hr-interview', label: 'Danh sách PV', icon: <Users className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || isHR || isManager },
   ];
 
+  const settingsLinks = [
+    { id: 'settings-general', label: 'Cấu hình', icon: <Settings className="w-5 h-5" />, indent: true, small: true },
+    { id: 'settings-users', label: 'Quản lý người dùng', icon: <UserCog className="w-5 h-5" />, indent: true, small: true },
+  ];
+
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      setExpanded(prev => ({ ...prev, settings: true }));
+    }
+  }, [activeTab]);
+
   const handleNavigate = (item: any) => {
     const hasSubItems = (item.id === 'model' && deptLinks.length > 0) || (item.id === 'hr' && hrLinks.some(l => l.visible !== false));
 
@@ -97,6 +111,10 @@ export const Sidebar = ({
       navigate('/hr/plan');
     } else if (item.id === 'hr-interview') {
       navigate('/hr/interview');
+    } else if (item.id === 'settings-general') {
+      navigate('/settings');
+    } else if (item.id === 'settings-users') {
+      navigate('/settings/users');
     } else if (item.id === 'model') {
       navigate('/model');
     } else if (item.id === 'hr') {
@@ -173,7 +191,11 @@ export const Sidebar = ({
               if (item.adminOnly && !isSystemAdmin) return null;
               if (!isSystemAdmin && !allowedTabs.includes(item.id)) return null;
 
-              const subItems = item.id === 'model' ? deptLinks : (item.id === 'hr' ? hrLinks.filter(l => l.visible !== false) : []);
+              const subItems = item.id === 'model'
+                ? deptLinks
+                : (item.id === 'hr'
+                  ? hrLinks.filter(l => l.visible !== false)
+                  : (item.id === 'settings' ? settingsLinks : []));
               const hasSubItems = subItems.length > 0;
               const isExpanded = expanded[item.id];
               const isActive = activeTab === item.id && (item.id !== 'hr' || !hrSubTab);
@@ -184,6 +206,9 @@ export const Sidebar = ({
                     onClick={() => {
                       if (hasSubItems) {
                         setExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }));
+                        if (item.id === 'settings') {
+                          handleNavigate(item);
+                        }
                       } else {
                         handleNavigate(item);
                       }
@@ -221,6 +246,7 @@ export const Sidebar = ({
                         {subItems.map(subItem => {
                           const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
                           const HR_IDS = ['hr-jd', 'hr-plan', 'hr-interview'];
+                          const SETTINGS_IDS = ['settings-general', 'settings-users'];
                           let isSubActive = false;
 
                           if (DEPT_IDS.includes(subItem.id)) {
@@ -229,6 +255,9 @@ export const Sidebar = ({
                             if (subItem.id === 'hr-jd') isSubActive = activeTab === 'hr' && hrSubTab !== 'interview' && hrSubTab !== 'plan';
                             if (subItem.id === 'hr-plan') isSubActive = activeTab === 'hr' && hrSubTab === 'plan';
                             if (subItem.id === 'hr-interview') isSubActive = activeTab === 'hr' && hrSubTab === 'interview';
+                          } else if (SETTINGS_IDS.includes(subItem.id)) {
+                            if (subItem.id === 'settings-general') isSubActive = activeTab === 'settings' && settingsSubPage === 'general';
+                            if (subItem.id === 'settings-users') isSubActive = activeTab === 'settings' && settingsSubPage === 'users';
                           }
 
                           return (

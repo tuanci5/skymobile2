@@ -275,7 +275,7 @@ export const SettingsPage: React.FC = () => {
           <div className="p-2 bg-blue-500/10 rounded-xl">
             <SettingsIcon className="w-6 h-6 text-blue-600" />
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Cài đặt hệ thống</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Cài đặt</h1>
         </div>
         <p className="text-slate-500">Cấu hình tham số AI, API và các thiết lập chung cho toàn bộ ứng dụng.</p>
       </div>

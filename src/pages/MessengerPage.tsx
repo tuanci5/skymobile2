@@ -1950,7 +1950,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                   <div className="flex flex-wrap gap-2">
                     {activeMessageTemplates.length === 0 && (
                       <div className="rounded-2xl border border-dashed border-blue-200 bg-white/70 px-3 py-4 text-xs font-semibold text-slate-500">
-                        Chưa có tin nhắn mẫu cho ngôn ngữ này. Vui lòng thêm trong Cài đặt hệ thống.
+                        Chưa có tin nhắn mẫu cho ngôn ngữ này. Vui lòng thêm trong Cài đặt.
                       </div>
                     )}
                     {activeMessageTemplates.map((template) => (

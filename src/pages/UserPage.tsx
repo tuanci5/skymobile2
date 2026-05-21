@@ -224,7 +224,7 @@ export const UserPage = () => {
     { id: 'revenue', label: 'Báo cáo' },
     { id: 'customers', label: 'Quản lý khách hàng' },
     { id: 'order-approvals', label: 'Phê duyệt đơn hàng' },
-    { id: 'settings', label: 'Cài đặt hệ thống' },
+    { id: 'settings', label: 'Cài đặt' },
   ];
 
   return (

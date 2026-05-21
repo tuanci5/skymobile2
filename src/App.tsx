@@ -62,6 +62,7 @@ function AppContent() {
   const activeDept = (activeTab === 'model' && ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(subSeg)) ? subSeg : null;
   const activeTeam = (activeDept === 'sales-mkt' && ['marketing', 'sale', 'cskh'].includes(teamSeg)) ? teamSeg as any : null;
   const hrSubTab = activeTab === 'hr' ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : 'jd')) : 'jd';
+  const settingsSubPage = rootSeg === 'users' || (activeTab === 'settings' && subSeg === 'users') ? 'users' : 'general';
 
   const LECTURE_SLUGS: Record<string, any> = {
     'van-hoa': LECTURE_CULTURE_ATTITUDE,
@@ -80,6 +81,10 @@ function AppContent() {
   }, [user, internalRoleId, isSystemAdmin]);
 
   useEffect(() => {
+    if (rootSeg === 'users') {
+      navigate('/settings/users', { replace: true });
+      return;
+    }
     if (pathname === '/' || pathname === '' || rootSeg === 'accounts') {
       navigate('/model', { replace: true });
     }
@@ -110,6 +115,7 @@ function AppContent() {
     return [];
   })();
   const restrictedView = !isSystemAdmin && internalRoleId !== 'admin';
+  const requiredPermissionTab: TabType = settingsSubPage === 'users' ? 'users' : activeTab;
 
   const goToTab = (tab: TabType) => {
     if (!hasPermission(tab)) {
@@ -125,7 +131,7 @@ function AppContent() {
       <MobileShell activeTab={activeTab} routeKey={pathname}>
         {isMobileMenu ? (
           <MobileMenuPage user={user} onLogout={logout} isSystemAdmin={isSystemAdmin} allowedTabs={allowedTabs} />
-        ) : !hasPermission(activeTab) ? (
+        ) : !hasPermission(requiredPermissionTab) ? (
           <div className="flex flex-col items-center justify-center py-40 space-y-6 px-6">
             <div className="p-6 bg-rose-100 text-rose-600 rounded-full"><ShieldAlert className="w-12 h-12" /></div>
             <h2 className="text-xl font-bold text-slate-900 text-center">Truy cập bị từ chối</h2>
@@ -148,9 +154,12 @@ function AppContent() {
             {activeTab === 'hr' && <div className="p-4 pb-24"><HRPage selectedRole={restrictedView ? internalRoleId : activeRole} setSelectedRole={restrictedView ? () => {} : setActiveRole} setActiveTab={goToTab} restricted={restrictedView} hrSubTab={hrSubTab} user={user} /></div>}
             {activeTab === 'training' && <div className="p-4 pb-24"><TrainingPage courseSlug={subSeg === 'course' ? teamSeg : null} lectureSlug={subSeg === 'lecture' ? teamSeg : null} lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null} /></div>}
             {activeTab === 'business' && <div className="p-4 pb-24"><BusinessPlanPage initialSubTab="finance" /></div>}
-            {activeTab === 'users' && <div className="p-4 pb-24"><UserPage /></div>}
             {activeTab === 'customers' && <div className="p-4 pb-24"><CustomersPage /></div>}
-            {activeTab === 'settings' && <div className="p-4 pb-24"><SettingsPage /></div>}
+            {activeTab === 'settings' && (
+              <div className="p-4 pb-24">
+                {settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />}
+              </div>
+            )}
           </>
         )}
       </MobileShell>
@@ -169,7 +178,7 @@ function AppContent() {
       isSystemAdmin={isSystemAdmin}
       routeKey={pathname}
     >
-      {!hasPermission(activeTab) ? (
+      {!hasPermission(requiredPermissionTab) ? (
         <div className="flex flex-col items-center justify-center py-40 space-y-6">
           <div className="p-6 bg-rose-100 text-rose-600 rounded-full shadow-lg shadow-rose-100">
             <ShieldAlert className="w-16 h-16" />
@@ -215,11 +224,10 @@ function AppContent() {
           {activeTab === 'action-plan' && <BusinessPlanPage initialSubTab="action" />}
           {activeTab === 'tasks' && <TaskPage currentUser={user} />}
           {activeTab === 'products' && <ProductsPage />}
-          {activeTab === 'users' && <UserPage />}
           {activeTab === 'messenger' && <MessengerPage user={user} />}
           {activeTab === 'revenue' && <RevenuePage user={user} />}
           {activeTab === 'customers' && <CustomersPage />}
-          {activeTab === 'settings' && <SettingsPage />}
+          {activeTab === 'settings' && (settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />)}
         </>
       )}
     </AppShell>

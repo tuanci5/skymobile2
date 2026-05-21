@@ -11,8 +11,8 @@ const MENU_ITEMS = [
   { id: 'hr', label: 'Nhân sự & JD', icon: UserCog, path: '/hr' },
   { id: 'training', label: 'Đào tạo & Văn hóa', icon: GraduationCap, path: '/training' },
   { id: 'business', label: 'Kế hoạch kinh doanh', icon: TrendingUp, path: '/business', adminOnly: true },
-  { id: 'users', label: 'Quản lý người dùng', icon: UserCog, path: '/users', adminOnly: true },
-  { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, path: '/settings', adminOnly: true },
+  { id: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings', adminOnly: true },
+  { id: 'settings-users', label: 'Quản lý người dùng', icon: UserCog, path: '/settings/users', adminOnly: true, child: true },
 ];
 
 export const MobileMenuPage = ({ user, onLogout, isSystemAdmin, allowedTabs }: Props) => {
@@ -39,13 +39,14 @@ export const MobileMenuPage = ({ user, onLogout, isSystemAdmin, allowedTabs }: P
       <div className="p-4 space-y-2">
         {MENU_ITEMS.map(item => {
           if (item.adminOnly && !isSystemAdmin) return null;
-          if (!isSystemAdmin && !allowedTabs.includes(item.id)) return null;
+          const permissionId = item.id === 'settings-users' ? 'users' : item.id;
+          if (!isSystemAdmin && !allowedTabs.includes(permissionId)) return null;
           const Icon = item.icon;
           return (
             <button key={item.id} onClick={() => navigate(item.path)}
-              className="w-full flex items-center justify-between px-4 py-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm active:bg-slate-50">
+              className={`w-full flex items-center justify-between px-4 py-3.5 bg-white rounded-2xl border border-slate-100 shadow-sm active:bg-slate-50 ${item.child ? 'ml-4 w-[calc(100%-1rem)]' : ''}`}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                <div className={`${item.child ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-slate-100 flex items-center justify-center`}>
                   <Icon className="w-5 h-5 text-slate-600" />
                 </div>
                 <span className="font-bold text-sm text-slate-800">{item.label}</span>
