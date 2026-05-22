@@ -1803,9 +1803,10 @@ router.get('/reports/new-messages', async (req, res) => {
 router.get('/conversations', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT c.*, p.page_name, p.business_id
+      SELECT c.*, p.page_name, p.business_id, u.name AS assigned_to_name
       FROM fb_conversations c
       LEFT JOIN fb_pages p ON p.page_id = c.page_id
+      LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to)
       ORDER BY c.last_message_at DESC
     `);
     res.json(rows);

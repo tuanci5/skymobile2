@@ -15,6 +15,7 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [staffList, setStaffList] = useState<{ name: string, email: string, role?: string }[]>([]);
   const [replyText, setReplyText] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'bot'>('all');
   const [searchText, setSearchText] = useState('');
@@ -36,6 +37,19 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
     fetchConvs();
     const iv = setInterval(fetchConvs, 5000);
     return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/users`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) setStaffList(data);
+        }
+      } catch (err) { console.error(err); }
+    };
+    fetchUsers();
   }, []);
 
   // Poll messages
@@ -153,11 +167,26 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
     return hrs >= 24 ? d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getAssignedStaffDisplayName = (conv?: Pick<Conversation, 'assigned_to' | 'assigned_to_name'> | null) => {
+    const assignedTo = conv?.assigned_to?.trim();
+    if (!assignedTo) return '';
+
+    const normalizedAssignedTo = assignedTo.toLowerCase();
+    const staff = staffList.find(item => {
+      const email = (item.email || '').trim().toLowerCase();
+      const name = (item.name || '').trim().toLowerCase();
+      return email === normalizedAssignedTo || name === normalizedAssignedTo;
+    });
+    const displayName = (staff?.name || conv?.assigned_to_name || assignedTo).trim();
+
+    return displayName.includes('@') ? displayName.split('@')[0] : displayName;
+  };
+
   const displayed = conversations.filter(c => {
     if (filter === 'unread' && (c.unread_count || 0) <= 0) return false;
     if (filter === 'bot' && c.is_human_intervened) return false;
     if (searchText.trim()) {
-      const s = [c.customer_name, c.last_message, c.assigned_to].filter(Boolean).join(' ').toLowerCase();
+      const s = [c.customer_name, c.last_message, c.assigned_to, getAssignedStaffDisplayName(c)].filter(Boolean).join(' ').toLowerCase();
       if (!s.includes(searchText.toLowerCase())) return false;
     }
     return true;
@@ -208,7 +237,11 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
                 )}
               </div>
               <div className="flex items-center gap-1.5 mt-1.5">
-                {conv.is_human_intervened ? (
+                {getAssignedStaffDisplayName(conv) ? (
+                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-md flex items-center gap-1 max-w-[150px] truncate">
+                    <Hand className="w-3 h-3 shrink-0" /> {getAssignedStaffDisplayName(conv)}
+                  </span>
+                ) : conv.is_human_intervened ? (
                   <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-md flex items-center gap-1"><Hand className="w-3 h-3" /> NV</span>
                 ) : (
                   <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-md flex items-center gap-1"><Bot className="w-3 h-3" /> AI</span>
@@ -235,7 +268,11 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
         </div>
         <div className="flex-1 min-w-0" onClick={() => setScreen('info')}>
           <h3 className="font-bold text-sm text-slate-900 truncate">{selectedConv.customer_name}</h3>
-          <p className="text-[11px] text-slate-500">{selectedConv.is_human_intervened ? 'NV đang hỗ trợ' : 'AI tự động'}</p>
+          <p className="text-[11px] text-slate-500">
+            {selectedConv.is_human_intervened
+              ? (getAssignedStaffDisplayName(selectedConv) ? `${getAssignedStaffDisplayName(selectedConv)} đang hỗ trợ` : 'NV đang hỗ trợ')
+              : 'AI tự động'}
+          </p>
         </div>
         <button onClick={toggleBot}
           className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 ${selectedConv.is_human_intervened ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -340,10 +377,12 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
           <div className="text-xs space-y-2 text-slate-600">
             <div className="flex justify-between"><span className="text-slate-400">Trạng thái:</span>
               <span className={`font-bold ${selectedConv.is_human_intervened ? 'text-orange-600' : 'text-emerald-600'}`}>
-                {selectedConv.is_human_intervened ? 'NV hỗ trợ' : 'AI tự động'}
+                {selectedConv.is_human_intervened
+                  ? (getAssignedStaffDisplayName(selectedConv) || 'NV hỗ trợ')
+                  : 'AI tự động'}
               </span>
             </div>
-            {selectedConv.assigned_to && <div className="flex justify-between"><span className="text-slate-400">Phụ trách:</span><span className="font-bold">{selectedConv.assigned_to}</span></div>}
+            {selectedConv.assigned_to && <div className="flex justify-between"><span className="text-slate-400">Phụ trách:</span><span className="font-bold">{getAssignedStaffDisplayName(selectedConv)}</span></div>}
             {selectedConv.customer_status && <div className="flex justify-between"><span className="text-slate-400">TT khách:</span><span className="font-bold">{selectedConv.customer_status}</span></div>}
             <div className="flex justify-between"><span className="text-slate-400">Cập nhật:</span><span>{new Date(selectedConv.last_message_at).toLocaleDateString('vi-VN')}</span></div>
           </div>

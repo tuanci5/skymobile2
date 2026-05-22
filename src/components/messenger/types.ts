@@ -35,6 +35,7 @@ export interface Conversation {
   ad_cost?: number;
   unread_count: number;
   assigned_to?: string;
+  assigned_to_name?: string | null;
   profile_link?: string;
   ad_image?: string;
   ad_message?: string;

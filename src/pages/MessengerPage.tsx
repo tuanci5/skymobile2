@@ -119,6 +119,7 @@ const parseMessageTemplates = (value?: string): MessageTemplateMap => {
 };
 
 const TRANSLATION_CACHE_LANGUAGE = 'Vietnamese:auto-detect:v2';
+const ALL_PAGES_VALUE = 'all';
 
 type ImageLibraryItem = {
   id: number;
@@ -163,7 +164,7 @@ const isAdsStaffRole = (role?: string | null) => {
 // ─── Avatar Helper ─────────────────────────────────────────────────────────
 export const MessengerPage = ({ user }: { user?: any }) => {
   const [pages, setPages] = useState<FBPage[]>([]);
-  const [selectedPage, setSelectedPage] = useState<string | null>(null);
+  const [selectedPage, setSelectedPage] = useState<string>(ALL_PAGES_VALUE);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -391,6 +392,21 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getAssignedStaffDisplayName = (conv?: Pick<Conversation, 'assigned_to' | 'assigned_to_name'> | null) => {
+    const assignedTo = conv?.assigned_to?.trim();
+    if (!assignedTo) return '';
+
+    const normalizedAssignedTo = assignedTo.toLowerCase();
+    const staff = staffList.find(item => {
+      const email = (item.email || '').trim().toLowerCase();
+      const name = (item.name || '').trim().toLowerCase();
+      return email === normalizedAssignedTo || name === normalizedAssignedTo;
+    });
+    const displayName = (staff?.name || conv?.assigned_to_name || assignedTo).trim();
+
+    return displayName.includes('@') ? displayName.split('@')[0] : displayName;
+  };
+
   useFacebookSdk();
 
   const markConversationRead = async (convId: number) => {
@@ -451,7 +467,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         if (pagesRes.ok) {
           const pagesData = await pagesRes.json();
           setPages(pagesData);
-          if (pagesData.length > 0) setSelectedPage(pagesData[0].page_id);
         }
 
         if (convsRes.ok) {
@@ -467,6 +482,27 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (selectedPage === ALL_PAGES_VALUE) return;
+    if (pages.length > 0 && !pages.some(page => page.page_id === selectedPage)) {
+      setSelectedPage(ALL_PAGES_VALUE);
+    }
+  }, [pages, selectedPage]);
+
+  useEffect(() => {
+    if (!selectedConv || selectedPage === ALL_PAGES_VALUE || selectedConv.page_id === selectedPage) return;
+
+    setSelectedConv(null);
+    setMessages([]);
+    setNotes([]);
+    setAdSources([]);
+    setReplyText('');
+    setTranslations({});
+    setHasMoreMessages(true);
+    setIsLoadingMore(false);
+    setIsInitialLoad(true);
+  }, [selectedPage, selectedConv?.id, selectedConv?.page_id]);
 
   useEffect(() => {
     if (!selectedConv) return;
@@ -1201,8 +1237,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
   const handleAssign = async (staff: string) => {
     if (!selectedConv) return;
-    setSelectedConv(prev => prev ? { ...prev, assigned_to: staff } : null);
-    setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, assigned_to: staff } : c));
+    const assignedStaffName = staff ? getAssignedStaffDisplayName({ assigned_to: staff }) : null;
+    setSelectedConv(prev => prev ? { ...prev, assigned_to: staff, assigned_to_name: assignedStaffName } : null);
+    setConversations(prev => prev.map(c => c.id === selectedConv.id ? { ...c, assigned_to: staff, assigned_to_name: assignedStaffName } : c));
 
     try {
       await fetch(`${API_BASE_URL}/api/fb/conversations/${selectedConv.id}/assign`, {
@@ -1500,6 +1537,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       if (!isAssignedToPage && !isAssignedToAds && !isAssignedToConv && !isPageUnassigned) return false;
     }
 
+    if (selectedPage !== ALL_PAGES_VALUE && conv.page_id !== selectedPage) return false;
+
     if (conversationFilter === 'unread' && (conv.unread_count || 0) <= 0) return false;
     if (conversationFilter === 'bot' && conv.is_human_intervened) return false;
 
@@ -1512,6 +1551,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         conv.customer_id,
         conv.last_message,
         conv.assigned_to,
+        getAssignedStaffDisplayName(conv),
         conv.campaign_name
       ].filter(Boolean).join(' ').toLowerCase();
       if (!searchableText.includes(searchTerm)) return false;
@@ -1531,8 +1571,24 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       {/* ─── LEFT PANEL: Conversation List ─── */}
       <div className="w-[300px] xl:w-[340px] 2xl:w-[380px] bg-white border-r border-slate-200 flex flex-col shrink-0">
         <div className="px-4 py-3 border-b border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-lg text-slate-800">Tin nhắn</h2>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="font-bold text-lg text-slate-800 shrink-0">Tin nhắn</h2>
+              <select
+                id="messenger-page-filter"
+                value={selectedPage}
+                onChange={(e) => setSelectedPage(e.target.value)}
+                title="Lọc theo Fanpage"
+                className="min-w-0 max-w-[150px] bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-2.5 py-2 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              >
+                <option value={ALL_PAGES_VALUE}>Tất cả page</option>
+                {[...pages]
+                  .sort((a, b) => a.page_name.localeCompare(b.page_name, 'vi'))
+                  .map(page => (
+                    <option key={page.page_id} value={page.page_id}>{page.page_name}</option>
+                  ))}
+              </select>
+            </div>
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
               <Settings className="w-5 h-5" />
             </button>
@@ -1601,7 +1657,11 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                      {conv.is_human_intervened ? (
+                      {getAssignedStaffDisplayName(conv) ? (
+                        <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-md flex items-center gap-1 whitespace-nowrap truncate max-w-[150px]">
+                          <Hand className="w-3 h-3 shrink-0" /> {getAssignedStaffDisplayName(conv)}
+                        </span>
+                      ) : conv.is_human_intervened ? (
                         <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-md flex items-center gap-1 whitespace-nowrap">
                           <Hand className="w-3 h-3" /> NV CSKH
                         </span>
@@ -1618,11 +1678,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                       {conv.customer_status && (
                         <span className={`px-2 py-0.5 text-[10px] font-black rounded-md truncate max-w-[120px] border whitespace-nowrap ${getCustomerStatusClass(conv.customer_status)}`}>
                           {conv.customer_status}
-                        </span>
-                      )}
-                      {conv.assigned_to && (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md truncate max-w-[120px] border border-slate-200 whitespace-nowrap">
-                          👤 {conv.assigned_to.split(' ')[0]}
                         </span>
                       )}
                     </div>
@@ -1654,7 +1709,9 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                   <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span>Trạng thái:</span>
                     {selectedConv.is_human_intervened ? (
-                      <span className="text-orange-600 font-medium">Nhân viên đang hỗ trợ</span>
+                      <span className="text-orange-600 font-medium">
+                        {getAssignedStaffDisplayName(selectedConv) ? `${getAssignedStaffDisplayName(selectedConv)} đang hỗ trợ` : 'Nhân viên đang hỗ trợ'}
+                      </span>
                     ) : (
                       <span className="text-emerald-600 font-medium">AI đang tự động trả lời</span>
                     )}
