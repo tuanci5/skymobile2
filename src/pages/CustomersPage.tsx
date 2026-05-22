@@ -513,33 +513,74 @@ export const CustomersPage: React.FC = () => {
   const getOrderStatusBadge = (status: string | null) => {
     const s = String(status || '').toLowerCase();
     if (s.includes('pending') || s.includes('chờ')) {
-      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Chờ duyệt</span>;
+      return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Chờ duyệt</span>;
     }
     if (s.includes('approve') || s.includes('đã') || s.includes('complete') || s.includes('success')) {
-      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Hoàn thành</span>;
+      return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Hoàn thành</span>;
     }
     if (s.includes('reject') || s.includes('cancel') || s.includes('hủy')) {
-      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã hủy</span>;
+      return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã hủy</span>;
     }
-    return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-50 text-slate-700 border border-slate-200">{status || 'Chờ'}</span>;
+    return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-50 text-slate-700 border border-slate-200">{status || 'Chờ'}</span>;
   };
 
   const getApprovalStatusBadge = (status: string | null) => {
     const s = String(status || 'Pending').toLowerCase();
     if (s.includes('approve')) {
-      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Đã phê duyệt</span>;
+      return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Đã phê duyệt</span>;
     }
     if (s.includes('reject') || s.includes('cancel')) {
-      return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã từ chối</span>;
+      return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Đã từ chối</span>;
     }
-    return <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Chờ phê duyệt</span>;
+    return <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Chờ phê duyệt</span>;
   };
 
+  const isApprovalView = activeTab === 'approvals';
+  const pageContainerClass = isApprovalView ? 'max-w-[1600px] mx-auto space-y-5' : 'max-w-7xl mx-auto space-y-6';
+  const headerClass = isApprovalView
+    ? 'flex flex-col xl:flex-row xl:items-center justify-between gap-5 bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200/80 relative overflow-hidden'
+    : 'flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden';
+  const headerAccentClass = isApprovalView
+    ? 'absolute right-0 top-0 h-full w-96 bg-gradient-to-l from-indigo-50 via-blue-50/70 to-transparent pointer-events-none opacity-80'
+    : 'absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-indigo-50 to-transparent rounded-bl-full pointer-events-none opacity-60';
+  const titleClass = isApprovalView
+    ? 'text-2xl md:text-3xl font-black text-slate-900 tracking-tight'
+    : 'text-3xl md:text-4xl font-black text-slate-900 tracking-tight';
+  const subtitleClass = isApprovalView
+    ? 'text-slate-500 mt-1.5 max-w-2xl text-sm leading-relaxed'
+    : 'text-slate-500 mt-2 max-w-xl text-sm md:text-base leading-relaxed';
+  const syncButtonClass = isApprovalView
+    ? 'flex w-full sm:w-auto items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-indigo-100 disabled:opacity-50 transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300'
+    : 'flex items-center gap-2.5 px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-2xl font-bold hover:shadow-xl hover:shadow-indigo-100 disabled:opacity-50 transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300';
+  const filterBarClass = isApprovalView
+    ? 'flex flex-col sm:flex-row gap-3 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm'
+    : 'flex flex-col sm:flex-row gap-3';
+  const searchInputClass = isApprovalView
+    ? 'w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent'
+    : 'w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm';
+  const tabButtonClass = (tab: 'customers' | 'orders' | 'approvals' | 'analytics') =>
+    `flex items-center gap-2 ${isApprovalView ? 'px-3 py-2' : 'px-4 py-1.5'} rounded-lg text-xs font-bold transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
+      activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+    }`;
+  const orderCardClass = isApprovalView
+    ? 'bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden'
+    : 'bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden';
+  const orderTableClass = isApprovalView
+    ? 'w-full min-w-[1260px] table-fixed text-left border-collapse'
+    : 'w-full text-left border-collapse';
+  const orderHeaderCellClass = isApprovalView
+    ? 'px-4 py-3.5 text-[11px] font-black text-slate-500 uppercase tracking-wide whitespace-nowrap'
+    : 'px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider';
+  const orderCellClass = isApprovalView ? 'px-4 py-4 align-middle' : 'px-6 py-5';
+  const orderStatusCellClass = isApprovalView ? 'px-3 py-4 align-middle' : 'px-6 py-5';
+  const approvalActionCellClass = isApprovalView ? 'px-4 py-4 align-middle text-right' : 'px-6 py-5 text-right';
+  const orderColumnCount = activeTab === 'approvals' ? 9 : 7;
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className={pageContainerClass}>
       {/* ─── HEADER ─── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-64 h-64 bg-gradient-to-bl from-indigo-50 to-transparent rounded-bl-full pointer-events-none opacity-60" />
+      <div className={headerClass}>
+        <div className={headerAccentClass} />
         
         <div className="relative z-10 flex-1">
           <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -550,14 +591,14 @@ export const CustomersPage: React.FC = () => {
             <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto">
               <button
                 onClick={() => setActiveTab('customers')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'customers' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={tabButtonClass('customers')}
               >
                 <Users className="w-3.5 h-3.5" />
                 Khách hàng
               </button>
               <button
                 onClick={() => setActiveTab('orders')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'orders' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={tabButtonClass('orders')}
               >
                 <FileText className="w-3.5 h-3.5" />
                 Đơn hàng
@@ -565,7 +606,7 @@ export const CustomersPage: React.FC = () => {
               {canApproveOrders && (
                 <button
                   onClick={() => setActiveTab('approvals')}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'approvals' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={tabButtonClass('approvals')}
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
                   Phê duyệt đơn hàng
@@ -573,20 +614,20 @@ export const CustomersPage: React.FC = () => {
               )}
               <button
                 onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={tabButtonClass('analytics')}
               >
                 <TrendingUp className="w-3.5 h-3.5" />
                 Báo cáo & Thống kê
               </button>
             </div>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+          <h1 className={titleClass}>
             {activeTab === 'customers' && 'Quản Lý Khách Hàng'}
             {activeTab === 'orders' && 'Lịch Sử Đơn Hàng'}
             {activeTab === 'approvals' && 'Phê Duyệt Đơn Hàng'}
             {activeTab === 'analytics' && 'Hiệu Suất Kinh Doanh'}
           </h1>
-          <p className="text-slate-500 mt-2 max-w-xl text-sm md:text-base leading-relaxed">
+          <p className={subtitleClass}>
             {activeTab === 'customers' && 'Theo dõi danh sách khách hàng từ các kênh quảng cáo Messenger Ads và hệ thống bán hàng Sky Mobile.'}
             {activeTab === 'orders' && 'Lịch sử mua hàng, doanh số và hoa hồng nhận được từ đơn hàng đã chốt trực tiếp trên Sky Mobile.'}
             {activeTab === 'approvals' && 'Kiểm tra, phê duyệt hoặc từ chối các đơn hàng đang chờ xác nhận từ đội kinh doanh.'}
@@ -598,7 +639,7 @@ export const CustomersPage: React.FC = () => {
           <button
             onClick={handleSync}
             disabled={isSyncing}
-            className="flex items-center gap-2.5 px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-2xl font-bold hover:shadow-xl hover:shadow-indigo-100 disabled:opacity-50 transition-all active:scale-95"
+            className={syncButtonClass}
           >
             <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
             Đồng bộ từ Sky Mobile
@@ -608,15 +649,15 @@ export const CustomersPage: React.FC = () => {
 
       {/* ─── FILTERS ─── */}
       {activeTab !== 'analytics' && (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className={filterBarClass}>
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Search className={`${isApprovalView ? 'left-3.5 w-4 h-4' : 'left-4 w-5 h-5'} absolute top-1/2 -translate-y-1/2 text-slate-400`} />
             <input
               type="text"
               placeholder={activeTab === 'customers' ? "Tìm khách hàng theo tên, SĐT, Facebook UID..." : "Tìm đơn hàng theo khách hàng, ID..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm"
+              className={searchInputClass}
             />
           </div>
           
@@ -842,27 +883,40 @@ export const CustomersPage: React.FC = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden"
+            className={orderCardClass}
           >
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className={orderTableClass}>
+                {activeTab === 'approvals' && (
+                  <colgroup>
+                    <col style={{ width: '88px' }} />
+                    <col style={{ width: '330px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '116px' }} />
+                    <col style={{ width: '126px' }} />
+                    <col style={{ width: '134px' }} />
+                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '108px' }} />
+                    <col style={{ width: '168px' }} />
+                  </colgroup>
+                )}
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Mã Đơn</th>
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Khách hàng</th>
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Tổng tiền</th>
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Trạng thái</th>
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Chi nhánh</th>
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Người tạo</th>
-                    {activeTab === 'approvals' && <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Phê duyệt</th>}
-                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Ngày chốt</th>
-                    {activeTab === 'approvals' && <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Thao tác</th>}
+                    <th className={orderHeaderCellClass}>Mã Đơn</th>
+                    <th className={orderHeaderCellClass}>Khách hàng</th>
+                    <th className={orderHeaderCellClass}>Tổng tiền</th>
+                    <th className={orderHeaderCellClass}>Trạng thái</th>
+                    <th className={orderHeaderCellClass}>Chi nhánh</th>
+                    <th className={orderHeaderCellClass}>Người tạo</th>
+                    {activeTab === 'approvals' && <th className={orderHeaderCellClass}>Phê duyệt</th>}
+                    <th className={orderHeaderCellClass}>Ngày chốt</th>
+                    {activeTab === 'approvals' && <th className={`${orderHeaderCellClass} text-right`}>Thao tác</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {loadingOrders ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={orderColumnCount} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                           <p className="text-slate-500 font-medium">Đang tải danh sách đơn hàng...</p>
@@ -871,7 +925,7 @@ export const CustomersPage: React.FC = () => {
                     </tr>
                   ) : orders.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={orderColumnCount} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <FileText className="w-12 h-12 text-slate-300" />
                           <p className="text-slate-500 font-medium">Không tìm thấy đơn hàng nào khớp.</p>
@@ -880,11 +934,11 @@ export const CustomersPage: React.FC = () => {
                     </tr>
                   ) : (
                     orders.map((o) => (
-                      <tr key={o.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer group" onClick={() => handleOpenCustomerByOrder(o)}>
-                        <td className="px-6 py-5 font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors">
+                      <tr key={o.id} className="hover:bg-indigo-50/30 transition-colors cursor-pointer group" onClick={() => handleOpenCustomerByOrder(o)}>
+                        <td className={`${orderCellClass} font-bold text-slate-800 text-sm group-hover:text-indigo-600 transition-colors whitespace-nowrap`}>
                           #{o.skymobile_order_id}
                         </td>
-                        <td className="px-6 py-5">
+                        <td className={orderCellClass}>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-white shrink-0">
                               {loadingCustomerLookup === o.id ? (
@@ -895,62 +949,64 @@ export const CustomersPage: React.FC = () => {
                                 (o.customer_name || 'KH').slice(0, 2).toUpperCase()
                               )}
                             </div>
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-700 text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-2">
-                                {o.customer_name}
+                            <div className="flex min-w-0 flex-col">
+                              <span className="font-bold text-slate-700 text-sm group-hover:text-indigo-600 transition-colors flex items-center gap-2 min-w-0">
+                                <span className="truncate">{o.customer_name}</span>
                                 {loadingCustomerLookup === o.id && (
-                                  <span className="text-[10px] font-medium text-indigo-500 animate-pulse">(đang tải...)</span>
+                                  <span className="text-[10px] font-medium text-indigo-500 animate-pulse shrink-0">(đang tải...)</span>
                                 )}
                               </span>
                               {o.items && o.items.length > 0 && (
-                                <div className="text-[10px] text-slate-400 font-semibold mt-0.5 max-w-[280px] truncate bg-slate-50 border border-slate-100/50 px-1.5 py-0.5 rounded w-fit" title={o.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}>
+                                <div className={`${isApprovalView ? 'max-w-[260px]' : 'max-w-[280px]'} text-[10px] text-slate-400 font-semibold mt-0.5 truncate bg-slate-50 border border-slate-100/50 px-1.5 py-0.5 rounded w-fit`} title={o.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}>
                                   {o.items.map((it: any) => `${it.product_name} (x${it.quantity})`).join(', ')}
                                 </div>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-5">
+                        <td className={orderCellClass}>
                           <div className="font-black text-slate-900 text-sm">{formatCurrency(o.total_amount)}</div>
                           {o.commission_total && (
-                            <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
+                            <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5 whitespace-nowrap">
                               <TrendingUp className="w-3 h-3" />
                               Hoa hồng: {formatCommission(o.commission_total)}
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-5">
+                        <td className={orderStatusCellClass}>
                           {getOrderStatusBadge(o.order_status)}
                         </td>
-                        <td className="px-6 py-5">
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                        <td className={orderStatusCellClass}>
+                          <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
                             {o.branch_name || 'Sky Mobile'}
                           </span>
                         </td>
-                        <td className="px-6 py-5 text-xs text-slate-600 font-medium">
-                          {o.created_by_name || 'Nhân viên'}
+                        <td className={`${orderCellClass} text-xs text-slate-600 font-medium`}>
+                          <span className={isApprovalView ? 'line-clamp-2' : undefined}>{o.created_by_name || 'Nhân viên'}</span>
                         </td>
                         {activeTab === 'approvals' && (
-                          <td className="px-6 py-5">
+                          <td className={orderStatusCellClass}>
                             {getApprovalStatusBadge(o.approval_status || o.order_status)}
                           </td>
                         )}
-                        <td className="px-6 py-5 text-xs text-slate-500 font-medium">
+                        <td className={`${orderCellClass} text-xs text-slate-500 font-medium whitespace-nowrap`}>
                           {new Date(o.created_at).toLocaleDateString('vi-VN')}
                         </td>
                         {activeTab === 'approvals' && (
-                          <td className="px-6 py-5 text-right">
+                          <td className={approvalActionCellClass}>
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleUpdateOrderApproval(o, 'Approved'); }}
-                                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all active:scale-95"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all active:scale-95 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
                               >
+                                <CheckCircle className="w-3.5 h-3.5" />
                                 Duyệt
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleUpdateOrderApproval(o, 'Rejected'); }}
-                                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all active:scale-95"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-all active:scale-95 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
                               >
+                                <X className="w-3.5 h-3.5" />
                                 Từ chối
                               </button>
                             </div>

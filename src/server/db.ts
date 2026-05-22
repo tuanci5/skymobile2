@@ -201,7 +201,8 @@ export async function initDBUtils() {
       "ALTER TABLE fb_conversations ADD COLUMN ad_source_status VARCHAR(50) DEFAULT 'unknown'",
       "ALTER TABLE fb_conversations ADD COLUMN ad_source_error TEXT",
       "ALTER TABLE fb_conversations ADD COLUMN ad_referral_raw JSONB",
-      "ALTER TABLE fb_conversations ADD COLUMN ad_source_updated_at TIMESTAMP"
+      "ALTER TABLE fb_conversations ADD COLUMN ad_source_updated_at TIMESTAMP",
+      "ALTER TABLE fb_conversations ADD COLUMN ad_cost DECIMAL(10,2)"
     ];
     for (const alterSql of conversationAdColumns) {
       try {

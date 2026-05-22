@@ -57,17 +57,26 @@ const canViewAllMessengerReports = (role?: string | null) => {
 };
 
 const getReportDateFilter = (range?: string | null, column = 'm.created_at') => {
-  switch (range) {
-    case 'Hôm nay':
-      return `${column} >= CURRENT_DATE`;
-    case 'Tuần này':
-      return `${column} >= date_trunc('week', CURRENT_DATE)`;
-    case 'Năm nay':
-      return `${column} >= date_trunc('year', CURRENT_DATE)`;
-    case 'Tháng này':
-    default:
-      return `${column} >= date_trunc('month', CURRENT_DATE)`;
+  const normalized = String(range || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .trim()
+    .toLowerCase();
+
+  if (normalized.includes('hom qua') || normalized === 'yesterday') {
+    return `${column} >= CURRENT_DATE - INTERVAL '1 day' AND ${column} < CURRENT_DATE`;
   }
+  if (normalized.includes('hom nay') || normalized === 'today') {
+    return `${column} >= CURRENT_DATE`;
+  }
+  if (normalized.includes('tuan nay') || normalized === 'week') {
+    return `${column} >= date_trunc('week', CURRENT_DATE)`;
+  }
+  if (normalized.includes('nam nay') || normalized === 'year') {
+    return `${column} >= date_trunc('year', CURRENT_DATE)`;
+  }
+  return `${column} >= date_trunc('month', CURRENT_DATE)`;
 };
 
 const isTruthyQueryValue = (value: unknown) =>
@@ -1334,6 +1343,321 @@ router.get('/reports/cskh-personal', async (req, res) => {
     });
   } catch (err: any) {
     console.error('Error fetching CSKH personal report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reports/page-performance', async (req, res) => {
+  try {
+    const range = String(req.query.range || 'Tháng này').trim();
+    const messageDateFilter = getReportDateFilter(range, 'm.created_at');
+    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at');
+    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at');
+    const orderDateFilter = getReportDateFilter(range, 'o.created_at');
+    const adSourceDateFilter = getReportDateFilter(range, 's.last_seen_at');
+
+    const { rows } = await pool.query(`
+      WITH page_base AS (
+        SELECT page_id, COALESCE(NULLIF(page_name, ''), page_id) AS page_name
+        FROM fb_pages
+      ),
+      message_metrics AS (
+        SELECT
+          c.page_id,
+          COUNT(m.id)::int AS message_count,
+          COUNT(m.id) FILTER (WHERE m.sender_type = 'user')::int AS inbound_message_count,
+          COUNT(m.id) FILTER (WHERE m.sender_type = 'human')::int AS human_message_count,
+          COUNT(m.id) FILTER (WHERE m.sender_type = 'ai')::int AS ai_message_count,
+          COUNT(DISTINCT m.conversation_id)::int AS active_conversation_count,
+          COUNT(DISTINCT NULLIF(LOWER(COALESCE(NULLIF(m.sender_email, ''), NULLIF(m.sender_name, ''), '')), ''))
+            FILTER (WHERE m.sender_type = 'human') AS staff_count,
+          MAX(m.created_at) AS last_message_at
+        FROM fb_messages m
+        JOIN fb_conversations c ON c.id = m.conversation_id
+        WHERE ${messageDateFilter}
+        GROUP BY c.page_id
+      ),
+      customer_first_messages AS (
+        SELECT
+          c.id AS conversation_id,
+          c.page_id,
+          c.ad_id,
+          MIN(m.created_at) AS first_message_at
+        FROM fb_messages m
+        JOIN fb_conversations c ON c.id = m.conversation_id
+        WHERE m.sender_type = 'user'
+        GROUP BY c.id, c.page_id, c.ad_id
+      ),
+      new_customer_metrics AS (
+        SELECT
+          page_id,
+          COUNT(*)::int AS new_customer_count,
+          COUNT(*) FILTER (WHERE ad_id IS NOT NULL)::int AS ad_customer_count,
+          MAX(first_message_at) AS last_new_customer_at
+        FROM customer_first_messages
+        WHERE ${firstMessageDateFilter}
+        GROUP BY page_id
+      ),
+      conversation_metrics AS (
+        SELECT
+          c.page_id,
+          COUNT(*)::int AS conversation_count,
+          COUNT(*) FILTER (WHERE c.ad_id IS NOT NULL)::int AS ad_conversation_count,
+          COALESCE(SUM(COALESCE(c.ad_cost, 0)), 0) AS ad_cost,
+          MAX(c.last_message_at) AS last_conversation_at
+        FROM fb_conversations c
+        WHERE ${conversationDateFilter}
+        GROUP BY c.page_id
+      ),
+      ad_source_metrics AS (
+        SELECT
+          s.page_id,
+          COUNT(DISTINCT NULLIF(s.ad_id, ''))::int AS ad_count,
+          COALESCE(SUM(COALESCE(s.click_count, 0)), 0)::int AS ad_click_count,
+          MAX(s.last_seen_at) AS last_ad_seen_at
+        FROM fb_conversation_ad_sources s
+        WHERE ${adSourceDateFilter}
+        GROUP BY s.page_id
+      ),
+      customer_page_candidates AS (
+        SELECT
+          cust.id AS customer_row_id,
+          c.page_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY cust.id
+            ORDER BY
+              CASE
+                WHEN NULLIF(cust.facebook_uid, '') IS NOT NULL AND c.facebook_uid = cust.facebook_uid THEN 0
+                WHEN NULLIF(cust.conversation_id, '') IS NOT NULL AND c.customer_id = cust.conversation_id THEN 1
+                ELSE 2
+              END,
+              c.last_message_at DESC NULLS LAST,
+              c.id DESC
+          ) AS rn
+        FROM customers cust
+        JOIN fb_conversations c ON (
+          (NULLIF(cust.facebook_uid, '') IS NOT NULL AND (c.facebook_uid = cust.facebook_uid OR c.customer_id = cust.facebook_uid))
+          OR (NULLIF(cust.conversation_id, '') IS NOT NULL AND (c.customer_id = cust.conversation_id OR c.facebook_uid = cust.conversation_id))
+        )
+      ),
+      customer_page_links AS (
+        SELECT customer_row_id, page_id
+        FROM customer_page_candidates
+        WHERE rn = 1
+      ),
+      order_customer_candidates AS (
+        SELECT
+          o.id AS order_row_id,
+          COALESCE(o.total_amount, 0) AS total_amount,
+          o.created_at,
+          cust.id AS customer_row_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY o.id
+            ORDER BY
+              CASE
+                WHEN NULLIF(o.customer_id, '') IS NOT NULL AND cust.skymobile_customer_id::text = o.customer_id THEN 0
+                ELSE 1
+              END,
+              cust.created_at DESC NULLS LAST,
+              cust.id DESC
+          ) AS rn
+        FROM orders o
+        LEFT JOIN customers cust ON (
+          (NULLIF(o.customer_id, '') IS NOT NULL AND cust.skymobile_customer_id::text = o.customer_id)
+          OR (
+            NULLIF(o.customer_name, '') IS NOT NULL
+            AND NULLIF(cust.customer_name, '') IS NOT NULL
+            AND LOWER(cust.customer_name) = LOWER(o.customer_name)
+          )
+        )
+        WHERE ${orderDateFilter}
+      ),
+      order_page_rows AS (
+        SELECT
+          occ.order_row_id,
+          occ.total_amount,
+          occ.created_at,
+          occ.customer_row_id,
+          COALESCE(cpl.page_id, 'unassigned') AS page_id
+        FROM order_customer_candidates occ
+        LEFT JOIN customer_page_links cpl ON cpl.customer_row_id = occ.customer_row_id
+        WHERE occ.rn = 1
+      ),
+      order_metrics AS (
+        SELECT
+          page_id,
+          COUNT(DISTINCT order_row_id)::int AS order_count,
+          COUNT(DISTINCT customer_row_id) FILTER (WHERE customer_row_id IS NOT NULL)::int AS revenue_customer_count,
+          COALESCE(SUM(total_amount), 0) AS revenue,
+          COALESCE(AVG(total_amount), 0) AS average_order_value,
+          MAX(created_at) AS last_order_at
+        FROM order_page_rows
+        GROUP BY page_id
+      ),
+      page_metrics AS (
+        SELECT
+          pb.page_id,
+          pb.page_name,
+          COALESCE(conv.conversation_count, 0)::int AS conversation_count,
+          COALESCE(msg.active_conversation_count, 0)::int AS active_conversation_count,
+          COALESCE(nc.new_customer_count, 0)::int AS new_customer_count,
+          COALESCE(msg.message_count, 0)::int AS message_count,
+          COALESCE(msg.inbound_message_count, 0)::int AS inbound_message_count,
+          COALESCE(msg.human_message_count, 0)::int AS human_message_count,
+          COALESCE(msg.ai_message_count, 0)::int AS ai_message_count,
+          COALESCE(msg.staff_count, 0)::int AS staff_count,
+          COALESCE(ord.order_count, 0)::int AS order_count,
+          COALESCE(ord.revenue_customer_count, 0)::int AS revenue_customer_count,
+          COALESCE(ord.revenue, 0) AS revenue,
+          COALESCE(ord.average_order_value, 0) AS average_order_value,
+          COALESCE(conv.ad_cost, 0) AS ad_cost,
+          COALESCE(conv.ad_conversation_count, 0)::int AS ad_conversation_count,
+          COALESCE(nc.ad_customer_count, 0)::int AS ad_customer_count,
+          COALESCE(src.ad_count, 0)::int AS ad_count,
+          COALESCE(src.ad_click_count, 0)::int AS ad_click_count,
+          CASE
+            WHEN COALESCE(conv.ad_cost, 0) > 0 THEN ROUND((COALESCE(ord.revenue, 0) / COALESCE(conv.ad_cost, 0))::numeric, 2)
+            ELSE 0
+          END AS roas,
+          COALESCE(ord.revenue, 0) - COALESCE(conv.ad_cost, 0) AS profit_after_ads,
+          CASE
+            WHEN COALESCE(nc.new_customer_count, 0) > 0 THEN ROUND((COALESCE(conv.ad_cost, 0) / COALESCE(nc.new_customer_count, 0))::numeric, 0)
+            ELSE 0
+          END AS cost_per_customer,
+          CASE
+            WHEN COALESCE(msg.message_count, 0) > 0 THEN ROUND((COALESCE(conv.ad_cost, 0) / COALESCE(msg.message_count, 0))::numeric, 0)
+            ELSE 0
+          END AS cost_per_message,
+          NULLIF(GREATEST(
+            COALESCE(msg.last_message_at, TIMESTAMP '1970-01-01'),
+            COALESCE(nc.last_new_customer_at, TIMESTAMP '1970-01-01'),
+            COALESCE(conv.last_conversation_at, TIMESTAMP '1970-01-01'),
+            COALESCE(ord.last_order_at, TIMESTAMP '1970-01-01'),
+            COALESCE(src.last_ad_seen_at, TIMESTAMP '1970-01-01')
+          ), TIMESTAMP '1970-01-01') AS last_activity_at
+        FROM page_base pb
+        LEFT JOIN message_metrics msg ON msg.page_id = pb.page_id
+        LEFT JOIN new_customer_metrics nc ON nc.page_id = pb.page_id
+        LEFT JOIN conversation_metrics conv ON conv.page_id = pb.page_id
+        LEFT JOIN ad_source_metrics src ON src.page_id = pb.page_id
+        LEFT JOIN order_metrics ord ON ord.page_id = pb.page_id
+      )
+      SELECT *
+      FROM page_metrics
+      UNION ALL
+      SELECT
+        'unassigned' AS page_id,
+        'Chưa xác định Page' AS page_name,
+        0::int AS conversation_count,
+        0::int AS active_conversation_count,
+        0::int AS new_customer_count,
+        0::int AS message_count,
+        0::int AS inbound_message_count,
+        0::int AS human_message_count,
+        0::int AS ai_message_count,
+        0::int AS staff_count,
+        COALESCE(order_count, 0)::int AS order_count,
+        COALESCE(revenue_customer_count, 0)::int AS revenue_customer_count,
+        COALESCE(revenue, 0) AS revenue,
+        COALESCE(average_order_value, 0) AS average_order_value,
+        0 AS ad_cost,
+        0::int AS ad_conversation_count,
+        0::int AS ad_customer_count,
+        0::int AS ad_count,
+        0::int AS ad_click_count,
+        0 AS roas,
+        COALESCE(revenue, 0) AS profit_after_ads,
+        0 AS cost_per_customer,
+        0 AS cost_per_message,
+        last_order_at AS last_activity_at
+      FROM order_metrics
+      WHERE page_id = 'unassigned'
+        AND (COALESCE(order_count, 0) > 0 OR COALESCE(revenue, 0) > 0)
+      ORDER BY revenue DESC, message_count DESC, page_name ASC
+    `);
+
+    const toNumber = (value: unknown) => Number(value || 0);
+    const normalizedRows = rows.map(row => ({
+      page_id: String(row.page_id || ''),
+      page_name: String(row.page_name || 'Fanpage'),
+      conversation_count: toNumber(row.conversation_count),
+      active_conversation_count: toNumber(row.active_conversation_count),
+      new_customer_count: toNumber(row.new_customer_count),
+      message_count: toNumber(row.message_count),
+      inbound_message_count: toNumber(row.inbound_message_count),
+      human_message_count: toNumber(row.human_message_count),
+      ai_message_count: toNumber(row.ai_message_count),
+      staff_count: toNumber(row.staff_count),
+      order_count: toNumber(row.order_count),
+      revenue_customer_count: toNumber(row.revenue_customer_count),
+      revenue: toNumber(row.revenue),
+      average_order_value: toNumber(row.average_order_value),
+      ad_cost: toNumber(row.ad_cost),
+      ad_conversation_count: toNumber(row.ad_conversation_count),
+      ad_customer_count: toNumber(row.ad_customer_count),
+      ad_count: toNumber(row.ad_count),
+      ad_click_count: toNumber(row.ad_click_count),
+      roas: toNumber(row.roas),
+      profit_after_ads: toNumber(row.profit_after_ads),
+      cost_per_customer: toNumber(row.cost_per_customer),
+      cost_per_message: toNumber(row.cost_per_message),
+      last_activity_at: row.last_activity_at || null
+    }));
+
+    const summary = normalizedRows.reduce((acc, row) => {
+      acc.page_count += row.page_id === 'unassigned' ? 0 : 1;
+      acc.conversation_count += row.conversation_count;
+      acc.active_conversation_count += row.active_conversation_count;
+      acc.new_customer_count += row.new_customer_count;
+      acc.message_count += row.message_count;
+      acc.inbound_message_count += row.inbound_message_count;
+      acc.human_message_count += row.human_message_count;
+      acc.ai_message_count += row.ai_message_count;
+      acc.staff_count += row.staff_count;
+      acc.order_count += row.order_count;
+      acc.revenue_customer_count += row.revenue_customer_count;
+      acc.revenue += row.revenue;
+      acc.ad_cost += row.ad_cost;
+      acc.ad_conversation_count += row.ad_conversation_count;
+      acc.ad_customer_count += row.ad_customer_count;
+      acc.ad_count += row.ad_count;
+      acc.ad_click_count += row.ad_click_count;
+      acc.profit_after_ads += row.profit_after_ads;
+      return acc;
+    }, {
+      page_count: 0,
+      conversation_count: 0,
+      active_conversation_count: 0,
+      new_customer_count: 0,
+      message_count: 0,
+      inbound_message_count: 0,
+      human_message_count: 0,
+      ai_message_count: 0,
+      staff_count: 0,
+      order_count: 0,
+      revenue_customer_count: 0,
+      revenue: 0,
+      ad_cost: 0,
+      ad_conversation_count: 0,
+      ad_customer_count: 0,
+      ad_count: 0,
+      ad_click_count: 0,
+      profit_after_ads: 0
+    });
+
+    res.json({
+      range: range || 'Tháng này',
+      rows: normalizedRows,
+      summary: {
+        ...summary,
+        average_order_value: summary.order_count > 0 ? Math.round(summary.revenue / summary.order_count) : 0,
+        roas: summary.ad_cost > 0 ? Number((summary.revenue / summary.ad_cost).toFixed(2)) : 0,
+        cost_per_customer: summary.new_customer_count > 0 ? Math.round(summary.ad_cost / summary.new_customer_count) : 0,
+        cost_per_message: summary.message_count > 0 ? Math.round(summary.ad_cost / summary.message_count) : 0
+      }
+    });
+  } catch (err: any) {
+    console.error('Error fetching page performance report:', err);
     res.status(500).json({ error: err.message });
   }
 });

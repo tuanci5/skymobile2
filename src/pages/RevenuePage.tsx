@@ -15,7 +15,12 @@ import {
   FileText,
   Inbox,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Megaphone,
+  BarChart3,
+  Wallet,
+  Receipt,
+  Target
 } from 'lucide-react';
 import { API_BASE_URL } from '../components/messenger/api';
 import {
@@ -27,7 +32,8 @@ import {
   getOrderStatusLabel
 } from '../services/revenueReport';
 
-type ReportType = 'revenue' | 'page_messages' | 'cskh_personal';
+type PageReportType = 'page_overview';
+type ReportType = 'revenue' | PageReportType | 'page_messages' | 'cskh_personal';
 
 type ReportDefinition = {
   id: ReportType;
@@ -58,6 +64,40 @@ type MessageReportData = {
     unassigned_customer_count: number;
     page_count: number;
     staff_count: number;
+  };
+};
+
+type PageReportRow = {
+  page_id: string;
+  page_name: string;
+  conversation_count: number;
+  active_conversation_count: number;
+  new_customer_count: number;
+  message_count: number;
+  inbound_message_count: number;
+  human_message_count: number;
+  ai_message_count: number;
+  staff_count: number;
+  order_count: number;
+  revenue_customer_count: number;
+  revenue: number;
+  average_order_value: number;
+  ad_cost: number;
+  ad_conversation_count: number;
+  ad_customer_count: number;
+  ad_count: number;
+  ad_click_count: number;
+  roas: number;
+  profit_after_ads: number;
+  cost_per_customer: number;
+  cost_per_message: number;
+  last_activity_at?: string | null;
+};
+
+type PageReportData = {
+  rows: PageReportRow[];
+  summary: Omit<PageReportRow, 'page_id' | 'page_name' | 'last_activity_at'> & {
+    page_count: number;
   };
 };
 
@@ -116,11 +156,49 @@ const EMPTY_CSKH_PERSONAL_REPORT: CskhPersonalReportData = {
   }
 };
 
+const EMPTY_PAGE_REPORT: PageReportData = {
+  rows: [],
+  summary: {
+    page_count: 0,
+    conversation_count: 0,
+    active_conversation_count: 0,
+    new_customer_count: 0,
+    message_count: 0,
+    inbound_message_count: 0,
+    human_message_count: 0,
+    ai_message_count: 0,
+    staff_count: 0,
+    order_count: 0,
+    revenue_customer_count: 0,
+    revenue: 0,
+    average_order_value: 0,
+    ad_cost: 0,
+    ad_conversation_count: 0,
+    ad_customer_count: 0,
+    ad_count: 0,
+    ad_click_count: 0,
+    roas: 0,
+    profit_after_ads: 0,
+    cost_per_customer: 0,
+    cost_per_message: 0
+  }
+};
+
+const PAGE_REPORT_TYPES = ['page_overview'] as const;
+
+const isPageReportType = (report: ReportType): report is PageReportType =>
+  PAGE_REPORT_TYPES.includes(report as PageReportType);
+
 const REPORTS: ReportDefinition[] = [
   {
     id: 'revenue',
     label: 'Doanh thu',
     description: 'Dòng tiền, đơn hàng, khách hàng và hiệu suất bán hàng.'
+  },
+  {
+    id: 'page_overview',
+    label: 'Báo cáo theo Page',
+    description: 'Tin nhắn, doanh thu và chi phí quảng cáo trên cùng một màn hình, lọc theo Fanpage.'
   },
   {
     id: 'cskh_personal',
@@ -172,10 +250,14 @@ const canViewCskhPersonalReport = (role?: string | null) => {
   return normalized.includes('cskh') || normalized.includes('cham soc khach hang');
 };
 
+const canViewPageReport = (role?: string | null) =>
+  canViewRevenueReport(role) || canViewMessageReport(role);
+
 const getAllowedReports = (user?: any) => {
   const role = user?.role;
   const reports = REPORTS.filter(report => {
     if (report.id === 'revenue') return canViewRevenueReport(role);
+    if (isPageReportType(report.id)) return canViewPageReport(role);
     if (report.id === 'cskh_personal') return canViewCskhPersonalReport(role);
     if (report.id === 'page_messages') return canViewMessageReport(role);
     return false;
@@ -193,6 +275,44 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const formatNumber = (value: number) =>
+  Number(value || 0).toLocaleString('vi-VN');
+
+const formatRatio = (value: number) =>
+  Number(value || 0).toFixed(2);
+
+const buildPageReportSummary = (rows: PageReportRow[]): PageReportData['summary'] => {
+  const totals = rows.reduce((acc, row) => {
+    acc.page_count += row.page_id === 'unassigned' ? 0 : 1;
+    acc.conversation_count += row.conversation_count;
+    acc.active_conversation_count += row.active_conversation_count;
+    acc.new_customer_count += row.new_customer_count;
+    acc.message_count += row.message_count;
+    acc.inbound_message_count += row.inbound_message_count;
+    acc.human_message_count += row.human_message_count;
+    acc.ai_message_count += row.ai_message_count;
+    acc.staff_count += row.staff_count;
+    acc.order_count += row.order_count;
+    acc.revenue_customer_count += row.revenue_customer_count;
+    acc.revenue += row.revenue;
+    acc.ad_cost += row.ad_cost;
+    acc.ad_conversation_count += row.ad_conversation_count;
+    acc.ad_customer_count += row.ad_customer_count;
+    acc.ad_count += row.ad_count;
+    acc.ad_click_count += row.ad_click_count;
+    acc.profit_after_ads += row.profit_after_ads;
+    return acc;
+  }, { ...EMPTY_PAGE_REPORT.summary });
+
+  return {
+    ...totals,
+    average_order_value: totals.order_count > 0 ? Math.round(totals.revenue / totals.order_count) : 0,
+    roas: totals.ad_cost > 0 ? Number((totals.revenue / totals.ad_cost).toFixed(2)) : 0,
+    cost_per_customer: totals.new_customer_count > 0 ? Math.round(totals.ad_cost / totals.new_customer_count) : 0,
+    cost_per_message: totals.message_count > 0 ? Math.round(totals.ad_cost / totals.message_count) : 0
+  };
+};
+
 export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const [dateRange, setDateRange] = useState('Tháng này');
   const allowedReports = useMemo(() => getAllowedReports(user), [user]);
@@ -206,6 +326,11 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const [cskhPersonalReport, setCskhPersonalReport] = useState<CskhPersonalReportData>(EMPTY_CSKH_PERSONAL_REPORT);
   const [isLoadingCskhPersonal, setIsLoadingCskhPersonal] = useState(false);
   const [cskhPersonalError, setCskhPersonalError] = useState<string | null>(null);
+  const [pageReport, setPageReport] = useState<PageReportData>(EMPTY_PAGE_REPORT);
+  const [isLoadingPageReport, setIsLoadingPageReport] = useState(false);
+  const [pageReportError, setPageReportError] = useState<string | null>(null);
+  const [selectedPageId, setSelectedPageId] = useState('all');
+  const isPageReportSelected = isPageReportType(selectedReport);
 
   useEffect(() => {
     if (!allowedReports.some(report => report.id === selectedReport)) {
@@ -240,6 +365,88 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       isActive = false;
       controller.abort();
     };
+  }, [selectedReport, dateRange]);
+
+  useEffect(() => {
+    if (!isPageReportType(selectedReport)) return;
+
+    const controller = new AbortController();
+    const params = new URLSearchParams({ range: dateRange });
+    const toNumber = (value: unknown) => Number(value || 0);
+
+    setIsLoadingPageReport(true);
+    setPageReportError(null);
+    fetch(`${API_BASE_URL}/api/fb/reports/page-performance?${params.toString()}`, { signal: controller.signal })
+      .then(async res => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || 'Không thể tải báo cáo theo Page.');
+
+        const rows: PageReportRow[] = Array.isArray(data?.rows)
+          ? data.rows.map((row: any) => ({
+            page_id: String(row?.page_id || ''),
+            page_name: String(row?.page_name || 'Fanpage'),
+            conversation_count: toNumber(row?.conversation_count),
+            active_conversation_count: toNumber(row?.active_conversation_count),
+            new_customer_count: toNumber(row?.new_customer_count),
+            message_count: toNumber(row?.message_count),
+            inbound_message_count: toNumber(row?.inbound_message_count),
+            human_message_count: toNumber(row?.human_message_count),
+            ai_message_count: toNumber(row?.ai_message_count),
+            staff_count: toNumber(row?.staff_count),
+            order_count: toNumber(row?.order_count),
+            revenue_customer_count: toNumber(row?.revenue_customer_count),
+            revenue: toNumber(row?.revenue),
+            average_order_value: toNumber(row?.average_order_value),
+            ad_cost: toNumber(row?.ad_cost),
+            ad_conversation_count: toNumber(row?.ad_conversation_count),
+            ad_customer_count: toNumber(row?.ad_customer_count),
+            ad_count: toNumber(row?.ad_count),
+            ad_click_count: toNumber(row?.ad_click_count),
+            roas: toNumber(row?.roas),
+            profit_after_ads: toNumber(row?.profit_after_ads),
+            cost_per_customer: toNumber(row?.cost_per_customer),
+            cost_per_message: toNumber(row?.cost_per_message),
+            last_activity_at: row?.last_activity_at ? String(row.last_activity_at) : null
+          }))
+          : [];
+
+        setPageReport({
+          rows,
+          summary: {
+            page_count: toNumber(data?.summary?.page_count),
+            conversation_count: toNumber(data?.summary?.conversation_count),
+            active_conversation_count: toNumber(data?.summary?.active_conversation_count),
+            new_customer_count: toNumber(data?.summary?.new_customer_count),
+            message_count: toNumber(data?.summary?.message_count),
+            inbound_message_count: toNumber(data?.summary?.inbound_message_count),
+            human_message_count: toNumber(data?.summary?.human_message_count),
+            ai_message_count: toNumber(data?.summary?.ai_message_count),
+            staff_count: toNumber(data?.summary?.staff_count),
+            order_count: toNumber(data?.summary?.order_count),
+            revenue_customer_count: toNumber(data?.summary?.revenue_customer_count),
+            revenue: toNumber(data?.summary?.revenue),
+            average_order_value: toNumber(data?.summary?.average_order_value),
+            ad_cost: toNumber(data?.summary?.ad_cost),
+            ad_conversation_count: toNumber(data?.summary?.ad_conversation_count),
+            ad_customer_count: toNumber(data?.summary?.ad_customer_count),
+            ad_count: toNumber(data?.summary?.ad_count),
+            ad_click_count: toNumber(data?.summary?.ad_click_count),
+            roas: toNumber(data?.summary?.roas),
+            profit_after_ads: toNumber(data?.summary?.profit_after_ads),
+            cost_per_customer: toNumber(data?.summary?.cost_per_customer),
+            cost_per_message: toNumber(data?.summary?.cost_per_message)
+          }
+        });
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error('Error loading page report:', err);
+        setPageReportError(err.message || 'Không thể tải báo cáo theo Page.');
+        setPageReport(EMPTY_PAGE_REPORT);
+      })
+      .finally(() => setIsLoadingPageReport(false));
+
+    return () => controller.abort();
   }, [selectedReport, dateRange]);
 
   useEffect(() => {
@@ -393,6 +600,202 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const cskhPersonalRows = cskhPersonalReport.byPage;
   const cskhRecentConversations = cskhPersonalReport.recentConversations;
   const maxCskhPageMessages = Math.max(1, ...cskhPersonalRows.map(item => item.sent_message_count));
+  const pageOptions = useMemo(
+    () => pageReport.rows
+      .filter(row => row.page_id && row.page_id !== 'unassigned')
+      .sort((a, b) => a.page_name.localeCompare(b.page_name, 'vi')),
+    [pageReport.rows]
+  );
+  const selectedPageRows = useMemo(() => {
+    const rows = selectedPageId === 'all'
+      ? [...pageReport.rows]
+      : pageReport.rows.filter(row => row.page_id === selectedPageId);
+
+    return rows.sort((a, b) => b.revenue - a.revenue || b.message_count - a.message_count || a.page_name.localeCompare(b.page_name, 'vi'));
+  }, [pageReport.rows, selectedPageId]);
+  const pageSummary = useMemo(
+    () => selectedPageId === 'all' ? pageReport.summary : buildPageReportSummary(selectedPageRows),
+    [pageReport.summary, selectedPageId, selectedPageRows]
+  );
+  const selectedPageName = selectedPageId === 'all'
+    ? 'Tất cả Page'
+    : pageOptions.find(page => page.page_id === selectedPageId)?.page_name || 'Fanpage';
+
+  useEffect(() => {
+    if (selectedPageId === 'all') return;
+    if (!pageOptions.some(page => page.page_id === selectedPageId)) {
+      setSelectedPageId('all');
+    }
+  }, [pageOptions, selectedPageId]);
+
+  const renderPageReport = () => {
+    const messageStats = [
+      { title: 'Tổng tin nhắn', value: formatNumber(pageSummary.message_count), icon: <Inbox className="w-5 h-5 text-blue-600" />, color: 'bg-blue-100' },
+      { title: 'Khách mới', value: formatNumber(pageSummary.new_customer_count), icon: <Users className="w-5 h-5 text-rose-600" />, color: 'bg-rose-100' },
+      { title: 'Hội thoại', value: formatNumber(pageSummary.conversation_count), icon: <MessageSquare className="w-5 h-5 text-violet-600" />, color: 'bg-violet-100' },
+      { title: 'Tin nhân viên', value: formatNumber(pageSummary.human_message_count), icon: <FileText className="w-5 h-5 text-emerald-600" />, color: 'bg-emerald-100' }
+    ];
+    const revenueStats = [
+      { title: 'Doanh thu', value: formatYen(pageSummary.revenue), icon: <DollarSign className="w-5 h-5 text-emerald-600" />, color: 'bg-emerald-100' },
+      { title: 'Đơn hàng', value: formatNumber(pageSummary.order_count), icon: <Receipt className="w-5 h-5 text-blue-600" />, color: 'bg-blue-100' },
+      { title: 'Khách mua', value: formatNumber(pageSummary.revenue_customer_count), icon: <Users className="w-5 h-5 text-rose-600" />, color: 'bg-rose-100' },
+      { title: 'Đơn TB', value: formatYen(pageSummary.average_order_value), icon: <Activity className="w-5 h-5 text-amber-600" />, color: 'bg-amber-100' }
+    ];
+    const adStats = [
+      { title: 'Chi phí Ads', value: formatYen(pageSummary.ad_cost), icon: <Megaphone className="w-5 h-5 text-rose-600" />, color: 'bg-rose-100' },
+      { title: 'Hội thoại Ads', value: formatNumber(pageSummary.ad_conversation_count), icon: <MessageSquare className="w-5 h-5 text-blue-600" />, color: 'bg-blue-100' },
+      { title: 'Chi phí/khách', value: formatYen(pageSummary.cost_per_customer), icon: <Target className="w-5 h-5 text-amber-600" />, color: 'bg-amber-100' },
+      { title: 'ROAS', value: `${formatRatio(pageSummary.roas)}x`, icon: <TrendingUp className="w-5 h-5 text-emerald-600" />, color: 'bg-emerald-100' }
+    ];
+    const overviewStats = [
+      { title: 'Page đang xem', value: selectedPageId === 'all' ? formatNumber(pageSummary.page_count) : '1', icon: <BarChart3 className="w-6 h-6 text-blue-600" />, color: 'bg-blue-100' },
+      { title: 'Tin nhắn', value: formatNumber(pageSummary.message_count), icon: <Inbox className="w-6 h-6 text-violet-600" />, color: 'bg-violet-100' },
+      { title: 'Doanh thu', value: formatYen(pageSummary.revenue), icon: <DollarSign className="w-6 h-6 text-emerald-600" />, color: 'bg-emerald-100' },
+      { title: 'Lãi sau Ads', value: formatYen(pageSummary.profit_after_ads), icon: <Wallet className="w-6 h-6 text-amber-600" />, color: 'bg-amber-100' }
+    ];
+
+    const renderStatGroup = (title: string, subtitle: string, stats: typeof messageStats) => (
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+        <div className="mb-5">
+          <h3 className="font-black text-slate-900">{title}</h3>
+          <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {stats.map(stat => (
+            <div key={stat.title} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className={`p-2.5 rounded-xl ${stat.color}`}>{stat.icon}</div>
+                <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-full">{dateRange}</span>
+              </div>
+              <p className="text-xs font-bold text-slate-500 mb-1">{stat.title}</p>
+              <p className="text-xl font-black text-slate-900">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        {pageReportError && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-medium text-rose-700">
+            {pageReportError}
+          </div>
+        )}
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 md:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div>
+              <h3 className="font-black text-slate-900 text-lg">Báo cáo theo Fanpage</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Chọn một Page để toàn bộ chỉ số tin nhắn, doanh thu và chi phí quảng cáo bên dưới cập nhật theo Page đó.
+              </p>
+            </div>
+            <div className="relative min-w-full sm:min-w-[320px] lg:min-w-[360px]">
+              <select
+                value={selectedPageId}
+                onChange={(e) => setSelectedPageId(e.target.value)}
+                className="appearance-none w-full bg-white border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
+              >
+                <option value="all">Tất cả Page</option>
+                {pageOptions.map(page => (
+                  <option key={page.page_id} value={page.page_id}>{page.page_name}</option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {overviewStats.map((stat, idx) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.08 }}
+              key={stat.title}
+              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={`p-3 rounded-2xl ${stat.color}`}>{stat.icon}</div>
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRange}</span>
+              </div>
+              <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
+              <h3 className="text-2xl font-black text-slate-800">{stat.value}</h3>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {renderStatGroup('Tin nhắn', selectedPageName, messageStats)}
+          {renderStatGroup('Doanh thu', selectedPageName, revenueStats)}
+          {renderStatGroup('Chi phí quảng cáo', selectedPageName, adStats)}
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">Đối chiếu tổng hợp theo Fanpage</h3>
+              <p className="text-slate-500 text-sm mt-1">
+                Mỗi dòng hiển thị đủ ba nhóm dữ liệu để so sánh hiệu quả giữa các Page trong kỳ đang chọn.
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full shrink-0">
+              {selectedPageName}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Fanpage</th>
+                  <th className="px-6 py-4 text-right">Khách mới</th>
+                  <th className="px-6 py-4 text-right">Tin nhắn</th>
+                  <th className="px-6 py-4 text-right">Đơn hàng</th>
+                  <th className="px-6 py-4 text-right">Doanh thu</th>
+                  <th className="px-6 py-4 text-right">Chi phí Ads</th>
+                  <th className="px-6 py-4 text-right">Lãi sau Ads</th>
+                  <th className="px-6 py-4 text-right">ROAS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {isLoadingPageReport ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> Đang tải dữ liệu...
+                    </td>
+                  </tr>
+                ) : selectedPageRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                      Chưa có dữ liệu theo Page trong kỳ này.
+                    </td>
+                  </tr>
+                ) : selectedPageRows.map(row => (
+                  <tr key={row.page_id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-slate-800">{row.page_name}</p>
+                      {row.page_id !== 'unassigned' && <p className="text-xs text-slate-400">ID: {row.page_id}</p>}
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-blue-700">{formatNumber(row.new_customer_count)}</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-700">{formatNumber(row.message_count)}</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-700">{formatNumber(row.order_count)}</td>
+                    <td className="px-6 py-4 text-right font-black text-emerald-700">{formatYen(row.revenue)}</td>
+                    <td className="px-6 py-4 text-right font-bold text-rose-600">{formatYen(row.ad_cost)}</td>
+                    <td className="px-6 py-4 text-right font-black text-slate-900">{formatYen(row.profit_after_ads)}</td>
+                    <td className="px-6 py-4 text-right font-black text-slate-900">{formatRatio(row.roas)}x</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   const renderRevenueReport = () => (
     <>
@@ -861,6 +1264,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               className="appearance-none w-full bg-white border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
             >
               <option value="Hôm nay">Hôm nay</option>
+              <option value="Hôm qua">Hôm qua</option>
               <option value="Tuần này">Tuần này</option>
               <option value="Tháng này">Tháng này</option>
               <option value="Năm nay">Năm nay</option>
@@ -882,9 +1286,11 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
             {selectedReport === 'page_messages'
               ? <MessageSquare className="w-5 h-5" />
-              : selectedReport === 'cskh_personal'
-                ? <Users className="w-5 h-5" />
-                : <DollarSign className="w-5 h-5" />}
+              : selectedReport === 'page_overview'
+                ? <BarChart3 className="w-5 h-5" />
+                : selectedReport === 'cskh_personal'
+                  ? <Users className="w-5 h-5" />
+                  : <DollarSign className="w-5 h-5" />}
           </div>
           <div>
             <h2 className="font-black text-slate-900">{selectedReportInfo.label}</h2>
@@ -893,11 +1299,13 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
         </div>
       </div>
 
-      {selectedReport === 'page_messages'
-        ? renderMessageReport()
-        : selectedReport === 'cskh_personal'
-          ? renderCskhPersonalReport()
-          : renderRevenueReport()}
+      {isPageReportSelected
+        ? renderPageReport()
+        : selectedReport === 'page_messages'
+          ? renderMessageReport()
+          : selectedReport === 'cskh_personal'
+            ? renderCskhPersonalReport()
+            : renderRevenueReport()}
     </div>
   );
 };

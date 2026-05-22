@@ -4,7 +4,7 @@ import { syncFromSkyMobile } from '../services/skymobileSync';
 
 const router = express.Router();
 
-type RevenueReportRange = 'today' | 'week' | 'month' | 'year';
+type RevenueReportRange = 'today' | 'yesterday' | 'week' | 'month' | 'year';
 
 const normalizeReportRange = (range: unknown): RevenueReportRange => {
   const normalized = String(range || 'month')
@@ -15,6 +15,7 @@ const normalizeReportRange = (range: unknown): RevenueReportRange => {
     .toLowerCase();
 
   if (normalized === 'today' || normalized.includes('hom nay')) return 'today';
+  if (normalized === 'yesterday' || normalized.includes('hom qua')) return 'yesterday';
   if (normalized === 'week' || normalized.includes('tuan nay')) return 'week';
   if (normalized === 'year' || normalized.includes('nam nay')) return 'year';
   return 'month';
@@ -30,6 +31,16 @@ const getRevenueReportConfig = (range: RevenueReportRange) => {
         currentStartSql: `date_trunc('day', ${now})`,
         currentEndSql: now,
         previousStartSql: `date_trunc('day', ${now}) - interval '1 day'`,
+        seriesStep: '1 hour',
+        truncUnit: 'hour',
+        labelFormat: 'HH24:MI'
+      };
+    case 'yesterday':
+      return {
+        range,
+        currentStartSql: `date_trunc('day', ${now}) - interval '1 day'`,
+        currentEndSql: `date_trunc('day', ${now})`,
+        previousStartSql: `date_trunc('day', ${now}) - interval '2 days'`,
         seriesStep: '1 hour',
         truncUnit: 'hour',
         labelFormat: 'HH24:MI'
