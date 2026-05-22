@@ -71,7 +71,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       {task && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-4xl h-[85vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-white w-full max-w-[1000px] h-[85vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 min-h-[64px]">
               <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
                 <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" />
