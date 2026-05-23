@@ -1737,38 +1737,71 @@ router.get('/reports/new-messages', async (req, res) => {
             u.role,
             p.assigned_users,
             p.assigned_ads_users
+        ),
+        first_human_responses AS (
+          SELECT
+            cfm.conversation_id,
+            MIN(reply.created_at) AS first_response_at
+          FROM customer_first_messages cfm
+          JOIN fb_messages reply ON reply.conversation_id = cfm.conversation_id
+            AND reply.sender_type = 'human'
+            AND reply.created_at > cfm.first_message_at
+          GROUP BY cfm.conversation_id
         )
         SELECT
-          page_id,
-          page_name,
-          staff_key,
-          staff_name,
-          staff_email,
-          staff_role,
+          cfm.page_id,
+          cfm.page_name,
+          cfm.staff_key,
+          cfm.staff_name,
+          cfm.staff_email,
+          cfm.staff_role,
           COUNT(*)::int AS customer_count,
           COUNT(*)::int AS conversation_count,
-          SUM(message_count)::int AS message_count,
-          MIN(first_message_at) AS first_message_at,
-          MAX(first_message_at) AS last_message_at
-        FROM customer_first_messages
+          SUM(cfm.message_count)::int AS message_count,
+          COUNT(fhr.first_response_at)::int AS response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fhr.first_response_at - cfm.first_message_at))) FILTER (WHERE fhr.first_response_at IS NOT NULL), 0)::int AS total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fhr.first_response_at - cfm.first_message_at))) FILTER (WHERE fhr.first_response_at IS NOT NULL)), 0)::int AS average_response_seconds,
+          MIN(cfm.first_message_at) AS first_message_at,
+          MAX(cfm.first_message_at) AS last_message_at
+        FROM customer_first_messages cfm
+        LEFT JOIN first_human_responses fhr ON fhr.conversation_id = cfm.conversation_id
         WHERE ${dateFilter}
           ${scopeFilter}
         GROUP BY
-          page_id,
-          page_name,
-          staff_key,
-          staff_name,
-          staff_email,
-          staff_role
+          cfm.page_id,
+          cfm.page_name,
+          cfm.staff_key,
+          cfm.staff_name,
+          cfm.staff_email,
+          cfm.staff_role
         ORDER BY customer_count DESC, page_name ASC, staff_name ASC
       `,
       params
     );
 
-    const totals = rows.reduce((acc: any, row: any) => {
+    const normalizedRows = rows.map((row: any) => ({
+      page_id: String(row.page_id || ''),
+      page_name: String(row.page_name || 'Fanpage'),
+      staff_key: String(row.staff_key || 'Chưa giao'),
+      staff_name: String(row.staff_name || 'Chưa giao'),
+      staff_email: row.staff_email || null,
+      staff_role: String(row.staff_role || ''),
+      customer_count: Number(row.customer_count || 0),
+      conversation_count: Number(row.conversation_count || 0),
+      message_count: Number(row.message_count || 0),
+      response_count: Number(row.response_count || 0),
+      total_response_seconds: Number(row.total_response_seconds || 0),
+      average_response_seconds: Number(row.average_response_seconds || 0),
+      first_message_at: row.first_message_at || null,
+      last_message_at: row.last_message_at || null
+    }));
+
+    const totals = normalizedRows.reduce((acc: any, row: any) => {
       acc.customer_count += Number(row.customer_count || 0);
       acc.conversation_count += Number(row.conversation_count || 0);
       acc.message_count += Number(row.message_count || 0);
+      acc.response_count += Number(row.response_count || 0);
+      acc.total_response_seconds += Number(row.total_response_seconds || 0);
       if (row.staff_key === 'Chưa giao') acc.unassigned_customer_count += Number(row.customer_count || 0);
       acc.page_ids.add(row.page_id);
       acc.staff_keys.add(row.staff_key);
@@ -1778,18 +1811,23 @@ router.get('/reports/new-messages', async (req, res) => {
       conversation_count: 0,
       message_count: 0,
       unassigned_customer_count: 0,
+      response_count: 0,
+      total_response_seconds: 0,
       page_ids: new Set<string>(),
       staff_keys: new Set<string>()
     });
 
     res.json({
       range: range || 'Tháng này',
-      rows,
+      rows: normalizedRows,
       summary: {
         customer_count: totals.customer_count,
         conversation_count: totals.conversation_count,
         message_count: totals.message_count,
         unassigned_customer_count: totals.unassigned_customer_count,
+        response_count: totals.response_count,
+        total_response_seconds: totals.total_response_seconds,
+        average_response_seconds: totals.response_count > 0 ? Math.round(totals.total_response_seconds / totals.response_count) : 0,
         page_count: totals.page_ids.size,
         staff_count: totals.staff_keys.size
       }
