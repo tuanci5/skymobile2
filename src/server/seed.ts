@@ -36,11 +36,11 @@ async function seed() {
 
     // Insert default role permissions
     const roles = [
-      { role: 'Quản trị', allowed_tabs: ['model', 'hr', 'salary', 'training', 'business', 'action-plan', 'products', 'users', 'tasks', 'messenger', 'revenue', 'customers', 'order-approvals'] },
-      { role: 'Trưởng phòng Kinh doanh Marketing', allowed_tabs: ['model', 'hr', 'training', 'business', 'tasks', 'messenger', 'revenue', 'customers', 'order-approvals'] },
-      { role: 'Trưởng nhóm Marketing', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers'] },
-      { role: 'Trưởng nhóm Sale', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers'] },
-      { role: 'Trưởng nhóm CSKH', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers'] },
+      { role: 'Quản trị', allowed_tabs: ['model', 'hr', 'salary', 'training', 'business', 'action-plan', 'products', 'users', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts', 'order-approvals'] },
+      { role: 'Trưởng phòng Kinh doanh Marketing', allowed_tabs: ['model', 'hr', 'training', 'business', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts', 'order-approvals'] },
+      { role: 'Trưởng nhóm Marketing', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts'] },
+      { role: 'Trưởng nhóm Sale', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts'] },
+      { role: 'Trưởng nhóm CSKH', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts'] },
       { role: 'Nhân viên Sale', allowed_tabs: ['model', 'tasks', 'messenger'] },
       { role: 'Nhân viên CSKH', allowed_tabs: ['model', 'tasks', 'messenger', 'revenue'] },
       { role: 'Nhân viên Chăm sóc khách hàng', allowed_tabs: ['model', 'tasks', 'messenger', 'revenue'] }

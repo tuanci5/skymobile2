@@ -718,13 +718,13 @@ export async function initDBUtils() {
       } catch (e) {}
     }
 
-    // Automatically ensure customer/order approval permissions for core roles
+    // Automatically ensure customer/order approval/debt permissions for core roles
     try {
       await client.query(`
         INSERT INTO role_permissions (role, allowed_tabs)
         VALUES
-          ('Quản trị', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb),
-          ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "order-approvals"]'::jsonb),
+          ('Quản trị', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "customer-debts", "order-approvals"]'::jsonb),
+          ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "customer-debts", "order-approvals"]'::jsonb),
           ('Nhân viên CSKH', '["model", "tasks", "messenger", "revenue"]'::jsonb),
           ('Nhân viên Chăm sóc khách hàng', '["model", "tasks", "messenger", "revenue"]'::jsonb)
         ON CONFLICT (role) DO NOTHING
@@ -733,6 +733,12 @@ export async function initDBUtils() {
         UPDATE role_permissions
         SET allowed_tabs = allowed_tabs || '["customers"]'::jsonb
         WHERE NOT (allowed_tabs @> '["customers"]'::jsonb)
+      `);
+      await client.query(`
+        UPDATE role_permissions
+        SET allowed_tabs = allowed_tabs || '["customer-debts"]'::jsonb
+        WHERE role IN ('Quản trị', 'Trưởng phòng Kinh doanh Marketing', 'Trưởng nhóm Marketing', 'Trưởng nhóm Sale', 'Trưởng nhóm CSKH')
+          AND NOT (allowed_tabs @> '["customer-debts"]'::jsonb)
       `);
       await client.query(`
         UPDATE role_permissions

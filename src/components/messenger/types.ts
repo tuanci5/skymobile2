@@ -89,7 +89,7 @@ export interface Message {
   ai_translation?: string | null;
   ai_translation_language?: string | null;
   translated_at?: string | null;
-  attachment_type?: 'image' | string | null;
+  attachment_type?: 'image' | 'sticker' | 'like' | 'fallback' | string | null;
   attachment_url?: string | null;
   attachment_proxy_url?: string | null;
   attachment_payload?: Record<string, any> | null;

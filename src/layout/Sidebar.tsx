@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  ReceiptText,
   PieChart,
   Settings,
   ShoppingCart,
@@ -61,6 +62,7 @@ export const Sidebar = ({
     { id: 'revenue', label: 'Báo cáo', icon: <PieChart className="w-5 h-5" /> },
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
     { id: 'customers', label: 'Quản lý khách hàng', icon: <Users className="w-5 h-5" /> },
+    { id: 'customer-debts', label: 'Công nợ khách hàng', icon: <ReceiptText className="w-5 h-5" /> },
     { id: 'settings', label: 'Cài đặt', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   ];
 

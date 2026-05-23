@@ -106,13 +106,55 @@ const graphGet = async (path: string, accessToken: string, params: Record<string
   }
   return data;
 };
-const getFirstImageAttachment = (message: any) => {
+const SUPPORTED_FB_ATTACHMENT_TYPES = ['image', 'sticker', 'like', 'fallback'] as const;
+
+const normalizeFacebookAttachmentType = (attachment: any): string => {
+  const rawType = String(attachment?.type || '').toLowerCase();
+  const payload = attachment?.payload || {};
+  const url = String(payload?.url || '').toLowerCase();
+  const title = String(payload?.title || payload?.name || '').toLowerCase();
+
+  // Facebook can send built-in Messenger Like as type=like, or as an image/sticker-like
+  // attachment depending on Graph/Webhook version. Keep a safe heuristic for old/new data.
+  if (
+    rawType === 'like'
+    || /(^|[^a-z])(like|thumb|thumbs|thumbsup|thumbs_up)([^a-z]|$)/i.test(`${url} ${title}`)
+  ) {
+    return 'like';
+  }
+
+  if (
+    rawType === 'sticker'
+    || payload?.sticker_id
+    || /(^|[^a-z])sticker([^a-z]|$)/i.test(`${url} ${title}`)
+  ) {
+    return 'sticker';
+  }
+
+  if (rawType === 'image') return 'image';
+
+  // Some Messenger attachments arrive as fallback payloads but still contain a URL/id.
+  if (rawType === 'fallback') return 'fallback';
+
+  return rawType;
+};
+
+const getFirstSupportedAttachment = (message: any) => {
   const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
-  return attachments.find((attachment: any) => attachment?.type === 'image' && attachment?.payload?.url) || null;
+  return attachments.find((attachment: any) => {
+    const normalizedType = normalizeFacebookAttachmentType(attachment);
+    return SUPPORTED_FB_ATTACHMENT_TYPES.includes(normalizedType as any)
+      && (
+        attachment?.payload?.url
+        || attachment?.payload?.sticker_id
+        || attachment?.payload?.attachment_id
+        || attachment?.payload?.id
+      );
+  }) || null;
 };
 
 const buildAttachmentProxyUrl = (messageId: number, attachmentType?: string | null) => (
-  attachmentType === 'image' ? `/api/fb/message-attachment-proxy/${messageId}` : null
+  SUPPORTED_FB_ATTACHMENT_TYPES.includes(String(attachmentType || '').toLowerCase() as any) ? `/api/fb/message-attachment-proxy/${messageId}` : null
 );
 
 const mapMessageRow = (row: any) => ({
@@ -764,12 +806,19 @@ router.post('/webhook', (req, res) => {
               continue;
             }
 
-            const imageAttachment = getFirstImageAttachment(webhook_event.message);
-            const messageText = webhook_event.message.text || (imageAttachment ? '[Ảnh]' : '');
-            if (!messageText && !imageAttachment) continue;
-            const attachmentType = imageAttachment ? 'image' : null;
-            const attachmentUrl = imageAttachment?.payload?.url || null;
-            const facebookAttachmentId = imageAttachment?.payload?.attachment_id || null;
+            const supportedAttachment = getFirstSupportedAttachment(webhook_event.message);
+            const attachmentType = supportedAttachment ? normalizeFacebookAttachmentType(supportedAttachment) : null;
+            const attachmentLabel = attachmentType === 'sticker'
+              ? '[Sticker]'
+              : attachmentType === 'like'
+                ? '[Like]'
+                : attachmentType === 'image'
+                  ? '[Ảnh]'
+                  : '';
+            const messageText = webhook_event.message.text || attachmentLabel;
+            if (!messageText && !supportedAttachment) continue;
+            const attachmentUrl = supportedAttachment?.payload?.url || null;
+            const facebookAttachmentId = supportedAttachment?.payload?.attachment_id || supportedAttachment?.payload?.sticker_id || supportedAttachment?.payload?.id || null;
 
             const adSource = await resolveAdSourceFromWebhook(webhook_event, page.access_token);
 
@@ -902,7 +951,7 @@ router.post('/webhook', (req, res) => {
             `INSERT INTO fb_messages (
               conversation_id, sender_type, message_text, attachment_type, attachment_url, attachment_payload, facebook_attachment_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [convId, 'user', messageText, attachmentType, attachmentUrl, imageAttachment ? JSON.stringify(imageAttachment.payload || {}) : null, facebookAttachmentId]
+            [convId, 'user', messageText, attachmentType, attachmentUrl, supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null, facebookAttachmentId]
           );
 
           // --- DIFY AI BATCHING LOGIC (5s delay to group messages) ---
@@ -1899,7 +1948,8 @@ router.get('/message-attachment-proxy/:messageId', async (req, res) => {
       [messageId]
     );
 
-    if (rows.length === 0 || rows[0].attachment_type !== 'image' || !rows[0].attachment_url) {
+    const attachmentType = String(rows[0]?.attachment_type || '').toLowerCase();
+    if (rows.length === 0 || !SUPPORTED_FB_ATTACHMENT_TYPES.includes(attachmentType as any) || !rows[0].attachment_url) {
       return res.status(404).send('Attachment not found');
     }
 

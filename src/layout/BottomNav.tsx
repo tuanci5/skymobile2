@@ -28,7 +28,7 @@ export const BottomNav = ({ activeTab, unreadCount = 0 }: BottomNavProps) => {
 
   const isActive = (id: string) => {
     if (id === 'menu') {
-      return pathname === '/mobile-menu' || ['model', 'hr', 'training', 'business', 'users', 'settings'].includes(activeTab);
+      return pathname === '/mobile-menu' || ['model', 'hr', 'training', 'business', 'users', 'customer-debts', 'settings'].includes(activeTab);
     }
     return activeTab === id;
   };

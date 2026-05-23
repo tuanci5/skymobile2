@@ -10,6 +10,24 @@ import { BottomNav } from '../../layout/BottomNav';
 
 type MobileScreen = 'list' | 'chat' | 'info';
 
+const getFacebookAttachmentKind = (msg: Message): 'image' | 'sticker' | 'like' | 'fallback' | null => {
+  const type = String(msg.attachment_type || '').toLowerCase();
+  const text = String(msg.message_text || '').trim().toLowerCase();
+  const payload = (msg.attachment_payload || {}) as Record<string, any>;
+  const url = String(msg.attachment_url || '').toLowerCase();
+  const payloadText = JSON.stringify(payload || {}).toLowerCase();
+  const fingerprint = `${type} ${text} ${url} ${payloadText} ${String(msg.facebook_attachment_id || '').toLowerCase()}`;
+
+  if (type === 'like' || text === '[like]' || /(^|[^a-z])(like|thumb|thumbs|thumbsup|thumbs_up|emoji)([^a-z]|$)/.test(fingerprint)) return 'like';
+  if (type === 'sticker' || text === '[sticker]' || payload.sticker_id || /(^|[^a-z])sticker([^a-z]|$)/.test(fingerprint)) return 'sticker';
+  if (type === 'fallback') return 'fallback';
+  if (type === 'image') return 'image';
+
+  return null;
+};
+
+const isAttachmentLabel = (text?: string | null) => ['[Ảnh]', '[Sticker]', '[Like]'].includes(String(text || '').trim());
+
 export const MobileMessengerPage = ({ user }: { user?: any }) => {
   const [screen, setScreen] = useState<MobileScreen>('list');
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -289,14 +307,32 @@ export const MobileMessengerPage = ({ user }: { user?: any }) => {
         {isLoadingMore && <div className="flex justify-center py-2"><RefreshCw className="w-5 h-5 text-blue-500 animate-spin" /></div>}
         {messages.map(msg => {
           const isUser = msg.sender_type === 'user';
+          const attachmentKind = getFacebookAttachmentKind(msg);
+          const hasImageAttachment = attachmentKind === 'image' && !!msg.attachment_proxy_url;
+          const hasStickerAttachment = attachmentKind === 'sticker' && !!msg.attachment_proxy_url;
+          const hasLikeAttachment = attachmentKind === 'like';
+          const isMessengerIconAttachment = hasStickerAttachment || hasLikeAttachment;
+          const hasVisibleText = !!msg.message_text && !isAttachmentLabel(msg.message_text);
           return (
             <div key={msg.id} className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}>
               <div className={`max-w-[80%] ${isUser ? '' : ''}`}>
-                <div className={`px-3 py-2 rounded-2xl text-[14px] leading-relaxed ${isUser ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm' : msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-blue-600 text-white rounded-tr-sm'}`}>
-                  {msg.attachment_type === 'image' && msg.attachment_proxy_url && (
-                    <img src={`${API_BASE_URL}${msg.attachment_proxy_url}`} alt="" className="max-h-48 rounded-xl mb-1" loading="lazy" />
+                <div className={`${isMessengerIconAttachment ? 'p-0 bg-transparent border-0' : hasImageAttachment && !hasVisibleText ? 'p-0.5' : 'px-3 py-2'} rounded-2xl text-[14px] leading-relaxed ${isMessengerIconAttachment ? '' : isUser ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm' : msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-blue-600 text-white rounded-tr-sm'}`}>
+                  {isMessengerIconAttachment && (
+                    hasLikeAttachment && !msg.attachment_proxy_url ? (
+                      <div className="text-[48px] leading-none drop-shadow-sm" title="Facebook Like">👍</div>
+                    ) : (
+                      <img
+                        src={`${API_BASE_URL}${msg.attachment_proxy_url}`}
+                        alt={hasLikeAttachment ? 'Facebook Like' : 'Sticker Messenger'}
+                        className={`${hasLikeAttachment ? 'h-14 w-14' : 'max-h-24 max-w-24'} block object-contain drop-shadow-sm`}
+                        loading="lazy"
+                      />
+                    )
                   )}
-                  {msg.message_text && msg.message_text !== '[Ảnh]' && <p className="whitespace-pre-wrap">{msg.message_text}</p>}
+                  {attachmentKind === 'image' && msg.attachment_proxy_url && (
+                    <img src={`${API_BASE_URL}${msg.attachment_proxy_url}`} alt="" className={`block max-h-48 ${hasImageAttachment && !hasVisibleText ? 'rounded-[0.85rem]' : 'rounded-xl'} ${hasVisibleText ? 'mb-1' : ''}`} loading="lazy" />
+                  )}
+                  {msg.message_text && !isAttachmentLabel(msg.message_text) && <p className="whitespace-pre-wrap">{msg.message_text}</p>}
                 </div>
                 <span className="text-[10px] text-slate-400 mt-1 block px-1">
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

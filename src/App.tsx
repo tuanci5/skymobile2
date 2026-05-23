@@ -23,6 +23,7 @@ import { BusinessPlanPage } from './pages/BusinessPlanPage';
 import { ModelPage } from './pages/ModelPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CustomersPage } from './pages/CustomersPage';
+import { CustomerDebtsPage } from './pages/CustomerDebtsPage';
 
 import { MobileMessengerPage } from './pages/mobile/MobileMessengerPage';
 import { MobileTaskPage } from './pages/mobile/MobileTaskPage';
@@ -155,6 +156,7 @@ function AppContent() {
             {activeTab === 'training' && <div className="p-4 pb-24"><TrainingPage courseSlug={subSeg === 'course' ? teamSeg : null} lectureSlug={subSeg === 'lecture' ? teamSeg : null} lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null} /></div>}
             {activeTab === 'business' && <div className="p-4 pb-24"><BusinessPlanPage initialSubTab="finance" /></div>}
             {activeTab === 'customers' && <div className="p-4 pb-24"><CustomersPage /></div>}
+            {activeTab === 'customer-debts' && <div className="p-4 pb-24"><CustomerDebtsPage /></div>}
             {activeTab === 'settings' && (
               <div className="p-4 pb-24">
                 {settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />}
@@ -227,6 +229,7 @@ function AppContent() {
           {activeTab === 'messenger' && <MessengerPage user={user} />}
           {activeTab === 'revenue' && <RevenuePage user={user} />}
           {activeTab === 'customers' && <CustomersPage />}
+          {activeTab === 'customer-debts' && <CustomerDebtsPage />}
           {activeTab === 'settings' && (settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />)}
         </>
       )}

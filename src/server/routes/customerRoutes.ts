@@ -211,6 +211,124 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// GET /api/customers/debts - Customer debt overview grouped by customer
+router.get('/debts', async (req, res) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const paymentStatus = String(req.query.paymentStatus || '').trim();
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const debtWhereParts = [
+      `COALESCE(o.total_amount, 0) > 0`,
+      `COALESCE(o.payment_status, 'Unpaid') <> 'Paid'`,
+      `COALESCE(o.order_status, '') NOT IN ('Cancelled', 'Canceled')`,
+      `COALESCE(o.approval_status, '') <> 'Rejected'`
+    ];
+
+    if (search) {
+      debtWhereParts.push(`(o.customer_name ILIKE $${paramIndex} OR o.customer_id ILIKE $${paramIndex} OR o.skymobile_order_id::varchar ILIKE $${paramIndex})`);
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (paymentStatus) {
+      debtWhereParts.push(`COALESCE(o.payment_status, 'Unpaid') = $${paramIndex}`);
+      params.push(paymentStatus);
+      paramIndex++;
+    }
+
+    const whereSql = debtWhereParts.join(' AND ');
+
+    const summaryRes = await pool.query(`
+      SELECT
+        COUNT(*)::int AS debt_order_count,
+        COUNT(DISTINCT COALESCE(NULLIF(o.customer_id, ''), o.customer_name, o.id::text))::int AS debt_customer_count,
+        COALESCE(SUM(COALESCE(o.total_amount, 0)), 0) AS total_debt,
+        COALESCE(SUM(COALESCE(o.total_amount, 0)) FILTER (WHERE o.created_at < CURRENT_DATE - interval '30 days'), 0) AS overdue_debt
+      FROM orders o
+      WHERE ${whereSql}
+    `, params);
+
+    const countRes = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM (
+        SELECT COALESCE(NULLIF(o.customer_id, ''), o.customer_name, o.id::text)
+        FROM orders o
+        WHERE ${whereSql}
+        GROUP BY COALESCE(NULLIF(o.customer_id, ''), o.customer_name, o.id::text)
+      ) grouped
+    `, params);
+
+    const listParams = [...params, limit, offset];
+    const { rows } = await pool.query(`
+      WITH debt_orders AS (
+        SELECT o.*
+        FROM orders o
+        WHERE ${whereSql}
+      ), grouped AS (
+        SELECT
+          COALESCE(NULLIF(o.customer_id, ''), o.customer_name, o.id::text) AS customer_key,
+          MAX(c.id) AS customer_local_id,
+          MAX(c.skymobile_customer_id) AS skymobile_customer_id,
+          COALESCE(MAX(c.customer_name), MAX(o.customer_name), 'Khách chưa xác định') AS customer_name,
+          MAX(COALESCE(c.avatar, o.customer_avatar)) AS customer_avatar,
+          MAX(c.phone_number) AS phone_number,
+          MAX(c.email) AS email,
+          COUNT(o.id)::int AS debt_order_count,
+          COALESCE(SUM(COALESCE(o.total_amount, 0)), 0) AS total_debt,
+          MIN(o.created_at) AS oldest_debt_at,
+          MAX(o.created_at) AS latest_order_at,
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', o.id,
+              'skymobile_order_id', o.skymobile_order_id,
+              'customer_id', o.customer_id,
+              'customer_name', o.customer_name,
+              'branch_name', o.branch_name,
+              'created_by_name', o.created_by_name,
+              'order_status', o.order_status,
+              'approval_status', o.approval_status,
+              'payment_status', o.payment_status,
+              'fulfillment_status', o.fulfillment_status,
+              'total_amount', o.total_amount,
+              'created_at', o.created_at,
+              'product_quantity', o.product_quantity
+            ) ORDER BY o.created_at DESC NULLS LAST
+          ) AS orders
+        FROM debt_orders o
+        LEFT JOIN customers c ON (
+          (NULLIF(o.customer_id, '') IS NOT NULL AND c.skymobile_customer_id::text = o.customer_id)
+          OR (o.customer_name IS NOT NULL AND c.customer_name = o.customer_name)
+        )
+        GROUP BY COALESCE(NULLIF(o.customer_id, ''), o.customer_name, o.id::text)
+      )
+      SELECT *
+      FROM grouped
+      ORDER BY total_debt DESC, latest_order_at DESC NULLS LAST
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `, listParams);
+
+    const total = toInt(countRes.rows[0]?.count);
+    res.json({
+      summary: {
+        totalDebt: toFloat(summaryRes.rows[0]?.total_debt),
+        overdueDebt: toFloat(summaryRes.rows[0]?.overdue_debt),
+        debtOrderCount: toInt(summaryRes.rows[0]?.debt_order_count),
+        debtCustomerCount: toInt(summaryRes.rows[0]?.debt_customer_count)
+      },
+      debts: rows,
+      pagination: { total, page, limit, pages: Math.ceil(total / limit) }
+    });
+  } catch (error: any) {
+    console.error('Error fetching customer debts:', error);
+    res.status(500).json({ error: 'Failed to fetch customer debts', details: error.message });
+  }
+});
+
 // GET /api/customers/revenue-report - Revenue report backed by real orders/customers data
 router.get('/revenue-report', async (req, res) => {
   try {
@@ -863,6 +981,40 @@ router.patch('/orders/:orderId/approval', async (req, res) => {
   } catch (error: any) {
     console.error('Error updating order approval:', error);
     res.status(500).json({ error: 'Failed to update order approval', details: error.message });
+  }
+});
+
+// PATCH /api/customers/orders/:orderId/payment - Update payment status for debt tracking
+router.patch('/orders/:orderId/payment', async (req, res) => {
+  try {
+    const parsedId = parseInt(req.params.orderId);
+    const { payment_status } = req.body;
+    const allowedStatuses = ['Paid', 'Unpaid', 'Partial', 'Partially Paid', 'Refunded'];
+
+    if (isNaN(parsedId)) {
+      return res.status(400).json({ error: 'Mã đơn hàng không hợp lệ' });
+    }
+
+    if (!allowedStatuses.includes(payment_status)) {
+      return res.status(400).json({ error: 'Trạng thái thanh toán không hợp lệ' });
+    }
+
+    const { rows } = await pool.query(`
+      UPDATE orders
+      SET payment_status = $1,
+          synced_at = CURRENT_TIMESTAMP
+      WHERE id = $2 OR skymobile_order_id = $2
+      RETURNING *
+    `, [payment_status, parsedId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+
+    res.json(rows[0]);
+  } catch (error: any) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({ error: 'Failed to update payment status', details: error.message });
   }
 });
 

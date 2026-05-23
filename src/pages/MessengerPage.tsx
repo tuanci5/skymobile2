@@ -131,6 +131,24 @@ type ImageLibraryItem = {
   tags?: string[] | null;
 };
 
+const getFacebookAttachmentKind = (msg: Message): 'image' | 'sticker' | 'like' | 'fallback' | null => {
+  const type = String(msg.attachment_type || '').toLowerCase();
+  const text = String(msg.message_text || '').trim().toLowerCase();
+  const payload = (msg.attachment_payload || {}) as Record<string, any>;
+  const url = String(msg.attachment_url || '').toLowerCase();
+  const payloadText = JSON.stringify(payload || {}).toLowerCase();
+  const fingerprint = `${type} ${text} ${url} ${payloadText} ${String(msg.facebook_attachment_id || '').toLowerCase()}`;
+
+  if (type === 'like' || text === '[like]' || /(^|[^a-z])(like|thumb|thumbs|thumbsup|thumbs_up|emoji)([^a-z]|$)/.test(fingerprint)) return 'like';
+  if (type === 'sticker' || text === '[sticker]' || payload.sticker_id || /(^|[^a-z])sticker([^a-z]|$)/.test(fingerprint)) return 'sticker';
+  if (type === 'fallback') return 'fallback';
+  if (type === 'image') return 'image';
+
+  return null;
+};
+
+const isAttachmentLabel = (text?: string | null) => ['[Ảnh]', '[Sticker]', '[Like]'].includes(String(text || '').trim());
+
 const normalizeEmailList = (emails?: string[] | null) =>
   (Array.isArray(emails) ? emails : [])
     .filter((email): email is string => typeof email === 'string')
@@ -1789,6 +1807,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
               )}
               {messages.map((msg, i) => {
                 const isUser = msg.sender_type === 'user';
+                const attachmentKind = getFacebookAttachmentKind(msg);
+                const hasImageAttachment = attachmentKind === 'image' && !!msg.attachment_proxy_url;
+                const hasStickerAttachment = attachmentKind === 'sticker' && !!msg.attachment_proxy_url;
+                const hasLikeAttachment = attachmentKind === 'like';
+                const isMessengerIconAttachment = hasStickerAttachment || hasLikeAttachment;
+                const hasVisibleText = !!msg.message_text && !isAttachmentLabel(msg.message_text);
                 const senderLabel = msg.sender_type === 'ai'
                   ? 'AI Dify'
                   : (msg.sender_name || msg.sender_email || 'CSKH');
@@ -1799,7 +1823,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                     key={msg.id}
                     className={`flex ${isUser ? 'justify-start' : 'justify-end'}`}
                   >
-                    <div className={`flex gap-3 max-w-[70%] ${isUser ? 'flex-row' : 'flex-row-reverse'}`}>
+                    <div className={`flex ${hasImageAttachment && !hasVisibleText ? 'gap-2' : 'gap-3'} max-w-[70%] ${isUser ? 'flex-row' : 'flex-row-reverse'}`}>
                       {!isUser && (
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.sender_type === 'ai' ? 'bg-emerald-100' : 'bg-blue-100'}`}>
                           {msg.sender_type === 'ai' ? <Bot className="w-4 h-4 text-emerald-600" /> : <User className="w-4 h-4 text-blue-600" />}
@@ -1807,27 +1831,39 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                       )}
 
                       <div className={`flex flex-col ${isUser ? 'items-start' : 'items-end'}`}>
-                        <div className={`p-3 rounded-2xl relative group ${isUser ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm' :
+                        <div className={`${isMessengerIconAttachment ? 'p-0 bg-transparent border-0 shadow-none' : hasImageAttachment && !hasVisibleText ? 'p-0.5' : 'p-3'} rounded-2xl relative group ${isMessengerIconAttachment ? '' : isUser ? 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm' :
                           msg.sender_type === 'ai' ? 'bg-emerald-600 text-white rounded-tr-sm shadow-md' :
                             'bg-blue-600 text-white rounded-tr-sm shadow-md'
                           }`}>
-                          {msg.attachment_type === 'image' && msg.attachment_proxy_url && (
+                          {isMessengerIconAttachment && (
+                            hasLikeAttachment && !msg.attachment_proxy_url ? (
+                              <div className="text-[56px] leading-none drop-shadow-sm" title="Facebook Like">👍</div>
+                            ) : (
+                              <img
+                                src={`${API_BASE_URL}${msg.attachment_proxy_url}`}
+                                alt={hasLikeAttachment ? 'Facebook Like' : 'Sticker Messenger'}
+                                className={`${hasLikeAttachment ? 'h-16 w-16' : 'max-h-28 max-w-28'} block object-contain drop-shadow-sm`}
+                                loading="lazy"
+                              />
+                            )
+                          )}
+                          {attachmentKind === 'image' && msg.attachment_proxy_url && (
                             <a
                               href={`${API_BASE_URL}${msg.attachment_proxy_url}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="block overflow-hidden rounded-xl bg-slate-100 border border-white/20 shadow-sm mb-2"
+                              className={`block overflow-hidden ${hasImageAttachment && !hasVisibleText ? 'rounded-[0.85rem] border-0 shadow-none' : 'rounded-xl border border-white/20 shadow-sm'} bg-slate-100 ${hasVisibleText ? 'mb-2' : ''}`}
                               title="Mở ảnh trong tab mới"
                             >
                               <img
                                 src={`${API_BASE_URL}${msg.attachment_proxy_url}`}
                                 alt="Ảnh trong tin nhắn Messenger"
-                                className="max-h-80 max-w-full object-contain bg-slate-100"
+                                className="block max-h-80 max-w-full object-contain bg-slate-100"
                                 loading="lazy"
                               />
                             </a>
                           )}
-                          {msg.message_text && msg.message_text !== '[Ảnh]' && (
+                          {msg.message_text && !isAttachmentLabel(msg.message_text) && (
                             <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
                           )}
 
