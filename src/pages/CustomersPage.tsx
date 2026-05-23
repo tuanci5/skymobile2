@@ -482,9 +482,13 @@ export const CustomersPage: React.FC = () => {
           setSyncProgressMsg(`❌ Lỗi đồng bộ: ${data.error}`);
           setSyncLogs(prev => [...prev, `❌ Thất bại: ${data.error}`]);
           eventSource.close();
+          setIsSyncing(false);
         }
       } catch (err) {
         console.error('Error parsing sync event:', err);
+        setSyncProgressMsg('❌ Lỗi xử lý phản hồi đồng bộ từ máy chủ.');
+        eventSource.close();
+        setIsSyncing(false);
       }
     };
 
@@ -492,6 +496,7 @@ export const CustomersPage: React.FC = () => {
       console.error('EventSource connection error:', err);
       setSyncProgressMsg('❌ Lỗi kết nối máy chủ đồng bộ.');
       eventSource.close();
+      setIsSyncing(false);
     };
   };
 

@@ -1,6 +1,37 @@
 import { chromium } from 'playwright';
 import { pool } from '../db';
 
+const SKY_MOBILE_BASE_URL = 'https://skymobile.vn';
+
+const getSkyMobileCredentials = () => {
+  const email = process.env.SKYMOBILE_EMAIL?.trim();
+  const password = process.env.SKYMOBILE_PASSWORD?.trim();
+
+  if (!email || !password) {
+    throw new Error('Thiếu cấu hình đăng nhập Sky Mobile. Vui lòng thiết lập SKYMOBILE_EMAIL và SKYMOBILE_PASSWORD trong biến môi trường.');
+  }
+
+  return { email, password };
+};
+
+const truncateBody = (body: string, maxLength = 500) => {
+  if (!body) return '';
+  return body.length > maxLength ? `${body.slice(0, maxLength)}...` : body;
+};
+
+const ensureOkResponse = async (res: Response, context: string) => {
+  if (res.ok) return;
+
+  let body = '';
+  try {
+    body = truncateBody(await res.text());
+  } catch {
+    body = '';
+  }
+
+  throw new Error(`${context} thất bại với HTTP ${res.status}${body ? ` - ${body}` : ''}`);
+};
+
 export interface SyncResult {
   success: boolean;
   ordersProcessed: number;
@@ -22,9 +53,11 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
   };
 
   log('🚀 Khởi tạo đồng bộ dữ liệu Sky Mobile...');
-  
+   
   let browser;
   try {
+    const credentials = getSkyMobileCredentials();
+
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -40,16 +73,16 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
     });
 
     log('🔑 Đang đăng nhập vào skymobile.vn...');
-    await page.goto('https://skymobile.vn/login', { waitUntil: 'networkidle' });
-    await page.fill('input[type="email"]', 'tuanci5@gmail.com');
-    await page.fill('input[type="password"]', 'thoigian1');
+    await page.goto(`${SKY_MOBILE_BASE_URL}/login`, { waitUntil: 'networkidle' });
+    await page.fill('input[type="email"]', credentials.email);
+    await page.fill('input[type="password"]', credentials.password);
     await page.click('button[type="submit"]');
 
     await page.waitForURL('**/app/**', { timeout: 15000 });
     log('✅ Đăng nhập thành công!');
 
     log('📋 Đang chuyển hướng tới trang đơn hàng để trích xuất Access Token...');
-    await page.goto('https://skymobile.vn/app/orders', { waitUntil: 'networkidle' });
+    await page.goto(`${SKY_MOBILE_BASE_URL}/app/orders`, { waitUntil: 'networkidle' });
     await page.waitForSelector('table, tbody tr', { timeout: 10000 });
 
     for (let i = 0; i < 6; i++) {
@@ -77,7 +110,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
     while (hasMoreOrders) {
       log(`📡 Đang tải trang đơn hàng ${orderPage}...`);
-      const url = `https://skymobile.vn/api/orders?pageNumber=${orderPage}&pageSize=100&sortBy=CreatedAt&sortDirection=DESC&branchId=1`;
+      const url = `${SKY_MOBILE_BASE_URL}/api/orders?pageNumber=${orderPage}&pageSize=100&sortBy=CreatedAt&sortDirection=DESC&branchId=1`;
       
       const res = await fetch(url, {
         headers: {
@@ -86,9 +119,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         }
       });
 
-      if (!res.ok) {
-        throw new Error(`Sky Mobile Orders API returned HTTP ${res.status}`);
-      }
+      await ensureOkResponse(res, `Sky Mobile Orders API (trang ${orderPage})`);
 
       const data = await res.json() as any;
       const items = data.items || [];
@@ -115,7 +146,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
     while (hasMoreCustomers) {
       log(`📡 Đang tải trang khách hàng ${customerPage}...`);
-      const url = `https://skymobile.vn/api/customers?pageNumber=${customerPage}&pageSize=100`;
+      const url = `${SKY_MOBILE_BASE_URL}/api/customers?pageNumber=${customerPage}&pageSize=100`;
       
       const res = await fetch(url, {
         headers: {
@@ -124,9 +155,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         }
       });
 
-      if (!res.ok) {
-        throw new Error(`Sky Mobile Customers API returned HTTP ${res.status}`);
-      }
+      await ensureOkResponse(res, `Sky Mobile Customers API (trang ${customerPage})`);
 
       const data = await res.json() as any;
       const items = data.items || [];
@@ -153,7 +182,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
     while (hasMorePromotions) {
       log(`📡 Đang tải trang khuyến mại ${promoPage}...`);
-      const url = `https://skymobile.vn/api/promotions?pageNumber=${promoPage}&pageSize=100`;
+      const url = `${SKY_MOBILE_BASE_URL}/api/promotions?pageNumber=${promoPage}&pageSize=100`;
 
       const res = await fetch(url, {
         headers: {
@@ -162,9 +191,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         }
       });
 
-      if (!res.ok) {
-        throw new Error(`Sky Mobile Promotions API returned HTTP ${res.status}`);
-      }
+      await ensureOkResponse(res, `Sky Mobile Promotions API (trang ${promoPage})`);
 
       const data = await res.json() as any;
       const items = data.items || [];
@@ -271,8 +298,6 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         ordersProcessed++;
 
         const checkRes = await client.query('SELECT id FROM orders WHERE skymobile_order_id = $1', [o.id]);
-        let isNewOrChanged = false;
-        
         if (checkRes.rows.length > 0) {
           // Update
           await client.query(`
@@ -344,59 +369,55 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
             o.commissionTotal
           ]);
           ordersInserted++;
-          isNewOrChanged = true;
         }
 
-        // Fetch and sync order items for this order!
-        // We sync if it's new/changed, or we don't have any items registered for this order in the DB yet.
-        const itemsCheck = await client.query('SELECT 1 FROM order_items WHERE order_id = $1 LIMIT 1', [o.id]);
-        if (isNewOrChanged || itemsCheck.rows.length === 0) {
-          try {
-            const detailUrl = `https://skymobile.vn/api/orders/${o.id}`;
-            const detailRes = await fetch(detailUrl, {
-              headers: {
-                'authorization': authHeader,
-                'accept': 'application/json, text/plain, */*'
-              }
-            });
-
-            if (detailRes.ok) {
-              const detailData = await detailRes.json() as any;
-              const items = detailData.orderItems || [];
-
-              // Clear old items for this order to avoid duplicates on update
-              await client.query('DELETE FROM order_items WHERE order_id = $1', [o.id]);
-
-              for (const item of items) {
-                if (!item.id) continue;
-                await client.query(`
-                  INSERT INTO order_items (
-                    skymobile_item_id, order_id, product_id, product_name,
-                    quantity, selling_price, billing_rate, commission
-                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                  ON CONFLICT (skymobile_item_id) DO UPDATE SET
-                    product_id = EXCLUDED.product_id,
-                    product_name = EXCLUDED.product_name,
-                    quantity = EXCLUDED.quantity,
-                    selling_price = EXCLUDED.selling_price,
-                    billing_rate = EXCLUDED.billing_rate,
-                    commission = EXCLUDED.commission,
-                    synced_at = CURRENT_TIMESTAMP
-                `, [
-                  item.id,
-                  o.id,
-                  item.productId,
-                  item.productName,
-                  item.quantity,
-                  item.effectiveSellingPrice || item.sellingPricePromo || 0,
-                  item.effectiveBillingRate || item.billingRatePromo || 0,
-                  item.commission || 0
-                ]);
-              }
+        // Luôn tải lại chi tiết đơn hàng để tránh order_items bị cũ khi đơn đã tồn tại nhưng item thay đổi trên Sky Mobile.
+        try {
+          const detailUrl = `${SKY_MOBILE_BASE_URL}/api/orders/${o.id}`;
+          const detailRes = await fetch(detailUrl, {
+            headers: {
+              'authorization': authHeader,
+              'accept': 'application/json, text/plain, */*'
             }
-          } catch (itemErr: any) {
-            console.error(`Error syncing items for order ${o.id}:`, itemErr.message);
+          });
+
+          await ensureOkResponse(detailRes, `Sky Mobile Order Detail API (đơn ${o.id})`);
+
+          const detailData = await detailRes.json() as any;
+          const items = detailData.orderItems || [];
+
+          // Clear old items for this order to avoid stale data and duplicates on update.
+          await client.query('DELETE FROM order_items WHERE order_id = $1', [o.id]);
+
+          for (const item of items) {
+            if (!item.id) continue;
+            await client.query(`
+              INSERT INTO order_items (
+                skymobile_item_id, order_id, product_id, product_name,
+                quantity, selling_price, billing_rate, commission
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (skymobile_item_id) DO UPDATE SET
+                product_id = EXCLUDED.product_id,
+                product_name = EXCLUDED.product_name,
+                quantity = EXCLUDED.quantity,
+                selling_price = EXCLUDED.selling_price,
+                billing_rate = EXCLUDED.billing_rate,
+                commission = EXCLUDED.commission,
+                synced_at = CURRENT_TIMESTAMP
+            `, [
+              item.id,
+              o.id,
+              item.productId,
+              item.productName,
+              item.quantity,
+              item.effectiveSellingPrice || item.sellingPricePromo || 0,
+              item.effectiveBillingRate || item.billingRatePromo || 0,
+              item.commission || 0
+            ]);
           }
+        } catch (itemErr: any) {
+          console.error(`Error syncing items for order ${o.id}:`, itemErr.message);
+          log(`⚠️ Không thể đồng bộ chi tiết đơn ${o.id}: ${itemErr.message}`);
         }
       }
 
