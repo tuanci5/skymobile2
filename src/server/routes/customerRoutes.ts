@@ -4,7 +4,9 @@ import { syncFromSkyMobile } from '../services/skymobileSync';
 
 const router = express.Router();
 
-type RevenueReportRange = 'today' | 'yesterday' | 'week' | 'month' | 'year';
+type RevenueReportRange = 'today' | 'yesterday' | 'week' | 'month' | 'year' | 'custom';
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const normalizeReportRange = (range: unknown): RevenueReportRange => {
   const normalized = String(range || 'month')
@@ -18,13 +20,29 @@ const normalizeReportRange = (range: unknown): RevenueReportRange => {
   if (normalized === 'yesterday' || normalized.includes('hom qua')) return 'yesterday';
   if (normalized === 'week' || normalized.includes('tuan nay')) return 'week';
   if (normalized === 'year' || normalized.includes('nam nay')) return 'year';
+  if (normalized === 'custom' || normalized.includes('khoang ngay')) return 'custom';
   return 'month';
 };
 
-const getRevenueReportConfig = (range: RevenueReportRange) => {
+const getRevenueReportConfig = (range: RevenueReportRange, startDate?: unknown, endDate?: unknown) => {
   const now = "timezone('Asia/Ho_Chi_Minh', now())";
+  const customStartDate = String(startDate || '').trim();
+  const customEndDate = String(endDate || '').trim();
 
   switch (range) {
+    case 'custom':
+      if (!ISO_DATE_PATTERN.test(customStartDate) || !ISO_DATE_PATTERN.test(customEndDate)) {
+        throw new Error('Khoảng ngày không hợp lệ.');
+      }
+      return {
+        range,
+        currentStartSql: `'${customStartDate}'::date`,
+        currentEndSql: `'${customEndDate}'::date + interval '1 day'`,
+        previousStartSql: `'${customStartDate}'::date - ((('${customEndDate}'::date + interval '1 day') - '${customStartDate}'::date))`,
+        seriesStep: '1 day',
+        truncUnit: 'day',
+        labelFormat: 'DD/MM'
+      };
     case 'today':
       return {
         range,
@@ -197,7 +215,7 @@ router.get('/stats', async (req, res) => {
 router.get('/revenue-report', async (req, res) => {
   try {
     const range = normalizeReportRange(req.query.range);
-    const config = getRevenueReportConfig(range);
+    const config = getRevenueReportConfig(range, req.query.startDate, req.query.endDate);
     const boundsCte = buildRevenueBoundsCte(config);
 
     const metricsRes = await pool.query(`

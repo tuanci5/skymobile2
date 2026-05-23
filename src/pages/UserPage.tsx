@@ -39,6 +39,15 @@ const ROLE_OPTIONS = [
   'Khách'
 ];
 
+const REPORT_PERMISSION_PREFIX = 'report:';
+
+const REPORTS_TO_MANAGE = [
+  { id: 'report:revenue', label: 'Doanh thu' },
+  { id: 'report:page_overview', label: 'Báo cáo theo Page' },
+  { id: 'report:cskh_personal', label: 'Báo cáo cá nhân CSKH' },
+  { id: 'report:page_messages', label: 'Khách mới nhắn Page theo nhân viên' },
+];
+
 export const UserPage = () => {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'roles'>('users');
   const [users, setUsers] = useState<User[]>([]);
@@ -167,13 +176,25 @@ export const UserPage = () => {
 
   const handleStartEditRole = (role: string, currentTabs: string[]) => {
     setEditingRole(role);
-    setTempPermissions(currentTabs);
+    setTempPermissions([...currentTabs]);
   };
 
-  const handleToggleTempPermission = (tabId: string) => {
-    setTempPermissions(prev =>
-      prev.includes(tabId) ? prev.filter(t => t !== tabId) : [...prev, tabId]
-    );
+  const handleToggleTempPermission = (permissionId: string) => {
+    setTempPermissions(prev => {
+      const exists = prev.includes(permissionId);
+
+      if (permissionId === 'revenue' && exists) {
+        return prev.filter(item => item !== 'revenue' && !item.startsWith(REPORT_PERMISSION_PREFIX));
+      }
+
+      if (permissionId.startsWith(REPORT_PERMISSION_PREFIX)) {
+        return exists
+          ? prev.filter(item => item !== permissionId)
+          : Array.from(new Set([...prev, 'revenue', permissionId]));
+      }
+
+      return exists ? prev.filter(item => item !== permissionId) : [...prev, permissionId];
+    });
   };
 
   const handleSaveRolePermissions = async () => {
@@ -226,6 +247,11 @@ export const UserPage = () => {
     { id: 'order-approvals', label: 'Phê duyệt đơn hàng' },
     { id: 'settings', label: 'Cài đặt' },
   ];
+
+  const getPermissionLabel = (permissionId: string) =>
+    TABS_TO_MANAGE.find(t => t.id === permissionId)?.label
+    || REPORTS_TO_MANAGE.find(t => t.id === permissionId)?.label
+    || permissionId;
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16">
@@ -416,32 +442,61 @@ export const UserPage = () => {
                     <tr key={role} className={`transition-colors ${isEditing ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
                       <td className="px-6 py-6 font-bold text-slate-700">{role}</td>
                       <td className="px-6 py-6">
-                        <div className="flex flex-wrap gap-3">
+                        <div className="space-y-4">
                           {isEditing ? (
-                            TABS_TO_MANAGE.map(tab => (
-                              <label key={tab.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer transition-all ${currentTabs.includes(tab.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
-                                <input
-                                  type="checkbox"
-                                  className="sr-only"
-                                  checked={currentTabs.includes(tab.id)}
-                                  onChange={() => handleToggleTempPermission(tab.id)}
-                                />
-                                <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${currentTabs.includes(tab.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
-                                  {currentTabs.includes(tab.id) && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
+                            <>
+                              <div>
+                                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">Quyền truy cập menu</p>
+                                <div className="flex flex-wrap gap-3">
+                                  {TABS_TO_MANAGE.map(tab => (
+                                    <label key={tab.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer transition-all ${currentTabs.includes(tab.id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={currentTabs.includes(tab.id)}
+                                        onChange={() => handleToggleTempPermission(tab.id)}
+                                      />
+                                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${currentTabs.includes(tab.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                                        {currentTabs.includes(tab.id) && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
+                                      </div>
+                                      <span className="text-xs font-bold">{tab.label}</span>
+                                    </label>
+                                  ))}
                                 </div>
-                                <span className="text-xs font-bold">{tab.label}</span>
-                              </label>
-                            ))
+                              </div>
+
+                              <div className={`rounded-2xl border p-4 ${currentTabs.includes('revenue') ? 'bg-blue-50/40 border-blue-100' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2">Loại báo cáo được xem</p>
+                                {!currentTabs.includes('revenue') && (
+                                  <p className="text-xs text-slate-400 italic mb-3">Bật quyền “Báo cáo” trước để cấu hình loại báo cáo.</p>
+                                )}
+                                <div className="flex flex-wrap gap-3">
+                                  {REPORTS_TO_MANAGE.map(report => (
+                                    <label key={report.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer transition-all ${currentTabs.includes(report.id) ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={currentTabs.includes(report.id)}
+                                        onChange={() => handleToggleTempPermission(report.id)}
+                                      />
+                                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${currentTabs.includes(report.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                                        {currentTabs.includes(report.id) && <Check className="w-3 h-3 text-white" strokeWidth={4} />}
+                                      </div>
+                                      <span className="text-xs font-bold">{report.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
                           ) : (
                             allowedTabs.length > 0 ? (
-                              allowedTabs.map(tabId => {
-                                const tab = TABS_TO_MANAGE.find(t => t.id === tabId);
-                                return (
-                                  <span key={tabId} className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold border border-slate-200">
-                                    {tab ? tab.label : tabId}
+                              <div className="flex flex-wrap gap-3">
+                                {allowedTabs.map(tabId => (
+                                  <span key={tabId} className={`px-3 py-1 rounded-full text-xs font-bold border ${tabId.startsWith(REPORT_PERMISSION_PREFIX) ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                    {getPermissionLabel(tabId)}
                                   </span>
-                                );
-                              })
+                                ))}
+                              </div>
                             ) : (
                               <span className="text-xs text-slate-400 italic">Chưa có quyền</span>
                             )

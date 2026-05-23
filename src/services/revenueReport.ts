@@ -146,8 +146,12 @@ const normalizeRevenueReport = (data: any): RevenueReportData => ({
     : []
 });
 
-export const fetchRevenueReport = async (range: string, signal?: AbortSignal) => {
+export const fetchRevenueReport = async (range: string, signal?: AbortSignal, customRange?: { startDate?: string; endDate?: string }) => {
   const params = new URLSearchParams({ range });
+  if (range === 'Khoảng ngày' && customRange?.startDate && customRange?.endDate) {
+    params.set('startDate', customRange.startDate);
+    params.set('endDate', customRange.endDate);
+  }
   const response = await fetch(`${API_BASE_URL}/api/customers/revenue-report?${params.toString()}`, { signal });
   const data = await response.json().catch(() => null);
 

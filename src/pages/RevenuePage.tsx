@@ -9,7 +9,6 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Calendar,
-  Download,
   Filter,
   MessageSquare,
   FileText,
@@ -24,6 +23,7 @@ import {
   Target
 } from 'lucide-react';
 import { API_BASE_URL } from '../components/messenger/api';
+import { useAuth } from '../context/AuthContext';
 import {
   EMPTY_REVENUE_REPORT,
   calculateGrowth,
@@ -41,6 +41,8 @@ type ReportDefinition = {
   label: string;
   description: string;
 };
+
+const REPORT_PERMISSION_PREFIX = 'report:';
 
 type MessageReportRow = {
   page_id: string;
@@ -260,8 +262,30 @@ const canViewCskhPersonalReport = (role?: string | null) => {
 const canViewPageReport = (role?: string | null) =>
   canViewRevenueReport(role) || canViewMessageReport(role);
 
-const getAllowedReports = (user?: any) => {
+const parseAllowedPermissions = (allowedTabs: any): string[] => {
+  if (Array.isArray(allowedTabs)) return allowedTabs;
+  if (typeof allowedTabs === 'string') {
+    try {
+      const parsed = JSON.parse(allowedTabs);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Invalid report permissions format:', error);
+    }
+  }
+  return [];
+};
+
+const getAllowedReports = (user?: any, rolePermissions: any[] = []) => {
   const role = user?.role;
+  const roleConfig = rolePermissions.find(permission => permission.role === role);
+  const allowedPermissions = parseAllowedPermissions(roleConfig?.allowed_tabs);
+  const configuredReportPermissions = allowedPermissions.filter(permission => permission.startsWith(REPORT_PERMISSION_PREFIX));
+
+  if (configuredReportPermissions.length > 0) {
+    const configuredReports = REPORTS.filter(report => configuredReportPermissions.includes(`${REPORT_PERMISSION_PREFIX}${report.id}`));
+    return configuredReports.length > 0 ? configuredReports : [];
+  }
+
   const reports = REPORTS.filter(report => {
     if (report.id === 'revenue') return canViewRevenueReport(role);
     if (isPageReportType(report.id)) return canViewPageReport(role);
@@ -269,7 +293,7 @@ const getAllowedReports = (user?: any) => {
     if (report.id === 'page_messages') return canViewMessageReport(role);
     return false;
   });
-  return reports.length > 0 ? reports : [REPORTS[0]];
+  return reports;
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -344,9 +368,13 @@ const buildPageReportSummary = (rows: PageReportRow[]): PageReportData['summary'
 };
 
 export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
+  const { rolePermissions } = useAuth();
   const [dateRange, setDateRange] = useState('Tháng này');
-  const allowedReports = useMemo(() => getAllowedReports(user), [user]);
+  const [customStartDate, setCustomStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [customEndDate, setCustomEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const allowedReports = useMemo(() => getAllowedReports(user, rolePermissions), [user, rolePermissions]);
   const [selectedReport, setSelectedReport] = useState<ReportType>(allowedReports[0]?.id || 'revenue');
+  const hasAllowedReports = allowedReports.length > 0;
   const [revenueReport, setRevenueReport] = useState(EMPTY_REVENUE_REPORT);
   const [isLoadingRevenue, setIsLoadingRevenue] = useState(false);
   const [revenueReportError, setRevenueReportError] = useState<string | null>(null);
@@ -361,14 +389,25 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const [pageReportError, setPageReportError] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState('all');
   const isPageReportSelected = isPageReportType(selectedReport);
+  const isCustomRange = dateRange === 'Khoảng ngày';
+  const customRangeParams = useMemo(() => (
+    isCustomRange && customStartDate && customEndDate
+      ? { startDate: customStartDate, endDate: customEndDate }
+      : undefined
+  ), [isCustomRange, customStartDate, customEndDate]);
+  const dateRangeLabel = isCustomRange && customStartDate && customEndDate
+    ? `${customStartDate.split('-').reverse().join('/')} - ${customEndDate.split('-').reverse().join('/')}`
+    : dateRange;
 
   useEffect(() => {
+    if (!hasAllowedReports) return;
     if (!allowedReports.some(report => report.id === selectedReport)) {
       setSelectedReport(allowedReports[0]?.id || 'revenue');
     }
-  }, [allowedReports, selectedReport]);
+  }, [allowedReports, hasAllowedReports, selectedReport]);
 
   useEffect(() => {
+    if (!hasAllowedReports) return;
     if (selectedReport !== 'revenue') return;
 
     const controller = new AbortController();
@@ -376,7 +415,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
 
     setIsLoadingRevenue(true);
     setRevenueReportError(null);
-    fetchRevenueReport(dateRange, controller.signal)
+    fetchRevenueReport(dateRange, controller.signal, customRangeParams)
       .then(data => {
         if (!isActive) return;
         setRevenueReport(data);
@@ -395,13 +434,18 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       isActive = false;
       controller.abort();
     };
-  }, [selectedReport, dateRange]);
+  }, [hasAllowedReports, selectedReport, dateRange, customRangeParams]);
 
   useEffect(() => {
+    if (!hasAllowedReports) return;
     if (!isPageReportType(selectedReport)) return;
 
     const controller = new AbortController();
     const params = new URLSearchParams({ range: dateRange });
+    if (customRangeParams) {
+      params.set('startDate', customRangeParams.startDate);
+      params.set('endDate', customRangeParams.endDate);
+    }
     const toNumber = (value: unknown) => Number(value || 0);
 
     setIsLoadingPageReport(true);
@@ -477,12 +521,17 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
       .finally(() => setIsLoadingPageReport(false));
 
     return () => controller.abort();
-  }, [selectedReport, dateRange]);
+  }, [hasAllowedReports, selectedReport, dateRange, customRangeParams]);
 
   useEffect(() => {
+    if (!hasAllowedReports) return;
     if (selectedReport !== 'page_messages') return;
 
     const params = new URLSearchParams({ range: dateRange });
+    if (customRangeParams) {
+      params.set('startDate', customRangeParams.startDate);
+      params.set('endDate', customRangeParams.endDate);
+    }
     if (user?.email) params.set('email', user.email);
     if (user?.name) params.set('name', user.name);
     if (user?.role) params.set('role', user.role);
@@ -501,12 +550,17 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
         setMessageReport(null);
       })
       .finally(() => setIsLoadingMessages(false));
-  }, [selectedReport, dateRange, user?.email, user?.name, user?.role]);
+  }, [hasAllowedReports, selectedReport, dateRange, customRangeParams, user?.email, user?.name, user?.role]);
 
   useEffect(() => {
+    if (!hasAllowedReports) return;
     if (selectedReport !== 'cskh_personal') return;
 
     const params = new URLSearchParams({ range: dateRange });
+    if (customRangeParams) {
+      params.set('startDate', customRangeParams.startDate);
+      params.set('endDate', customRangeParams.endDate);
+    }
     if (user?.email) params.set('email', user.email);
     if (user?.name) params.set('name', user.name);
 
@@ -561,10 +615,10 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
         setCskhPersonalReport(EMPTY_CSKH_PERSONAL_REPORT);
       })
       .finally(() => setIsLoadingCskhPersonal(false));
-  }, [selectedReport, dateRange, user?.email, user?.name]);
+  }, [hasAllowedReports, selectedReport, dateRange, customRangeParams, user?.email, user?.name]);
 
   const currentData = revenueReport.summary;
-  const selectedReportInfo = REPORTS.find(report => report.id === selectedReport) || REPORTS[0];
+  const selectedReportInfo = REPORTS.find(report => report.id === selectedReport) || allowedReports[0] || REPORTS[0];
   const maxChartRevenue = Math.max(1, ...revenueReport.chart.map(item => item.revenue));
   const chartHasRevenue = revenueReport.chart.some(item => item.revenue > 0);
 
@@ -700,7 +754,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
             <div key={stat.title} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className={`p-2.5 rounded-xl ${stat.color}`}>{stat.icon}</div>
-                <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-full">{dateRange}</span>
+              <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-full">{dateRangeLabel}</span>
               </div>
               <p className="text-xs font-bold text-slate-500 mb-1">{stat.title}</p>
               <p className="text-xl font-black text-slate-900">{stat.value}</p>
@@ -755,7 +809,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-2xl ${stat.color}`}>{stat.icon}</div>
-                <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRange}</span>
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRangeLabel}</span>
               </div>
               <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
               <h3 className="text-2xl font-black text-slate-800">{stat.value}</h3>
@@ -1021,7 +1075,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           >
             <div className="flex items-start justify-between mb-4">
               <div className={`p-3 rounded-2xl ${stat.color}`}>{stat.icon}</div>
-              <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRange}</span>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRangeLabel}</span>
             </div>
             <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
             <h3 className="text-2xl font-black text-slate-800">
@@ -1055,12 +1109,12 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                 <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
                   <tr>
                     <th className="px-6 py-4">Fanpage</th>
-                    <th className="px-6 py-4">Nhân viên</th>
                     <th className="px-6 py-4 text-right">Khách mới</th>
                     <th className="px-6 py-4 text-right">Tin nhắn</th>
                     <th className="px-6 py-4 text-right">Tin/Hội thoại</th>
                     <th className="px-6 py-4 text-right">Phản hồi TB</th>
                     <th className="px-6 py-4">Khách mới nhất</th>
+                    <th className="px-6 py-4">Nhân viên</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1070,10 +1124,6 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                         <p className="font-bold text-slate-800">{row.page_name}</p>
                         <p className="text-xs text-slate-400">ID: {row.page_id}</p>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-slate-700">{row.staff_name}</p>
-                        <p className="text-xs text-slate-400">{row.staff_role || row.staff_email || 'Chưa có vai trò'}</p>
-                      </td>
                       <td className="px-6 py-4 text-right font-black text-blue-700">{Number(row.customer_count || 0).toLocaleString('vi-VN')}</td>
                       <td className="px-6 py-4 text-right text-slate-700 font-bold">{Number(row.message_count || 0).toLocaleString('vi-VN')}</td>
                       <td className="px-6 py-4 text-right text-slate-700 font-bold">
@@ -1081,6 +1131,10 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                       </td>
                       <td className="px-6 py-4 text-right text-slate-700 font-bold">{formatDuration(row.average_response_seconds)}</td>
                       <td className="px-6 py-4 text-slate-500">{formatDateTime(row.last_message_at)}</td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-700">{row.staff_name}</p>
+                        <p className="text-xs text-slate-400">{row.staff_role || row.staff_email || 'Chưa có vai trò'}</p>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1145,7 +1199,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           >
             <div className="flex items-start justify-between mb-4">
               <div className={`p-3 rounded-2xl ${stat.color}`}>{stat.icon}</div>
-              <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRange}</span>
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRangeLabel}</span>
             </div>
             <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
             <h3 className="text-2xl font-black text-slate-800">{Number(stat.value || 0).toLocaleString('vi-VN')}</h3>
@@ -1262,6 +1316,24 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
     </>
   );
 
+  if (!hasAllowedReports) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-xs font-bold uppercase tracking-wider mb-4">
+            <TrendingUp className="w-4 h-4" />
+            <span>Báo cáo & Thống kê</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Báo cáo</h1>
+          <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-5 text-amber-700">
+            <p className="font-black">Chức vụ của bạn chưa được phân quyền xem loại báo cáo nào.</p>
+            <p className="text-sm mt-1">Vui lòng liên hệ Quản trị để bật quyền “Báo cáo” và chọn các loại báo cáo được phép xem.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-slate-100 relative overflow-hidden">
@@ -1306,16 +1378,40 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               <option value="Tuần này">Tuần này</option>
               <option value="Tháng này">Tháng này</option>
               <option value="Năm nay">Năm nay</option>
+              <option value="Khoảng ngày">Khoảng ngày</option>
             </select>
             <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
               <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
             </div>
           </div>
-          <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors text-sm">
-            <Download className="w-4 h-4" /> Xuất báo cáo
-          </button>
         </div>
+        {isCustomRange && (
+          <div className="relative z-10 mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl ml-auto">
+            <label className="text-[11px] uppercase tracking-wider font-black text-slate-400">
+              Từ ngày
+              <input
+                aria-label="Từ ngày"
+                type="date"
+                value={customStartDate}
+                max={customEndDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              />
+            </label>
+            <label className="text-[11px] uppercase tracking-wider font-black text-slate-400">
+              Đến ngày
+              <input
+                aria-label="Đến ngày"
+                type="date"
+                value={customEndDate}
+                min={customStartDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-100 rounded-2xl px-5 py-4 shadow-sm">

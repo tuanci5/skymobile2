@@ -56,13 +56,24 @@ const canViewAllMessengerReports = (role?: string | null) => {
     || normalizedRole.includes('truong nhom');
 };
 
-const getReportDateFilter = (range?: string | null, column = 'm.created_at') => {
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const getReportDateFilter = (range?: string | null, column = 'm.created_at', startDate?: unknown, endDate?: unknown) => {
   const normalized = String(range || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .trim()
     .toLowerCase();
+  const customStartDate = String(startDate || '').trim();
+  const customEndDate = String(endDate || '').trim();
+
+  if (normalized.includes('khoang ngay') || normalized === 'custom') {
+    if (!ISO_DATE_PATTERN.test(customStartDate) || !ISO_DATE_PATTERN.test(customEndDate)) {
+      throw new Error('Khoảng ngày không hợp lệ.');
+    }
+    return `${column} >= '${customStartDate}'::date AND ${column} < '${customEndDate}'::date + INTERVAL '1 day'`;
+  }
 
   if (normalized.includes('hom qua') || normalized === 'yesterday') {
     return `${column} >= CURRENT_DATE - INTERVAL '1 day' AND ${column} < CURRENT_DATE`;
@@ -1013,11 +1024,11 @@ router.get('/reports/cskh-personal', async (req, res) => {
       return res.status(400).json({ error: 'Email nhân viên là bắt buộc.' });
     }
 
-    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at');
-    const messageDateFilter = getReportDateFilter(range, 'm.created_at');
-    const noteDateFilter = getReportDateFilter(range, 'n.created_at');
-    const orderDateFilter = getReportDateFilter(range, 'o.created_at');
-    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at');
+    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at', req.query.startDate, req.query.endDate);
+    const messageDateFilter = getReportDateFilter(range, 'm.created_at', req.query.startDate, req.query.endDate);
+    const noteDateFilter = getReportDateFilter(range, 'n.created_at', req.query.startDate, req.query.endDate);
+    const orderDateFilter = getReportDateFilter(range, 'o.created_at', req.query.startDate, req.query.endDate);
+    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at', req.query.startDate, req.query.endDate);
     const params = [email, name];
 
     const staffAssignmentFilter = `
@@ -1350,11 +1361,11 @@ router.get('/reports/cskh-personal', async (req, res) => {
 router.get('/reports/page-performance', async (req, res) => {
   try {
     const range = String(req.query.range || 'Tháng này').trim();
-    const messageDateFilter = getReportDateFilter(range, 'm.created_at');
-    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at');
-    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at');
-    const orderDateFilter = getReportDateFilter(range, 'o.created_at');
-    const adSourceDateFilter = getReportDateFilter(range, 's.last_seen_at');
+    const messageDateFilter = getReportDateFilter(range, 'm.created_at', req.query.startDate, req.query.endDate);
+    const firstMessageDateFilter = getReportDateFilter(range, 'first_message_at', req.query.startDate, req.query.endDate);
+    const conversationDateFilter = getReportDateFilter(range, 'c.last_message_at', req.query.startDate, req.query.endDate);
+    const orderDateFilter = getReportDateFilter(range, 'o.created_at', req.query.startDate, req.query.endDate);
+    const adSourceDateFilter = getReportDateFilter(range, 's.last_seen_at', req.query.startDate, req.query.endDate);
 
     const { rows } = await pool.query(`
       WITH page_base AS (
@@ -1669,7 +1680,7 @@ router.get('/reports/new-messages', async (req, res) => {
     const name = String(req.query.name || '').trim().toLowerCase();
     const role = String(req.query.role || '').trim();
     const personalOnly = isTruthyQueryValue(req.query.personal);
-    const dateFilter = getReportDateFilter(range, 'first_message_at');
+    const dateFilter = getReportDateFilter(range, 'first_message_at', req.query.startDate, req.query.endDate);
 
     if (personalOnly && !email) {
       return res.status(400).json({ error: 'Email nhân viên là bắt buộc.' });
