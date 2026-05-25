@@ -120,6 +120,13 @@ const parseMessageTemplates = (value?: string): MessageTemplateMap => {
 
 const TRANSLATION_CACHE_LANGUAGE = 'Vietnamese:auto-detect:v2';
 const ALL_PAGES_VALUE = 'all';
+const CONVERSATION_PAGE_SIZE = 20;
+
+type ConversationListResponse = {
+  items: Conversation[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
 
 type ImageLibraryItem = {
   id: number;
@@ -184,6 +191,10 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [pages, setPages] = useState<FBPage[]>([]);
   const [selectedPage, setSelectedPage] = useState<string>(ALL_PAGES_VALUE);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [conversationCursor, setConversationCursor] = useState<string | null>(null);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [translations, setTranslations] = useState<Record<number, string>>({});
@@ -474,32 +485,97 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     fetchMessengerSettings();
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [pagesRes, convsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/fb/pages`),
-          fetch(`${API_BASE_URL}/api/fb/conversations`)
-        ]);
+  const buildConversationQuery = (cursor?: string | null) => {
+    const params = new URLSearchParams({
+      limit: String(CONVERSATION_PAGE_SIZE),
+      filter: conversationFilter
+    });
 
+    if (selectedPage !== ALL_PAGES_VALUE) params.set('page_id', selectedPage);
+    if (conversationSearch.trim()) params.set('search', conversationSearch.trim());
+    if (cursor) params.set('before', cursor);
+
+    return params.toString();
+  };
+
+  const normalizeConversationListResponse = (data: Conversation[] | ConversationListResponse): ConversationListResponse => {
+    if (Array.isArray(data)) {
+      const items = data.slice(0, CONVERSATION_PAGE_SIZE);
+      return {
+        items,
+        hasMore: data.length > CONVERSATION_PAGE_SIZE,
+        nextCursor: items.length > 0 ? items[items.length - 1].last_message_at : null
+      };
+    }
+
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      hasMore: Boolean(data.hasMore),
+      nextCursor: data.nextCursor || null
+    };
+  };
+
+  const mergeConversations = (current: Conversation[], incoming: Conversation[]) => {
+    const map = new Map<number, Conversation>();
+    [...incoming, ...current].forEach(conv => map.set(conv.id, { ...map.get(conv.id), ...conv }));
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+    );
+  };
+
+  const loadConversations = async (options: { append?: boolean; silent?: boolean } = {}) => {
+    const { append = false, silent = false } = options;
+    if (append) {
+      if (isLoadingMoreConversations || !hasMoreConversations || !conversationCursor) return;
+      setIsLoadingMoreConversations(true);
+    } else if (!silent) {
+      setIsLoadingConversations(true);
+    }
+
+    try {
+      const query = buildConversationQuery(append ? conversationCursor : null);
+      const res = await fetch(`${API_BASE_URL}/api/fb/conversations?${query}`);
+      if (!res.ok) throw new Error(`Load conversations failed: ${res.status}`);
+
+      const data = normalizeConversationListResponse(await res.json());
+      setConversations(prev => append ? mergeConversations(prev, data.items) : data.items);
+      setHasMoreConversations(data.hasMore);
+      setConversationCursor(data.nextCursor);
+    } catch (err) {
+      console.error('Error fetching conversations:', err);
+    } finally {
+      if (append) setIsLoadingMoreConversations(false);
+      else if (!silent) setIsLoadingConversations(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchPages = async () => {
+      try {
+        const pagesRes = await fetch(`${API_BASE_URL}/api/fb/pages`);
         if (pagesRes.ok) {
           const pagesData = await pagesRes.json();
           setPages(pagesData);
         }
-
-        if (convsRes.ok) {
-          const convsData = await convsRes.json();
-          setConversations(convsData);
-        }
       } catch (err) {
-        console.error('Error fetching messenger data:', err);
+        console.error('Error fetching messenger pages:', err);
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    fetchPages();
   }, []);
+
+  useEffect(() => {
+    setConversations([]);
+    setConversationCursor(null);
+    setHasMoreConversations(true);
+    loadConversations();
+  }, [selectedPage, conversationFilter, conversationSearch]);
+
+  useEffect(() => {
+    const interval = setInterval(() => loadConversations({ silent: true }), 5000);
+    return () => clearInterval(interval);
+  }, [selectedPage, conversationFilter, conversationSearch]);
 
   useEffect(() => {
     if (selectedPage === ALL_PAGES_VALUE) return;
@@ -1533,6 +1609,14 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     }
   };
 
+  const handleConversationListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (distanceToBottom < 120 && !isLoadingMoreConversations && hasMoreConversations) {
+      loadConversations({ append: true });
+    }
+  };
+
   const displayedConversations = conversations.filter(conv => {
     if (!isManager) {
       const page = pages.find(p => p.page_id === conv.page_id);
@@ -1553,26 +1637,6 @@ export const MessengerPage = ({ user }: { user?: any }) => {
       // Staff can see conversations for pages they manage, ads pages assigned to them,
       // conversations assigned directly to them, or pages with no relevant owner yet.
       if (!isAssignedToPage && !isAssignedToAds && !isAssignedToConv && !isPageUnassigned) return false;
-    }
-
-    if (selectedPage !== ALL_PAGES_VALUE && conv.page_id !== selectedPage) return false;
-
-    if (conversationFilter === 'unread' && (conv.unread_count || 0) <= 0) return false;
-    if (conversationFilter === 'bot' && conv.is_human_intervened) return false;
-
-    const searchTerm = conversationSearch.trim().toLowerCase();
-    if (searchTerm) {
-      const searchableText = [
-        conv.customer_name,
-        conv.page_name,
-        conv.page_id,
-        conv.customer_id,
-        conv.last_message,
-        conv.assigned_to,
-        getAssignedStaffDisplayName(conv),
-        conv.campaign_name
-      ].filter(Boolean).join(' ').toLowerCase();
-      if (!searchableText.includes(searchTerm)) return false;
     }
 
     return true;
@@ -1631,8 +1695,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {displayedConversations.length === 0 ? (
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" onScroll={handleConversationListScroll}>
+          {isLoadingConversations && conversations.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> ?ang t?i tin nh?n...
+            </div>
+          ) : displayedConversations.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm">
               Không có tin nhắn nào bạn đang phụ trách.
             </div>
@@ -1703,6 +1771,16 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                 </div>
               </div>
             )))}
+          {isLoadingMoreConversations && (
+            <div className="p-4 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> ?ang t?i th?m h?i tho?i...
+            </div>
+          )}
+          {!hasMoreConversations && displayedConversations.length > 0 && (
+            <div className="p-4 text-center text-slate-400 text-[11px]">
+              ?? t?i h?t h?i tho?i.
+            </div>
+          )}
         </div>
       </div>
 

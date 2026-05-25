@@ -1900,14 +1900,66 @@ router.get('/reports/new-messages', async (req, res) => {
 
 router.get('/conversations', async (req, res) => {
   try {
+    const rawLimit = parseInt(String(req.query.limit || '20'), 10);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 20, 1), 100);
+    const before = String(req.query.before || '').trim();
+    const pageId = String(req.query.page_id || '').trim();
+    const filter = String(req.query.filter || 'all').trim();
+    const search = String(req.query.search || '').trim();
+
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+
+    if (before) {
+      params.push(before);
+      whereClauses.push(`c.last_message_at < $${params.length}`);
+    }
+
+    if (pageId && pageId !== 'all') {
+      params.push(pageId);
+      whereClauses.push(`c.page_id = $${params.length}`);
+    }
+
+    if (filter === 'unread') {
+      whereClauses.push(`COALESCE(c.unread_count, 0) > 0`);
+    } else if (filter === 'bot') {
+      whereClauses.push(`COALESCE(c.is_human_intervened, false) = false`);
+    }
+
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(COALESCE(c.customer_name, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(p.page_name, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(c.page_id, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(c.customer_id, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(c.last_message, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(c.assigned_to, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(u.name, '')) LIKE $${params.length}
+        OR LOWER(COALESCE(c.campaign_name, '')) LIKE $${params.length}
+      )`);
+    }
+
+    params.push(limit + 1);
+    const limitParamIndex = params.length;
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
     const { rows } = await pool.query(`
       SELECT c.*, p.page_name, p.business_id, u.name AS assigned_to_name
       FROM fb_conversations c
       LEFT JOIN fb_pages p ON p.page_id = c.page_id
       LEFT JOIN users u ON LOWER(u.email) = LOWER(c.assigned_to)
+      ${whereSql}
       ORDER BY c.last_message_at DESC
-    `);
-    res.json(rows);
+      LIMIT $${limitParamIndex}
+    `, params);
+
+    const items = rows.slice(0, limit);
+    res.json({
+      items,
+      hasMore: rows.length > limit,
+      nextCursor: items.length > 0 ? items[items.length - 1].last_message_at : null
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

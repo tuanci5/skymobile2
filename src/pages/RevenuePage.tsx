@@ -369,7 +369,7 @@ const buildPageReportSummary = (rows: PageReportRow[]): PageReportData['summary'
 
 export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const { rolePermissions } = useAuth();
-  const [dateRange, setDateRange] = useState('Tháng này');
+  const [dateRange, setDateRange] = useState('Hôm nay');
   const [customStartDate, setCustomStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [customEndDate, setCustomEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const allowedReports = useMemo(() => getAllowedReports(user, rolePermissions), [user, rolePermissions]);
