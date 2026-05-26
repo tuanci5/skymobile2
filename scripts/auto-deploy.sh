@@ -74,6 +74,20 @@ run_node_bin() {
   fi
 }
 
+resolve_node_bin_for_pm2() {
+  local package_name="$1"
+  local fallback_path="$2"
+
+  if [ -x "node_modules/.bin/${package_name}" ]; then
+    printf './node_modules/.bin/%s' "$package_name"
+  elif [ -f "$fallback_path" ]; then
+    printf '%s' "$fallback_path"
+  else
+    log "❌ Cannot find ${package_name} binary for PM2."
+    exit 1
+  fi
+}
+
 main() {
   log "------------------------------------------"
   log "🚀 Starting Sky Mobile deployment"
@@ -142,8 +156,15 @@ main() {
   fi
 
   log "🔄 Restarting PM2 app ${PM2_APP_NAME} as ${DEPLOY_USER}..."
+  local tsx_bin=""
+  tsx_bin="$(resolve_node_bin_for_pm2 "tsx" "node_modules/tsx/dist/cli.mjs")"
+
   run_as_deploy_user pm2 delete "$PM2_APP_NAME" >/dev/null 2>&1 || true
-  run_as_deploy_user pm2 start npm --name "$PM2_APP_NAME" -- run api
+  if [ -x "$tsx_bin" ]; then
+    run_as_deploy_user pm2 start "$tsx_bin" --name "$PM2_APP_NAME" --cwd "$PROJECT_DIR" -- src/server/server.ts
+  else
+    run_as_deploy_user pm2 start node --name "$PM2_APP_NAME" --cwd "$PROJECT_DIR" -- "$tsx_bin" src/server/server.ts
+  fi
   run_as_deploy_user pm2 save
 
   log "📋 PM2 status:"
