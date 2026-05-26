@@ -13,6 +13,8 @@ export const ROLE_MAPPING: Record<string, string> = {
   'Nhân viên Kế toán': 'accountant',
   'Nhân viên kế toán tổng hợp': 'accountant',
   'Nhân viên Hành chính & Nhân sự': 'hr_staff',
+  'Nhân viên hành chính nhân sự': 'hr_staff',
+  'Nhân viên Hành chính Nhân sự': 'hr_staff',
   'Quản lý': 'head',
   'Trưởng phòng Kinh doanh – Marketing – CSKH': 'head',
 };

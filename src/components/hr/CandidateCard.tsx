@@ -3,6 +3,7 @@ import {
   User, Briefcase, Calendar, Clock, ClipboardList, 
   CheckCircle2, XCircle, ExternalLink, Trash2, Edit, BarChart2, Loader2 
 } from 'lucide-react';
+import { isHrRole } from '../../auth/roleUtils';
 
 interface Candidate {
   id: string;
@@ -39,7 +40,7 @@ export const CandidateCard: React.FC<{
 }> = ({ candidate, user, evalData, onEvaluate, onViewReport, onStatusChange, onDelete, onEditCV }) => {
   const [savingStatus, setSavingStatus] = useState(false);
   const statusCfg = STATUS_CONFIG[candidate.status] || STATUS_CONFIG['Chờ phỏng vấn'];
-  const canModify = user?.role === 'Quản trị' || user?.role?.includes('Hành chính - Nhân sự') || user?.role?.includes('Hành chính & Nhân sự');
+  const canModify = user?.role === 'Quản trị' || isHrRole(user?.role);
 
   const handleStatusChange = async (nextStatus: string) => {
     if (!nextStatus || nextStatus === candidate.status || savingStatus) return;

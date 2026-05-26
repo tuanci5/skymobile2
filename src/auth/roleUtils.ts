@@ -10,6 +10,17 @@ const normalizeRole = (role?: string | null) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const normalizeRoleForSearch = (role?: string | null) =>
+  normalizeRole(role)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 export const isAdminRole = (role?: string | null) => ADMIN_ROLES.includes(normalizeRole(role));
 
 export const isManagerRole = (role?: string | null) => {
@@ -19,5 +30,9 @@ export const isManagerRole = (role?: string | null) => {
 
 export const isHrRole = (role?: string | null) => {
   const normalizedRole = normalizeRole(role);
-  return !!normalizedRole && HR_MARKERS.some(marker => normalizedRole.includes(marker));
+  const searchableRole = normalizeRoleForSearch(role);
+  return !!normalizedRole && (
+    HR_MARKERS.some(marker => normalizedRole.includes(marker))
+    || searchableRole.includes('hanh chinh nhan su')
+  );
 };
