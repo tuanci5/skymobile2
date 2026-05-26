@@ -123,7 +123,7 @@ main() {
   if [ "${SKYMOBILE_DEPLOY_REEXECED:-0}" != "1" ] && [ -n "$before_head" ] && [ -n "$after_head" ] && [ "$before_head" != "$after_head" ]; then
     log "🔁 Code changed ${before_head} -> ${after_head}; reloading latest deploy script..."
     export SKYMOBILE_DEPLOY_REEXECED=1
-    exec "$0" "$@"
+    exec bash "$0" "$@"
   fi
 
   log "📦 Installing dependencies..."
