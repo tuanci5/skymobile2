@@ -7,6 +7,7 @@ export interface FBPage {
   dify_api_key?: string;
   facebook_ad_account_id?: string | null;
   business_id?: string | null;
+  has_user_access_token?: boolean;
   assigned_users?: string[];
   assigned_ads_users?: string[];
   ai_reply_delay?: number;

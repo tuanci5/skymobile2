@@ -99,6 +99,7 @@ export async function initDBUtils() {
         page_id VARCHAR(100) UNIQUE NOT NULL,
         page_name VARCHAR(255) NOT NULL,
         access_token TEXT NOT NULL,
+        user_access_token TEXT,
         dify_api_key TEXT,
         facebook_ad_account_id VARCHAR(100),
         business_id VARCHAR(100),
@@ -116,6 +117,11 @@ export async function initDBUtils() {
     // Add distribution_mode if missing
     try {
       await client.query("ALTER TABLE fb_pages ADD COLUMN distribution_mode VARCHAR(50) DEFAULT 'manual'");
+    } catch (e) {}
+
+    // Add User Access Token if missing (used for Ads API / ad account reads)
+    try {
+      await client.query("ALTER TABLE fb_pages ADD COLUMN user_access_token TEXT");
     } catch (e) {}
 
     // Add Facebook Ad Account ID and Business ID if missing

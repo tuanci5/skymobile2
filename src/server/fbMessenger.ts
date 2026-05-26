@@ -468,7 +468,7 @@ async function resolveFacebookUidFromConversationGraph(pageId: string, psid: str
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> \'\' THEN true ELSE false END AS has_user_access_token FROM fb_pages ORDER BY created_at DESC');
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -477,15 +477,15 @@ router.get('/pages', async (req, res) => {
 
 router.post('/pages', async (req, res) => {
   try {
-    const { page_id, page_name, access_token, dify_api_key, facebook_ad_account_id, business_id } = req.body;
+    const { page_id, page_name, access_token, user_access_token, dify_api_key, facebook_ad_account_id, business_id } = req.body;
     await pool.query(
-      `INSERT INTO fb_pages (page_id, page_name, access_token, dify_api_key, facebook_ad_account_id, business_id) 
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO fb_pages (page_id, page_name, access_token, user_access_token, dify_api_key, facebook_ad_account_id, business_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (page_id) DO UPDATE SET 
-       page_name = EXCLUDED.page_name, access_token = EXCLUDED.access_token, dify_api_key = EXCLUDED.dify_api_key,
+       page_name = EXCLUDED.page_name, access_token = EXCLUDED.access_token, user_access_token = EXCLUDED.user_access_token, dify_api_key = EXCLUDED.dify_api_key,
        facebook_ad_account_id = EXCLUDED.facebook_ad_account_id,
        business_id = EXCLUDED.business_id`,
-      [page_id, page_name, access_token, dify_api_key, facebook_ad_account_id || null, business_id || null]
+      [page_id, page_name, access_token, user_access_token || null, dify_api_key, facebook_ad_account_id || null, business_id || null]
     );
     res.json({ success: true });
   } catch (err: any) {
@@ -504,6 +504,7 @@ router.put('/pages/:page_id', async (req, res) => {
 
     const fieldMap: Record<string, string> = {
       access_token: 'access_token',
+      user_access_token: 'user_access_token',
       dify_api_key: 'dify_api_key',
       facebook_ad_account_id: 'facebook_ad_account_id',
       business_id: 'business_id',
@@ -524,7 +525,7 @@ router.put('/pages/:page_id', async (req, res) => {
         if (key === 'assigned_users' || key === 'assigned_ads_users') {
           setClauses.push(`${dbField} = $${paramIndex}::jsonb`);
           params.push(JSON.stringify(updates[key] || []));
-        } else if (key === 'access_token') {
+        } else if (key === 'access_token' || key === 'user_access_token') {
            if (updates[key].trim() !== '') {
              setClauses.push(`${dbField} = $${paramIndex}`);
              params.push(updates[key]);
@@ -544,7 +545,7 @@ router.put('/pages/:page_id', async (req, res) => {
     }
 
     params.push(page_id);
-    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`;
+    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`;
     
     console.log(`📡 Updating Page ${page_id}:`, updates);
     
@@ -575,10 +576,11 @@ router.post('/pages/:page_id/test-token', async (req, res) => {
 
   try {
     const { page_id } = req.params;
-    const { access_token: bodyToken, facebook_ad_account_id: bodyAdAccountId } = req.body || {};
-    const { rows } = await pool.query('SELECT access_token, page_name, facebook_ad_account_id FROM fb_pages WHERE page_id = $1', [page_id]);
+    const { access_token: bodyToken, user_access_token: bodyUserToken, facebook_ad_account_id: bodyAdAccountId } = req.body || {};
+    const { rows } = await pool.query('SELECT access_token, user_access_token, page_name, facebook_ad_account_id FROM fb_pages WHERE page_id = $1', [page_id]);
     const storedPage = rows[0];
     const token = bodyToken || storedPage?.access_token;
+    const adsToken = bodyUserToken || storedPage?.user_access_token || token;
     const adAccountId = normalizeAdAccountId(bodyAdAccountId || storedPage?.facebook_ad_account_id);
 
     if (!token) return res.status(400).json({ error: 'Missing Page Access Token' });
@@ -598,17 +600,17 @@ router.post('/pages/:page_id/test-token', async (req, res) => {
     }
 
     try {
-      const permData = await graphGet('me/permissions', token);
+      const permData = await graphGet('me/permissions', adsToken);
       const granted = new Set((permData.data || []).filter((p: any) => p.status === 'granted').map((p: any) => p.permission));
       permissions.forEach(p => { p.granted = granted.has(p.name); });
     } catch (err: any) {
-      // Page Access Tokens often cannot read /me/permissions. Keep this as
-      // diagnostic info only; the direct Page and Ads Account API checks below
-      // are the authoritative pass/fail tests for this screen.
+      // Some token types cannot read /me/permissions. Keep this as diagnostic
+      // info only; the direct Page and Ads Account API checks below are the
+      // authoritative pass/fail tests for this screen.
       errors.push({
         step: 'permissions_info',
         severity: 'info',
-        message: 'Không đọc được /me/permissions bằng Page token; dùng Page/Ads API check để xác thực quyền.',
+        message: 'Không đọc được /me/permissions bằng token hiện tại; dùng Page/Ads API check để xác thực quyền.',
         detail: err?.message,
         code: err?.graphError?.code,
         subcode: err?.graphError?.error_subcode
@@ -617,7 +619,7 @@ router.post('/pages/:page_id/test-token', async (req, res) => {
 
     if (adAccountId) {
       try {
-        await graphGet(`${adAccountId}/campaigns`, token, { fields: 'id,name', limit: '1' });
+        await graphGet(`${adAccountId}/campaigns`, adsToken, { fields: 'id,name', limit: '1' });
         ads_read_ok = true;
         const adsPerm = permissions.find(p => p.name === 'ads_read');
         if (adsPerm) adsPerm.granted = true;
@@ -634,6 +636,7 @@ router.post('/pages/:page_id/test-token', async (req, res) => {
       ads_read_ok,
       page_name,
       ad_account_id: adAccountId,
+      uses_separate_ads_token: !!(bodyUserToken || storedPage?.user_access_token),
       permissions,
       errors,
       checked_at: new Date().toISOString()
@@ -649,7 +652,7 @@ router.put('/pages/:id/assign-users', async (req, res) => {
     const { assigned_users } = req.body;
     
     const result = await pool.query(
-      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
+      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`,
       [JSON.stringify(assigned_users || []), id]
     );
     if (result.rowCount === 0) {
@@ -668,7 +671,7 @@ router.put('/pages/:id/assign-ads-users', async (req, res) => {
     const { assigned_ads_users } = req.body;
 
     const result = await pool.query(
-      `UPDATE fb_pages SET assigned_ads_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour`,
+      `UPDATE fb_pages SET assigned_ads_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`,
       [JSON.stringify(assigned_ads_users || []), id]
     );
     if (result.rowCount === 0) {

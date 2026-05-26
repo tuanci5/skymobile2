@@ -273,6 +273,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     pageName: '',
     pageId: '',
     pageAccessToken: '',
+    userAccessToken: '',
     difyApiKey: '',
     facebookAdAccountId: '',
     businessId: ''
@@ -281,6 +282,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
   const [editingPage, setEditingPage] = useState<{
     id: string,
     token: string,
+    userToken: string,
     difyKey: string,
     facebookAdAccountId?: string,
     businessId?: string,
@@ -1394,6 +1396,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     setEditingPage(prev => ({
       id: pageId,
       token: prev?.id === pageId ? prev.token : '',
+      userToken: prev?.id === pageId ? prev.userToken : '',
       difyKey: prev?.id === pageId ? prev.difyKey : (page.dify_api_key || ''),
       facebookAdAccountId: prev?.id === pageId ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
       businessId: prev?.id === pageId ? prev.businessId : (page.business_id || ''),
@@ -1426,6 +1429,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
     setEditingPage(prev => ({
       id: pageId,
       token: prev?.id === pageId ? prev.token : '',
+      userToken: prev?.id === pageId ? prev.userToken : '',
       difyKey: prev?.id === pageId ? prev.difyKey : (page.dify_api_key || ''),
       facebookAdAccountId: prev?.id === pageId ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
       businessId: prev?.id === pageId ? prev.businessId : (page.business_id || ''),
@@ -1452,6 +1456,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           page_id: newPageForm.pageId,
           page_name: newPageForm.pageName,
           access_token: newPageForm.pageAccessToken,
+          user_access_token: newPageForm.userAccessToken || null,
           dify_api_key: newPageForm.difyApiKey || null,
           facebook_ad_account_id: newPageForm.facebookAdAccountId || null,
           business_id: newPageForm.businessId || null
@@ -1469,6 +1474,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
           pageName: '',
           pageId: '',
           pageAccessToken: '',
+          userAccessToken: '',
           difyApiKey: '',
           facebookAdAccountId: '',
           businessId: ''
@@ -1493,6 +1499,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
 
     const updates: any = {};
     if (editingPage.token.trim() !== '') updates.access_token = editingPage.token;
+    if (editingPage.userToken.trim() !== '') updates.user_access_token = editingPage.userToken;
     if (editingPage.difyKey !== undefined) updates.dify_api_key = editingPage.difyKey;
     if (editingPage.facebookAdAccountId !== undefined) updates.facebook_ad_account_id = editingPage.facebookAdAccountId;
     if (editingPage.businessId !== undefined) updates.business_id = editingPage.businessId;
@@ -1554,6 +1561,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           access_token: draft?.token || undefined,
+          user_access_token: draft?.userToken || undefined,
           facebook_ad_account_id: draft?.facebookAdAccountId ?? page.facebook_ad_account_id ?? undefined
         })
       });
@@ -2544,6 +2552,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 setEditingPage(prev => ({
                                   id: page.page_id,
                                   token: prev?.id === page.page_id ? prev.token : '',
+                                  userToken: prev?.id === page.page_id ? prev.userToken : '',
                                   difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                   facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                   businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2581,13 +2590,14 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                   <input
                                     type="password"
                                     className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Dán mã Page Access Token mới vào đây..."
+                                    placeholder="Dán Page Access Token mới để nhắn tin Page..."
                                     value={editingPage?.id === page.page_id ? editingPage.token : ''}
                                     onChange={(e) => {
                                       const newToken = e.target.value;
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: newToken,
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2600,6 +2610,37 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       }));
                                     }}
                                   />
+                                  <p className="mt-1 text-[11px] text-slate-400">Dùng cho inbox, gửi tin nhắn, comment và dữ liệu Page.</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                    <span>User Access Token</span>
+                                    {page.has_user_access_token && <span className="text-[10px] text-emerald-600">Đã lưu</span>}
+                                  </p>
+                                  <input
+                                    type="password"
+                                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="Dán User/System token có ads_read..."
+                                    value={editingPage?.id === page.page_id ? editingPage.userToken : ''}
+                                    onChange={(e) => {
+                                      const newUserToken = e.target.value;
+                                      setEditingPage(prev => ({
+                                        id: page.page_id,
+                                        token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: newUserToken,
+                                        difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
+                                        facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
+                                        businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
+                                        aiReplyDelay: prev?.id === page.page_id ? prev.aiReplyDelay : (page.ai_reply_delay ?? 5),
+                                        aiStartHour: prev?.id === page.page_id ? prev.aiStartHour : (page.ai_start_hour ?? 0),
+                                        aiEndHour: prev?.id === page.page_id ? prev.aiEndHour : (page.ai_end_hour ?? 24),
+                                        distributionMode: prev?.id === page.page_id ? (prev.distributionMode || page.distribution_mode) : page.distribution_mode,
+                                        assignedUsers: prev?.id === page.page_id ? (prev.assignedUsers || page.assigned_users) : page.assigned_users,
+                                        assignedAdsUsers: prev?.id === page.page_id ? (prev.assignedAdsUsers || page.assigned_ads_users) : page.assigned_ads_users
+                                      }));
+                                    }}
+                                  />
+                                  <p className="mt-1 text-[11px] text-slate-400">Dùng riêng cho tài khoản quảng cáo/báo cáo Ads; để trống nếu chưa đổi.</p>
                                 </div>
                                 <div>
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Dify Chat API Key</p>
@@ -2613,6 +2654,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: newKey,
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2639,6 +2681,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2668,6 +2711,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: value,
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2695,6 +2739,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: value,
@@ -2719,6 +2764,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2746,6 +2792,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                       setEditingPage(prev => ({
                                         id: page.page_id,
                                         token: prev?.id === page.page_id ? prev.token : '',
+                                        userToken: prev?.id === page.page_id ? prev.userToken : '',
                                         difyKey: prev?.id === page.page_id ? prev.difyKey : (page.dify_api_key || ''),
                                         facebookAdAccountId: prev?.id === page.page_id ? prev.facebookAdAccountId : (page.facebook_ad_account_id || ''),
                                         businessId: prev?.id === page.page_id ? prev.businessId : (page.business_id || ''),
@@ -2933,7 +2980,8 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 ...prev,
                                 pageName: firstPage.name,
                                 pageId: firstPage.id,
-                                pageAccessToken: firstPage.access_token
+                                pageAccessToken: firstPage.access_token,
+                                userAccessToken: accessToken
                               }));
                               alert(`Đã lấy thành công thông tin trang: ${firstPage.name}`);
                             } else {
@@ -2945,7 +2993,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         }
                       }, {
                         config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID || '',
-                        scope: 'pages_show_list,pages_messaging,pages_manage_metadata'
+                        scope: 'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,ads_read'
                       });
                     }}
                     className="w-full mb-6 py-3.5 bg-[#1877F2] text-white font-bold rounded-xl hover:bg-[#166FE5] transition-all hover:-translate-y-0.5 flex items-center justify-center gap-3 shadow-md shadow-blue-500/20"
@@ -2983,15 +3031,29 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                         placeholder="Nhập ID trang Fanpage"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">Page Access Token</label>
-                      <input
-                        type="password"
-                        value={newPageForm.pageAccessToken}
-                        onChange={(e) => setNewPageForm({ ...newPageForm, pageAccessToken: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
-                        placeholder="EAAA..."
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Page Access Token</label>
+                        <input
+                          type="password"
+                          value={newPageForm.pageAccessToken}
+                          onChange={(e) => setNewPageForm({ ...newPageForm, pageAccessToken: e.target.value })}
+                          className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                          placeholder="EAAA... dùng cho nhắn tin Page"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">Token của Page: dùng để đọc inbox, comment và gửi tin nhắn.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">User Access Token</label>
+                        <input
+                          type="password"
+                          value={newPageForm.userAccessToken}
+                          onChange={(e) => setNewPageForm({ ...newPageForm, userAccessToken: e.target.value })}
+                          className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-shadow"
+                          placeholder="User/System token có ads_read"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">Token của user/system user: dùng để đọc tài khoản quảng cáo và báo cáo ads.</p>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1 flex items-center justify-between">
