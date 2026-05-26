@@ -97,8 +97,20 @@ main() {
   fi
 
   log "📥 Resetting code to origin/${BRANCH}..."
+  local before_head=""
+  before_head="$(git rev-parse HEAD 2>/dev/null || true)"
   run_as_deploy_user git fetch origin "$BRANCH"
   run_as_deploy_user git reset --hard "origin/${BRANCH}"
+  local after_head=""
+  after_head="$(git rev-parse HEAD 2>/dev/null || true)"
+
+  # Bash may continue executing the old in-memory script after git reset updates this file.
+  # Re-exec once so deployment always uses the latest auto-deploy.sh from the freshly pulled code.
+  if [ "${SKYMOBILE_DEPLOY_REEXECED:-0}" != "1" ] && [ -n "$before_head" ] && [ -n "$after_head" ] && [ "$before_head" != "$after_head" ]; then
+    log "🔁 Code changed ${before_head} -> ${after_head}; reloading latest deploy script..."
+    export SKYMOBILE_DEPLOY_REEXECED=1
+    exec "$0" "$@"
+  fi
 
   log "📦 Installing dependencies..."
   log "npm version: $(run_as_deploy_user npm --version)"
