@@ -10,7 +10,7 @@ const normalizeRole = (role?: string | null) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const normalizeRoleForSearch = (role?: string | null) =>
+export const normalizeRoleForSearch = (role?: string | null) =>
   normalizeRole(role)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -21,6 +21,15 @@ const normalizeRoleForSearch = (role?: string | null) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+export const getRoleGroupKey = (role?: string | null) => {
+  const searchableRole = normalizeRoleForSearch(role);
+  if (searchableRole.includes('hanh chinh nhan su')) return 'hr_staff';
+  return searchableRole;
+};
+
+export const isSameRoleGroup = (left?: string | null, right?: string | null) =>
+  !!left && !!right && getRoleGroupKey(left) === getRoleGroupKey(right);
+
 export const isAdminRole = (role?: string | null) => ADMIN_ROLES.includes(normalizeRole(role));
 
 export const isManagerRole = (role?: string | null) => {
@@ -30,9 +39,8 @@ export const isManagerRole = (role?: string | null) => {
 
 export const isHrRole = (role?: string | null) => {
   const normalizedRole = normalizeRole(role);
-  const searchableRole = normalizeRoleForSearch(role);
   return !!normalizedRole && (
     HR_MARKERS.some(marker => normalizedRole.includes(marker))
-    || searchableRole.includes('hanh chinh nhan su')
+    || getRoleGroupKey(role) === 'hr_staff'
   );
 };

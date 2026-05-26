@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { EMPTY_REVENUE_REPORT, calculateGrowth, fetchRevenueReport, formatYen } from '../../services/revenueReport';
 import { API_BASE_URL } from '../../components/messenger/api';
 import { useAuth } from '../../context/AuthContext';
+import { isSameRoleGroup } from '../../auth/roleUtils';
 
 type MobileReportType = 'revenue' | 'page_overview' | 'cskh_personal' | 'page_messages';
 
@@ -187,7 +188,7 @@ const canViewPageReport = (role?: string | null) =>
 
 const getAllowedMobileReports = (user?: any, rolePermissions: any[] = []) => {
   const role = user?.role;
-  const roleConfig = rolePermissions.find(permission => permission.role === role);
+  const roleConfig = rolePermissions.find(permission => isSameRoleGroup(permission.role, role));
   const allowedPermissions = parseAllowedPermissions(roleConfig?.allowed_tabs);
   const configuredReportPermissions = allowedPermissions.filter(permission => permission.startsWith(REPORT_PERMISSION_PREFIX));
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isSameRoleGroup } from '../auth/roleUtils';
 
 export const useTaskForm = (currentUser: any, assignableUsers: any[]) => {
   const [formData, setFormData] = useState({
@@ -20,7 +21,7 @@ export const useTaskForm = (currentUser: any, assignableUsers: any[]) => {
   };
 
   const handleToggleRoleGroup = (role: string) => {
-    const roleUsers = assignableUsers.filter(u => u.role === role).map(u => u.email);
+    const roleUsers = assignableUsers.filter(u => isSameRoleGroup(u.role, role)).map(u => u.email);
     const allRoleUsersSelected = roleUsers.every(email => formData.assignees.includes(email));
     
     setFormData(prev => {

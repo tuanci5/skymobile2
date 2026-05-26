@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { roleService } from '../services/api';
-import { isAdminRole } from '../auth/roleUtils';
+import { isAdminRole, isSameRoleGroup } from '../auth/roleUtils';
 
 interface User {
   email: string;
@@ -105,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!effectiveUser) return false;
     if (isAdminRole(effectiveUser.role)) return true;
 
-    const roleConfig = rolePermissions.find(rp => rp.role === effectiveUser.role);
+    const roleConfig = rolePermissions.find(rp => isSameRoleGroup(rp.role, effectiveUser.role));
     if (!roleConfig) return false;
 
     try {

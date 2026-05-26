@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../components/messenger/api';
 import { useAuth } from '../context/AuthContext';
+import { isSameRoleGroup } from '../auth/roleUtils';
 import {
   EMPTY_REVENUE_REPORT,
   calculateGrowth,
@@ -277,7 +278,7 @@ const parseAllowedPermissions = (allowedTabs: any): string[] => {
 
 const getAllowedReports = (user?: any, rolePermissions: any[] = []) => {
   const role = user?.role;
-  const roleConfig = rolePermissions.find(permission => permission.role === role);
+  const roleConfig = rolePermissions.find(permission => isSameRoleGroup(permission.role, role));
   const allowedPermissions = parseAllowedPermissions(roleConfig?.allowed_tabs);
   const configuredReportPermissions = allowedPermissions.filter(permission => permission.startsWith(REPORT_PERMISSION_PREFIX));
 

@@ -32,7 +32,7 @@ import { MobileRevenuePage } from './pages/mobile/MobileRevenuePage';
 import { MobileMenuPage } from './pages/mobile/MobileMenuPage';
 
 import { ROLE_MAPPING } from './auth/roleMapping';
-import { isAdminRole } from './auth/roleUtils';
+import { isAdminRole, isSameRoleGroup } from './auth/roleUtils';
 import { AppShell } from './layout/AppShell';
 import { MobileShell } from './layout/MobileShell';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -99,7 +99,7 @@ function AppContent() {
     return <LoginPage />;
   }
 
-  const userPerms = rolePermissions.find(p => p.role === user.role);
+  const userPerms = rolePermissions.find(p => isSameRoleGroup(p.role, user.role));
   const allowedTabs = (() => {
     if (isSystemAdmin) return [];
     if (!userPerms) return [];

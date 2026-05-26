@@ -5,7 +5,7 @@ import { ScrollToTop } from './ScrollToTop';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/api';
-import { isAdminRole } from '../auth/roleUtils';
+import { isAdminRole, isSameRoleGroup } from '../auth/roleUtils';
 import { Eye, Shield, ChevronDown, Check, Sparkles, ArrowLeft, Loader2, Search, UserRound } from 'lucide-react';
 
 type AppShellProps = {
@@ -152,7 +152,7 @@ export const AppShell = ({
   const roleOptions: string[] = [...ROLE_OPTIONS, ...extraRoles];
   const currentDisplayRole = simulatedRole || 'Quản trị';
   const roleStaffList = pendingRole
-    ? staffList.filter((staff) => staff.role === pendingRole)
+    ? staffList.filter((staff) => isSameRoleGroup(staff.role, pendingRole))
     : [];
   const filteredStaffList = roleStaffList.filter((staff) => {
     const query = normalizeSearchText(staffSearch);

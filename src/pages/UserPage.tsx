@@ -5,6 +5,7 @@ import {
   Trash2, Edit2, Check, X, Search,
   RefreshCw, AlertCircle, ShieldAlert
 } from 'lucide-react';
+import { isSameRoleGroup } from '../auth/roleUtils';
 
 interface User {
   email: string;
@@ -224,7 +225,7 @@ export const UserPage = () => {
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    const matchesRole = roleFilter === 'all' || isSameRoleGroup(user.role, roleFilter);
     return matchesSearch && matchesRole;
   });
 
@@ -424,7 +425,7 @@ export const UserPage = () => {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {ROLE_OPTIONS.map(role => {
-                  const perms = rolePermissions.find(p => p.role === role);
+                  const perms = rolePermissions.find(p => isSameRoleGroup(p.role, role));
                   let allowedTabs = perms ? (Array.isArray(perms.allowed_tabs) ? perms.allowed_tabs : []) : [];
 
                   if (perms && typeof perms.allowed_tabs === 'string') {
