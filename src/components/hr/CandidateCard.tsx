@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   User, Briefcase, Calendar, Clock, ClipboardList, 
-  CheckCircle2, XCircle, Filter, ExternalLink, Trash2, Edit, BarChart2 
+  CheckCircle2, XCircle, ExternalLink, Trash2, Edit, BarChart2, Loader2 
 } from 'lucide-react';
 
 interface Candidate {
@@ -33,12 +33,26 @@ export const CandidateCard: React.FC<{
   evalData?: any;
   onEvaluate: (c: Candidate) => void;
   onViewReport: (c: Candidate) => void;
-  onStatusChange: (c: Candidate, s: string) => void;
+  onStatusChange: (id: string, status: string) => Promise<any> | any;
   onDelete: (id: string) => void;
   onEditCV: (c: Candidate) => void;
 }> = ({ candidate, user, evalData, onEvaluate, onViewReport, onStatusChange, onDelete, onEditCV }) => {
+  const [savingStatus, setSavingStatus] = useState(false);
   const statusCfg = STATUS_CONFIG[candidate.status] || STATUS_CONFIG['Chờ phỏng vấn'];
-  const canModify = user?.role === 'Quản trị' || user?.role?.includes('Hành chính - Nhân sự');
+  const canModify = user?.role === 'Quản trị' || user?.role?.includes('Hành chính - Nhân sự') || user?.role?.includes('Hành chính & Nhân sự');
+
+  const handleStatusChange = async (nextStatus: string) => {
+    if (!nextStatus || nextStatus === candidate.status || savingStatus) return;
+    try {
+      setSavingStatus(true);
+      await onStatusChange(candidate.id, nextStatus);
+    } catch (error: any) {
+      console.error('Failed to update candidate status:', error);
+      alert(error?.message || 'Không thể lưu trạng thái ứng viên. Vui lòng thử lại.');
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all">
@@ -53,13 +67,20 @@ export const CandidateCard: React.FC<{
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <select
-            value={candidate.status}
-            onChange={(e) => onStatusChange(candidate, e.target.value)}
-            className={`px-2.5 py-1 rounded-full border text-[11px] font-bold outline-none cursor-pointer ${statusCfg.badge}`}
-          >
-            {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <div className="relative">
+            <select
+              value={candidate.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={savingStatus || !canModify}
+              className={`px-2.5 py-1 rounded-full border text-[11px] font-bold outline-none ${savingStatus || !canModify ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} ${statusCfg.badge}`}
+              title={canModify ? 'Chọn nhanh trạng thái và lưu ngay' : 'Bạn không có quyền đổi trạng thái'}
+            >
+              {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {savingStatus && (
+              <Loader2 className="absolute -right-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+            )}
+          </div>
           {evalData && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700">
               <CheckCircle2 className="w-3 h-3" />
