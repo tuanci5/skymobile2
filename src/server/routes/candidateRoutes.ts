@@ -45,12 +45,43 @@ router.put('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    
-    await pool.query('UPDATE candidates SET status = $1 WHERE id = $2', [status, id]);
-    res.json({ success: true, message: 'Status updated' });
-  } catch (error) {
+
+    if (typeof status !== 'string' || !status.trim()) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+
+    const { rows, rowCount } = await pool.query(
+      `UPDATE candidates
+       SET status = $1
+       WHERE id = $2
+       RETURNING id, name, position, interview_date, interviewer, status, cv_link, phone, source, interview_time`,
+      [status.trim(), id]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: `Candidate not found: ${id}` });
+    }
+
+    const row = rows[0];
+    res.json({
+      success: true,
+      message: 'Status updated',
+      candidate: {
+        id: row.id,
+        name: row.name,
+        position: row.position,
+        interviewDate: row.interview_date,
+        interviewer: row.interviewer,
+        status: row.status,
+        cvLink: row.cv_link,
+        phone: row.phone,
+        source: row.source,
+        interviewTime: row.interview_time
+      }
+    });
+  } catch (error: any) {
     console.error('Error updating status:', error);
-    res.status(500).json({ error: 'Failed to update status' });
+    res.status(500).json({ error: error.message || 'Failed to update status' });
   }
 });
 

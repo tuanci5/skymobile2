@@ -29,7 +29,7 @@ export const api = {
 export const candidateService = {
   getAll: () => api.get('/api/candidates'),
   create: (data: any) => api.post('/api/candidates', data),
-  updateStatus: (id: string, status: string) => api.put(`/api/candidates/${id}/status`, { status }),
+  updateStatus: (id: string, status: string) => api.put(`/api/candidates/${encodeURIComponent(id)}/status`, { status }),
   delete: (id: string) => api.delete(`/api/candidates/${id}`),
 };
 

@@ -24,9 +24,19 @@ export const useCandidates = () => {
   }, [fetchCandidates]);
 
   const updateCandidateStatus = async (id: string, status: string) => {
-    const result = await candidateService.updateStatus(id, status);
-    await fetchCandidates();
-    return result;
+    const previousCandidates = candidates;
+    setCandidates(current => current.map(candidate => (
+      candidate.id === id ? { ...candidate, status } : candidate
+    )));
+
+    try {
+      const result = await candidateService.updateStatus(id, status);
+      await fetchCandidates();
+      return result;
+    } catch (err) {
+      setCandidates(previousCandidates);
+      throw err;
+    }
   };
 
   const deleteCandidate = async (id: string) => {
