@@ -120,28 +120,37 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = (page - 1) * limit;
 
-    let queryParts = ['SELECT * FROM customers WHERE 1=1'];
-    let countParts = ['SELECT COUNT(*) FROM customers WHERE 1=1'];
+    let queryParts = [`
+      SELECT c.*, MAX(o.created_at) AS last_order_at
+      FROM customers c
+      LEFT JOIN orders o ON (
+        o.customer_id = c.skymobile_customer_id::text
+        OR o.customer_id = c.id::text
+        OR (o.customer_name IS NOT NULL AND o.customer_name = c.customer_name)
+      )
+      WHERE 1=1
+    `];
+    let countParts = ['SELECT COUNT(*) FROM customers c WHERE 1=1'];
     const params: any[] = [];
     let paramIndex = 1;
 
     if (search) {
-      queryParts.push(` AND (customer_name ILIKE $${paramIndex} OR phone_number ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR facebook_uid ILIKE $${paramIndex})`);
-      countParts.push(` AND (customer_name ILIKE $${paramIndex} OR phone_number ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR facebook_uid ILIKE $${paramIndex})`);
+      queryParts.push(` AND (c.customer_name ILIKE $${paramIndex} OR c.phone_number ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR c.facebook_uid ILIKE $${paramIndex})`);
+      countParts.push(` AND (c.customer_name ILIKE $${paramIndex} OR c.phone_number ILIKE $${paramIndex} OR c.email ILIKE $${paramIndex} OR c.facebook_uid ILIKE $${paramIndex})`);
       params.push(`%${search}%`);
       paramIndex++;
     }
 
     if (source) {
-      queryParts.push(` AND source = $${paramIndex}`);
-      countParts.push(` AND source = $${paramIndex}`);
+      queryParts.push(` AND c.source = $${paramIndex}`);
+      countParts.push(` AND c.source = $${paramIndex}`);
       params.push(source);
       paramIndex++;
     }
 
     if (nationality) {
-      queryParts.push(` AND nationality_name = $${paramIndex}`);
-      countParts.push(` AND nationality_name = $${paramIndex}`);
+      queryParts.push(` AND c.nationality_name = $${paramIndex}`);
+      countParts.push(` AND c.nationality_name = $${paramIndex}`);
       params.push(nationality);
       paramIndex++;
     }
@@ -151,7 +160,7 @@ router.get('/', async (req, res) => {
     const total = parseInt(countRes.rows[0].count);
 
     // Get data
-    queryParts.push(` ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`);
+    queryParts.push(` GROUP BY c.id ORDER BY c.created_at DESC NULLS LAST, c.id DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`);
     params.push(limit, offset);
     
     const { rows } = await pool.query(queryParts.join(''), params);

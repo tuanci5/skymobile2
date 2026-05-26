@@ -49,6 +49,7 @@ interface Customer {
   created_by: string | null;
   created_by_name: string | null;
   created_at: string | null;
+  last_order_at: string | null;
   source: string;
   notes: string | null;
   synced_at: string;
@@ -122,6 +123,21 @@ export const CustomersPage: React.FC = () => {
     const formattedNum = new Intl.NumberFormat('vi-VN').format(Math.round(val || 0));
     return `${formattedNum} ${currencyUnit}`;
   };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return 'Chưa có';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Chưa có';
+    return date.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const formatDateOnly = (value?: string | null) => {
+    if (!value) return 'Chưa có';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Chưa có';
+    return date.toLocaleDateString('vi-VN');
+  };
+
   
   // Customers pagination
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -579,7 +595,7 @@ export const CustomersPage: React.FC = () => {
   const orderCellClass = isApprovalView ? 'px-4 py-4 align-middle' : 'px-6 py-5';
   const orderStatusCellClass = isApprovalView ? 'px-3 py-4 align-middle' : 'px-6 py-5';
   const approvalActionCellClass = isApprovalView ? 'px-4 py-4 align-middle text-right' : 'px-6 py-5 text-right';
-  const orderColumnCount = activeTab === 'approvals' ? 9 : 7;
+  const orderColumnCount = activeTab === 'approvals' ? 10 : 8;
 
   return (
     <div className={pageContainerClass}>
@@ -729,6 +745,7 @@ export const CustomersPage: React.FC = () => {
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Facebook UID</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Nguồn</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Quốc tịch</th>
+                    <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Ngày lên đơn</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Ngày đồng bộ</th>
                     <th className="px-6 py-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Chi tiết</th>
                   </tr>
@@ -736,7 +753,7 @@ export const CustomersPage: React.FC = () => {
                 <tbody className="divide-y divide-slate-50">
                   {loadingCustomers ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={8} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
                           <p className="text-slate-500 font-medium">Đang tải danh sách khách hàng...</p>
@@ -745,7 +762,7 @@ export const CustomersPage: React.FC = () => {
                     </tr>
                   ) : customers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={8} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <Users className="w-12 h-12 text-slate-300" />
                           <p className="text-slate-500 font-medium">Không tìm thấy khách hàng nào khớp.</p>
@@ -790,8 +807,19 @@ export const CustomersPage: React.FC = () => {
                             {c.nationality_name || 'Không rõ'}
                           </span>
                         </td>
-                        <td className="px-6 py-5 text-xs text-slate-500 font-medium">
-                          {new Date(c.synced_at || c.created_at || '').toLocaleDateString('vi-VN')}
+                        <td className="px-6 py-5 text-xs font-medium">
+                          <div className="flex items-center gap-1.5 text-emerald-700 font-bold whitespace-nowrap">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                            {formatDateOnly(c.last_order_at)}
+                          </div>
+                          {!c.last_order_at && <div className="text-[10px] text-slate-400 mt-0.5">Chưa phát sinh đơn</div>}
+                        </td>
+                        <td className="px-6 py-5 text-xs font-medium">
+                          <div className="flex items-center gap-1.5 text-indigo-700 font-bold whitespace-nowrap">
+                            <RefreshCw className="w-3.5 h-3.5 text-indigo-500" />
+                            {formatDateOnly(c.synced_at)}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">Cập nhật từ đồng bộ</div>
                         </td>
                         <td className="px-6 py-5 text-right">
                           <button
@@ -914,7 +942,8 @@ export const CustomersPage: React.FC = () => {
                     <th className={orderHeaderCellClass}>Chi nhánh</th>
                     <th className={orderHeaderCellClass}>Người tạo</th>
                     {activeTab === 'approvals' && <th className={orderHeaderCellClass}>Phê duyệt</th>}
-                    <th className={orderHeaderCellClass}>Ngày chốt</th>
+                    <th className={orderHeaderCellClass}>Ngày lên đơn</th>
+                    <th className={orderHeaderCellClass}>Ngày đồng bộ</th>
                     {activeTab === 'approvals' && <th className={`${orderHeaderCellClass} text-right`}>Thao tác</th>}
                   </tr>
                 </thead>
@@ -994,8 +1023,11 @@ export const CustomersPage: React.FC = () => {
                             {getApprovalStatusBadge(o.approval_status || o.order_status)}
                           </td>
                         )}
-                        <td className={`${orderCellClass} text-xs text-slate-500 font-medium whitespace-nowrap`}>
-                          {new Date(o.created_at).toLocaleDateString('vi-VN')}
+                        <td className={`${orderCellClass} text-xs text-slate-500 font-bold whitespace-nowrap`}>
+                          {formatDateOnly(o.created_at)}
+                        </td>
+                        <td className={`${orderCellClass} text-xs text-indigo-600 font-bold whitespace-nowrap`}>
+                          {formatDateOnly(o.synced_at)}
                         </td>
                         {activeTab === 'approvals' && (
                           <td className={approvalActionCellClass}>
@@ -1444,8 +1476,12 @@ export const CustomersPage: React.FC = () => {
                         <span className="font-bold flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400" /> {selectedOrder.created_by_name || 'Nhân viên'}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400 font-bold">Thời gian tạo</span>
-                        <span className="font-bold flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> {new Date(selectedOrder.created_at).toLocaleString('vi-VN')}</span>
+                        <span className="text-slate-400 font-bold">Ngày lên đơn</span>
+                        <span className="font-bold flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-emerald-500" /> {formatDateTime(selectedOrder.created_at)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400 font-bold">Ngày đồng bộ</span>
+                        <span className="font-bold flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5 text-indigo-500" /> {formatDateTime(selectedOrder.synced_at)}</span>
                       </div>
                     </div>
 
@@ -1558,6 +1594,14 @@ export const CustomersPage: React.FC = () => {
                           <span className="text-slate-400 font-bold">Nguồn dữ liệu</span>
                           <span>{getSourceBadge(selectedCustomer.source)}</span>
                         </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Ngày lên đơn gần nhất</span>
+                          <span className="font-bold flex items-center gap-1 text-emerald-700"><Calendar className="w-3.5 h-3.5 text-emerald-500" />{formatDateTime(selectedCustomer.last_order_at)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400 font-bold">Ngày đồng bộ</span>
+                          <span className="font-bold flex items-center gap-1 text-indigo-700"><RefreshCw className="w-3.5 h-3.5 text-indigo-500" />{formatDateTime(selectedCustomer.synced_at)}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -1596,7 +1640,8 @@ export const CustomersPage: React.FC = () => {
                                 )}
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
                                   <Calendar className="w-3 h-3" />
-                                  {new Date(order.created_at).toLocaleDateString('vi-VN')}
+                                  Lên đơn: {formatDateOnly(order.created_at)}
+                                  <span>• Đồng bộ: {formatDateOnly(order.synced_at)}</span>
                                   <span>• Quantity: {order.product_quantity || 1}</span>
                                 </div>
                               </div>
