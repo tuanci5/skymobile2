@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../../components/messenger/api';
 import { useAuth } from '../../context/AuthContext';
 import { isSameRoleGroup } from '../../auth/roleUtils';
 
-type MobileReportType = 'revenue' | 'page_overview' | 'cskh_personal' | 'page_messages';
+type MobileReportType = 'revenue' | 'page_overview' | 'ad_spend' | 'cskh_personal' | 'page_messages';
 
 type MobileReportDefinition = {
   id: MobileReportType;
@@ -26,6 +26,11 @@ const MOBILE_REPORTS: MobileReportDefinition[] = [
     id: 'page_overview',
     label: 'Báo cáo theo Page',
     description: 'Tin nhắn, doanh thu và chi phí quảng cáo theo từng Fanpage.'
+  },
+  {
+    id: 'ad_spend',
+    label: 'Báo cáo chi phí quảng cáo',
+    description: 'Chi phí Ads, số hội thoại từ Ads, lượt click, giá mỗi hội thoại (CPA) và hiệu suất ROAS.'
   },
   {
     id: 'cskh_personal',
@@ -198,7 +203,7 @@ const getAllowedMobileReports = (user?: any, rolePermissions: any[] = []) => {
 
   return MOBILE_REPORTS.filter(report => {
     if (report.id === 'revenue') return canViewRevenueReport(role);
-    if (report.id === 'page_overview') return canViewPageReport(role);
+    if (report.id === 'page_overview' || report.id === 'ad_spend') return canViewPageReport(role);
     if (report.id === 'cskh_personal') return canViewCskhPersonalReport(role);
     if (report.id === 'page_messages') return canViewMessageReport(role);
     return false;
@@ -222,6 +227,7 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
   const d = report.summary;
   const isCskhPersonal = selectedReport === 'cskh_personal';
   const isPageOverview = selectedReport === 'page_overview';
+  const isAdSpend = selectedReport === 'ad_spend';
   const isPageMessages = selectedReport === 'page_messages';
   const selectedReportInfo = MOBILE_REPORTS.find(report => report.id === selectedReport) || allowedReports[0] || MOBILE_REPORTS[0];
   const isCustomRange = range === 'Khoảng ngày';
@@ -331,7 +337,7 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
 
   useEffect(() => {
     if (!hasAllowedReports) return;
-    if (selectedReport !== 'page_overview') return;
+    if (selectedReport !== 'page_overview' && selectedReport !== 'ad_spend') return;
 
     const controller = new AbortController();
     const params = new URLSearchParams({ range });
@@ -443,26 +449,33 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
       { title: 'Doanh thu', value: formatYen(pageReport.summary.revenue), badge: rangeLabel, icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
       { title: 'Chi phí Ads', value: formatYen(pageReport.summary.ad_cost), badge: rangeLabel, icon: Megaphone, color: 'bg-amber-100 text-amber-600' },
     ]
-    : isPageMessages
+    : isAdSpend
       ? [
-        { title: 'Khách mới', value: messageReport.summary.customer_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-rose-100 text-rose-600' },
-        { title: 'Hội thoại', value: messageReport.summary.conversation_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: MessageSquare, color: 'bg-blue-100 text-blue-600' },
-        { title: 'Tin nhắn', value: messageReport.summary.message_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Inbox, color: 'bg-violet-100 text-violet-600' },
-        { title: 'Nhân viên', value: messageReport.summary.staff_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-emerald-100 text-emerald-600' },
+        { title: 'Chi phí Ads', value: formatYen(pageReport.summary.ad_cost), badge: rangeLabel, icon: Megaphone, color: 'bg-rose-100 text-rose-600' },
+        { title: 'ROAS', value: pageReport.summary.ad_cost > 0 ? `${(pageReport.summary.revenue / pageReport.summary.ad_cost).toFixed(2)}x` : '0.00x', badge: rangeLabel, icon: TrendingUp, color: 'bg-emerald-100 text-emerald-600' },
+        { title: 'Doanh thu', value: formatYen(pageReport.summary.revenue), badge: rangeLabel, icon: DollarSign, color: 'bg-blue-100 text-blue-600' },
+        { title: 'Lãi sau Ads', value: formatYen(pageReport.summary.profit_after_ads), badge: rangeLabel, icon: Activity, color: 'bg-amber-100 text-amber-600' },
       ]
-      : isCskhPersonal
-    ? [
-      { title: 'Khách mới', value: cskhReport.summary.new_customer_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: MessageSquare, color: 'bg-blue-100 text-blue-600' },
-      { title: 'Hội thoại', value: cskhReport.summary.handled_conversation_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-emerald-100 text-emerald-600' },
-      { title: 'Tin đã gửi', value: cskhReport.summary.sent_message_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Inbox, color: 'bg-violet-100 text-violet-600' },
-      { title: 'Ghi chú', value: cskhReport.summary.note_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: FileText, color: 'bg-amber-100 text-amber-600' },
-    ]
-    : [
-      { title: 'Doanh thu', value: formatYen(d.revenue.current), ...growth(d.revenue.current, d.revenue.previous), icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
-      { title: 'Đơn hàng', value: d.orders.current.toLocaleString(), ...growth(d.orders.current, d.orders.previous), icon: ShoppingCart, color: 'bg-blue-100 text-blue-600' },
-      { title: 'Khách mới', value: d.customers.current.toLocaleString(), ...growth(d.customers.current, d.customers.previous), icon: Users, color: 'bg-rose-100 text-rose-600' },
-      { title: 'Đơn TB', value: formatYen(d.averageOrderValue.current), ...growth(d.averageOrderValue.current, d.averageOrderValue.previous), icon: Activity, color: 'bg-amber-100 text-amber-600' },
-    ];
+      : isPageMessages
+        ? [
+          { title: 'Khách mới', value: messageReport.summary.customer_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-rose-100 text-rose-600' },
+          { title: 'Hội thoại', value: messageReport.summary.conversation_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: MessageSquare, color: 'bg-blue-100 text-blue-600' },
+          { title: 'Tin nhắn', value: messageReport.summary.message_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Inbox, color: 'bg-violet-100 text-violet-600' },
+          { title: 'Nhân viên', value: messageReport.summary.staff_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-emerald-100 text-emerald-600' },
+        ]
+        : isCskhPersonal
+      ? [
+        { title: 'Khách mới', value: cskhReport.summary.new_customer_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: MessageSquare, color: 'bg-blue-100 text-blue-600' },
+        { title: 'Hội thoại', value: cskhReport.summary.handled_conversation_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-emerald-100 text-emerald-600' },
+        { title: 'Tin đã gửi', value: cskhReport.summary.sent_message_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Inbox, color: 'bg-violet-100 text-violet-600' },
+        { title: 'Ghi chú', value: cskhReport.summary.note_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: FileText, color: 'bg-amber-100 text-amber-600' },
+      ]
+      : [
+        { title: 'Doanh thu', value: formatYen(d.revenue.current), ...growth(d.revenue.current, d.revenue.previous), icon: DollarSign, color: 'bg-emerald-100 text-emerald-600' },
+        { title: 'Đơn hàng', value: d.orders.current.toLocaleString(), ...growth(d.orders.current, d.orders.previous), icon: ShoppingCart, color: 'bg-blue-100 text-blue-600' },
+        { title: 'Khách mới', value: d.customers.current.toLocaleString(), ...growth(d.customers.current, d.customers.previous), icon: Users, color: 'bg-rose-100 text-rose-600' },
+        { title: 'Đơn TB', value: formatYen(d.averageOrderValue.current), ...growth(d.averageOrderValue.current, d.averageOrderValue.previous), icon: Activity, color: 'bg-amber-100 text-amber-600' },
+      ];
   const maxMobileCskhMessages = Math.max(1, ...cskhReport.byPage.map(page => page.sent_message_count));
   const maxPageRevenue = Math.max(1, ...pageReport.rows.map(page => page.revenue));
   const maxMessageCustomers = Math.max(1, ...messageReport.rows.map(row => row.customer_count));
@@ -542,7 +555,9 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
               ? <Users className="w-4 h-4 text-blue-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               : isPageMessages
                 ? <MessageSquare className="w-4 h-4 text-violet-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              : <BarChart3 className="w-4 h-4 text-emerald-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
+                : isAdSpend
+                  ? <Megaphone className="w-4 h-4 text-rose-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  : <BarChart3 className="w-4 h-4 text-emerald-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
           </div>
           <p className="mt-2 text-[11px] leading-4 text-slate-500 font-medium">{selectedReportInfo.description}</p>
         </div>
@@ -582,7 +597,7 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
         {/* Detail List */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <h3 className="font-bold text-sm text-slate-800 mb-4">
-            {isPageOverview ? 'Hiệu quả theo Fanpage' : isPageMessages ? 'Khách mới theo nhân viên' : isCskhPersonal ? 'Hiệu suất theo Fanpage' : 'Sản phẩm bán chạy'}
+            {isPageOverview ? 'Hiệu quả theo Fanpage' : isAdSpend ? 'Chi phí Ads theo Fanpage' : isPageMessages ? 'Khách mới theo nhân viên' : isCskhPersonal ? 'Hiệu suất theo Fanpage' : 'Sản phẩm bán chạy'}
           </h3>
           {isLoading ? (
             <div className="py-10 text-center text-xs font-bold text-slate-400">Đang tải dữ liệu...</div>
@@ -607,6 +622,32 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )
+          ) : isAdSpend ? (
+            pageReport.rows.length === 0 ? (
+              <div className="py-10 text-center text-xs font-bold text-slate-400">Chưa có dữ liệu chi phí quảng cáo trong kỳ này.</div>
+            ) : (
+              <div className="space-y-4">
+                {pageReport.rows.map((page, i) => {
+                  const maxAdCost = Math.max(1, ...pageReport.rows.map(p => p.ad_cost));
+                  return (
+                    <div key={`${page.page_id}-${i}`}>
+                      <div className="flex justify-between items-center mb-1.5 gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-slate-700 truncate">{page.page_name}</p>
+                          <p className="text-[10px] text-slate-400">
+                            Doanh thu: {formatYen(page.revenue)} · Lãi: {formatYen(page.revenue - page.ad_cost)}
+                          </p>
+                        </div>
+                        <p className="font-bold text-xs text-rose-600 whitespace-nowrap">{formatYen(page.ad_cost)}</p>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-rose-500 h-full rounded-full" style={{ width: `${Math.max(4, (page.ad_cost / maxAdCost) * 100)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )
           ) : isPageMessages ? (

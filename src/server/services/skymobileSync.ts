@@ -297,8 +297,20 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
         if (!o.id) continue;
         ordersProcessed++;
 
-        const checkRes = await client.query('SELECT id FROM orders WHERE skymobile_order_id = $1', [o.id]);
+        const checkRes = await client.query('SELECT id, order_status FROM orders WHERE skymobile_order_id = $1', [o.id]);
+        let shouldFetchDetails = false;
+
         if (checkRes.rows.length > 0) {
+          const existingOrder = checkRes.rows[0];
+          // Check if we have items for this existing order
+          const itemsCheck = await client.query('SELECT 1 FROM order_items WHERE order_id = $1 LIMIT 1', [o.id]);
+          const hasItems = itemsCheck.rows.length > 0;
+
+          // Only fetch details if status changed or items are missing
+          if (existingOrder.order_status !== o.orderStatus || !hasItems) {
+            shouldFetchDetails = true;
+          }
+
           // Update
           await client.query(`
             UPDATE orders SET
@@ -341,6 +353,7 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
           ]);
           ordersUpdated++;
         } else {
+          shouldFetchDetails = true;
           // Insert
           await client.query(`
             INSERT INTO orders (
@@ -371,53 +384,55 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
           ordersInserted++;
         }
 
-        // Luôn tải lại chi tiết đơn hàng để tránh order_items bị cũ khi đơn đã tồn tại nhưng item thay đổi trên Sky Mobile.
-        try {
-          const detailUrl = `${SKY_MOBILE_BASE_URL}/api/orders/${o.id}`;
-          const detailRes = await fetch(detailUrl, {
-            headers: {
-              'authorization': authHeader,
-              'accept': 'application/json, text/plain, */*'
+        // Tải chi tiết đơn hàng khi cần thiết để tránh order_items bị cũ hoặc thiếu
+        if (shouldFetchDetails) {
+          try {
+            const detailUrl = `${SKY_MOBILE_BASE_URL}/api/orders/${o.id}`;
+            const detailRes = await fetch(detailUrl, {
+              headers: {
+                'authorization': authHeader,
+                'accept': 'application/json, text/plain, */*'
+              }
+            });
+
+            await ensureOkResponse(detailRes, `Sky Mobile Order Detail API (đơn ${o.id})`);
+
+            const detailData = await detailRes.json() as any;
+            const items = detailData.orderItems || [];
+
+            // Clear old items for this order to avoid stale data and duplicates on update.
+            await client.query('DELETE FROM order_items WHERE order_id = $1', [o.id]);
+
+            for (const item of items) {
+              if (!item.id) continue;
+              await client.query(`
+                INSERT INTO order_items (
+                  skymobile_item_id, order_id, product_id, product_name,
+                  quantity, selling_price, billing_rate, commission
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (skymobile_item_id) DO UPDATE SET
+                  product_id = EXCLUDED.product_id,
+                  product_name = EXCLUDED.product_name,
+                  quantity = EXCLUDED.quantity,
+                  selling_price = EXCLUDED.selling_price,
+                  billing_rate = EXCLUDED.billing_rate,
+                  commission = EXCLUDED.commission,
+                  synced_at = CURRENT_TIMESTAMP
+              `, [
+                item.id,
+                o.id,
+                item.productId,
+                item.productName,
+                item.quantity,
+                item.effectiveSellingPrice || item.sellingPricePromo || 0,
+                item.effectiveBillingRate || item.billingRatePromo || 0,
+                item.commission || 0
+              ]);
             }
-          });
-
-          await ensureOkResponse(detailRes, `Sky Mobile Order Detail API (đơn ${o.id})`);
-
-          const detailData = await detailRes.json() as any;
-          const items = detailData.orderItems || [];
-
-          // Clear old items for this order to avoid stale data and duplicates on update.
-          await client.query('DELETE FROM order_items WHERE order_id = $1', [o.id]);
-
-          for (const item of items) {
-            if (!item.id) continue;
-            await client.query(`
-              INSERT INTO order_items (
-                skymobile_item_id, order_id, product_id, product_name,
-                quantity, selling_price, billing_rate, commission
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-              ON CONFLICT (skymobile_item_id) DO UPDATE SET
-                product_id = EXCLUDED.product_id,
-                product_name = EXCLUDED.product_name,
-                quantity = EXCLUDED.quantity,
-                selling_price = EXCLUDED.selling_price,
-                billing_rate = EXCLUDED.billing_rate,
-                commission = EXCLUDED.commission,
-                synced_at = CURRENT_TIMESTAMP
-            `, [
-              item.id,
-              o.id,
-              item.productId,
-              item.productName,
-              item.quantity,
-              item.effectiveSellingPrice || item.sellingPricePromo || 0,
-              item.effectiveBillingRate || item.billingRatePromo || 0,
-              item.commission || 0
-            ]);
+          } catch (itemErr: any) {
+            console.error(`Error syncing items for order ${o.id}:`, itemErr.message);
+            log(`⚠️ Không thể đồng bộ chi tiết đơn ${o.id}: ${itemErr.message}`);
           }
-        } catch (itemErr: any) {
-          console.error(`Error syncing items for order ${o.id}:`, itemErr.message);
-          log(`⚠️ Không thể đồng bộ chi tiết đơn ${o.id}: ${itemErr.message}`);
         }
       }
 

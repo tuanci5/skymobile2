@@ -90,6 +90,53 @@ const getReportDateFilter = (range?: string | null, column = 'm.created_at', sta
   return `${column} >= date_trunc('month', CURRENT_DATE)`;
 };
 
+const getFBDateRangeForInsights = (range?: string | null, startDate?: unknown, endDate?: unknown) => {
+  const normalized = String(range || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .trim()
+    .toLowerCase();
+  const customStartDate = String(startDate || '').trim();
+  const customEndDate = String(endDate || '').trim();
+
+  if (normalized.includes('khoang ngay') || normalized === 'custom') {
+    if (ISO_DATE_PATTERN.test(customStartDate) && ISO_DATE_PATTERN.test(customEndDate)) {
+      return { since: customStartDate, until: customEndDate };
+    }
+  }
+
+  if (normalized.includes('hom qua') || normalized === 'yesterday') {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const dateStr = yesterday.toISOString().slice(0, 10);
+    return { since: dateStr, until: dateStr };
+  }
+
+  if (normalized.includes('hom nay') || normalized === 'today') {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    return { since: dateStr, until: dateStr };
+  }
+
+  if (normalized.includes('tuan nay') || normalized === 'week') {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(d.setDate(diff));
+    return {
+      since: startOfWeek.toISOString().slice(0, 10),
+      until: new Date().toISOString().slice(0, 10)
+    };
+  }
+
+  if (normalized.includes('nam nay') || normalized === 'year') {
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+    return { since: yearStart, until: new Date().toISOString().slice(0, 10) };
+  }
+
+  const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+  return { since: monthStart, until: new Date().toISOString().slice(0, 10) };
+};
+
 const isTruthyQueryValue = (value: unknown) =>
   ['1', 'true', 'yes'].includes(String(value || '').trim().toLowerCase());
 
@@ -485,9 +532,9 @@ router.post('/pages', async (req, res) => {
   try {
     const { page_id, page_name, access_token, user_access_token, dify_api_key, facebook_ad_account_id, business_id } = req.body;
     await pool.query(
-      `INSERT INTO fb_pages (page_id, page_name, access_token, user_access_token, dify_api_key, facebook_ad_account_id, business_id) 
+      `INSERT INTO fb_pages (page_id, page_name, access_token, user_access_token, dify_api_key, facebook_ad_account_id, business_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (page_id) DO UPDATE SET 
+       ON CONFLICT (page_id) DO UPDATE SET
        page_name = EXCLUDED.page_name, access_token = EXCLUDED.access_token, user_access_token = EXCLUDED.user_access_token, dify_api_key = EXCLUDED.dify_api_key,
        facebook_ad_account_id = EXCLUDED.facebook_ad_account_id,
        business_id = EXCLUDED.business_id`,
@@ -503,7 +550,7 @@ router.put('/pages/:page_id', async (req, res) => {
   try {
     const { page_id } = req.params;
     const updates = req.body;
-    
+
     if (Object.keys(updates).length === 0) {
       return res.json({ success: true, message: 'No fields to update' });
     }
@@ -552,11 +599,11 @@ router.put('/pages/:page_id', async (req, res) => {
 
     params.push(page_id);
     const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING ${FB_PAGE_SELECT_FIELDS}`;
-    
+
     console.log(`📡 Updating Page ${page_id}:`, updates);
-    
+
     const result = await pool.query(query, params);
-    
+
     if (result.rowCount === 0) {
       console.warn(`⚠️ No page found with ID ${page_id} to update.`);
       return res.status(404).json({ error: 'Page not found' });
@@ -656,7 +703,7 @@ router.put('/pages/:id/assign-users', async (req, res) => {
   try {
     const { id } = req.params;
     const { assigned_users } = req.body;
-    
+
     const result = await pool.query(
       `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING ${FB_PAGE_SELECT_FIELDS}`,
       [JSON.stringify(assigned_users || []), id]
@@ -946,7 +993,7 @@ router.post('/webhook', (req, res) => {
             const vnHour = (new Date().getUTCHours() + 7) % 24;
             const start = page.ai_start_hour;
             const end = page.ai_end_hour;
-            
+
             if (start < end) {
               isWithinAISchedule = vnHour >= start && vnHour < end;
             } else {
@@ -1646,32 +1693,95 @@ router.get('/reports/page-performance', async (req, res) => {
     `);
 
     const toNumber = (value: unknown) => Number(value || 0);
-    const normalizedRows = rows.map(row => ({
-      page_id: String(row.page_id || ''),
-      page_name: String(row.page_name || 'Fanpage'),
-      conversation_count: toNumber(row.conversation_count),
-      active_conversation_count: toNumber(row.active_conversation_count),
-      new_customer_count: toNumber(row.new_customer_count),
-      message_count: toNumber(row.message_count),
-      inbound_message_count: toNumber(row.inbound_message_count),
-      human_message_count: toNumber(row.human_message_count),
-      ai_message_count: toNumber(row.ai_message_count),
-      staff_count: toNumber(row.staff_count),
-      order_count: toNumber(row.order_count),
-      revenue_customer_count: toNumber(row.revenue_customer_count),
-      revenue: toNumber(row.revenue),
-      average_order_value: toNumber(row.average_order_value),
-      ad_cost: toNumber(row.ad_cost),
-      ad_conversation_count: toNumber(row.ad_conversation_count),
-      ad_customer_count: toNumber(row.ad_customer_count),
-      ad_count: toNumber(row.ad_count),
-      ad_click_count: toNumber(row.ad_click_count),
-      roas: toNumber(row.roas),
-      profit_after_ads: toNumber(row.profit_after_ads),
-      cost_per_customer: toNumber(row.cost_per_customer),
-      cost_per_message: toNumber(row.cost_per_message),
-      last_activity_at: row.last_activity_at || null
-    }));
+
+    // Fetch live Facebook Ad Account insights if configured
+    const fbDateRange = getFBDateRangeForInsights(range, req.query.startDate, req.query.endDate);
+    const { rows: pagesWithAds } = await pool.query(
+      `SELECT page_id, access_token, user_access_token, facebook_ad_account_id FROM fb_pages
+       WHERE facebook_ad_account_id IS NOT NULL AND (access_token IS NOT NULL OR user_access_token IS NOT NULL)`
+    );
+
+    const liveAdSpendByPage: Record<string, { spend: number, clicks: number, adCount: number }> = {};
+
+    for (const p of pagesWithAds) {
+      try {
+        const token = p.user_access_token || p.access_token;
+        let actId = String(p.facebook_ad_account_id).trim();
+        if (!actId.startsWith('act_')) {
+          actId = `act_${actId}`;
+        }
+
+        const timeRangeStr = JSON.stringify({ since: fbDateRange.since, until: fbDateRange.until });
+        const url = `https://graph.facebook.com/v18.0/${actId}/insights?level=campaign&time_range=${encodeURIComponent(timeRangeStr)}&fields=campaign_id,campaign_name,spend,clicks,impressions&limit=100&access_token=${token}`;
+
+        const resInsights = await fetch(url);
+        const fbData = await resInsights.json().catch(() => ({}));
+
+        if (fbData && Array.isArray(fbData.data)) {
+          let pageSpend = 0;
+          let pageClicks = 0;
+          const campaignIds = new Set<string>();
+
+          fbData.data.forEach((camp: any) => {
+            pageSpend += Number(camp.spend || 0);
+            pageClicks += Number(camp.clicks || 0);
+            if (camp.campaign_id) campaignIds.add(String(camp.campaign_id));
+          });
+
+          liveAdSpendByPage[p.page_id] = {
+            spend: pageSpend,
+            clicks: pageClicks,
+            adCount: campaignIds.size
+          };
+        }
+      } catch (err: any) {
+        console.error(`[FB_ADS_LIVE] Failed to fetch insights for page ${p.page_id}:`, err?.message || err);
+      }
+    }
+
+    const normalizedRows = rows.map(row => {
+      const pageId = String(row.page_id || '');
+      const rev = toNumber(row.revenue);
+      const newCust = toNumber(row.new_customer_count);
+      const msgCount = toNumber(row.message_count);
+
+      const liveAds = liveAdSpendByPage[pageId];
+      const adCost = liveAds ? liveAds.spend : toNumber(row.ad_cost);
+      const adClickCount = liveAds ? liveAds.clicks : toNumber(row.ad_click_count);
+      const adCount = liveAds ? liveAds.adCount : toNumber(row.ad_count);
+
+      const roas = adCost > 0 ? Number((rev / adCost).toFixed(2)) : 0;
+      const profitAfterAds = rev - adCost;
+      const costPerCustomer = newCust > 0 ? Math.round(adCost / newCust) : 0;
+      const costPerMessage = msgCount > 0 ? Math.round(adCost / msgCount) : 0;
+
+      return {
+        page_id: pageId,
+        page_name: String(row.page_name || 'Fanpage'),
+        conversation_count: toNumber(row.conversation_count),
+        active_conversation_count: toNumber(row.active_conversation_count),
+        new_customer_count: newCust,
+        message_count: msgCount,
+        inbound_message_count: toNumber(row.inbound_message_count),
+        human_message_count: toNumber(row.human_message_count),
+        ai_message_count: toNumber(row.ai_message_count),
+        staff_count: toNumber(row.staff_count),
+        order_count: toNumber(row.order_count),
+        revenue_customer_count: toNumber(row.revenue_customer_count),
+        revenue: rev,
+        average_order_value: toNumber(row.average_order_value),
+        ad_cost: adCost,
+        ad_conversation_count: toNumber(row.ad_conversation_count),
+        ad_customer_count: toNumber(row.ad_customer_count),
+        ad_count: adCount,
+        ad_click_count: adClickCount,
+        roas,
+        profit_after_ads: profitAfterAds,
+        cost_per_customer: costPerCustomer,
+        cost_per_message: costPerMessage,
+        last_activity_at: row.last_activity_at || null
+      };
+    });
 
     const summary = normalizedRows.reduce((acc, row) => {
       acc.page_count += row.page_id === 'unassigned' ? 0 : 1;
@@ -2454,9 +2564,9 @@ router.post('/conversations/:id/refresh-profile', async (req, res) => {
   try {
     const { id } = req.params;
     const { rows: convs } = await pool.query(
-      `SELECT c.customer_id, p.access_token, p.page_id 
-       FROM fb_conversations c 
-       JOIN fb_pages p ON c.page_id = p.page_id 
+      `SELECT c.customer_id, p.access_token, p.page_id
+       FROM fb_conversations c
+       JOIN fb_pages p ON c.page_id = p.page_id
        WHERE c.id = $1`, [id]
     );
 

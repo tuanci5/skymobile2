@@ -175,6 +175,7 @@ export const CustomersPage: React.FC = () => {
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFinished, setSyncFinished] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [syncProgressMsg, setSyncProgressMsg] = useState('');
 
@@ -473,6 +474,7 @@ export const CustomersPage: React.FC = () => {
 
   const handleSync = () => {
     setIsSyncing(true);
+    setSyncFinished(false);
     setSyncLogs([]);
     setSyncProgressMsg('Đang khởi tạo kết nối đồng bộ...');
 
@@ -488,6 +490,7 @@ export const CustomersPage: React.FC = () => {
           setSyncProgressMsg('🎉 Đồng bộ thành công hoàn toàn!');
           setSyncLogs(prev => [...prev, '🎉 Đồng bộ thành công cơ sở dữ liệu.']);
           eventSource.close();
+          setSyncFinished(true);
           setTimeout(() => {
             setIsSyncing(false);
             if (activeTab === 'customers') fetchCustomers(1);
@@ -498,13 +501,13 @@ export const CustomersPage: React.FC = () => {
           setSyncProgressMsg(`❌ Lỗi đồng bộ: ${data.error}`);
           setSyncLogs(prev => [...prev, `❌ Thất bại: ${data.error}`]);
           eventSource.close();
-          setIsSyncing(false);
+          setSyncFinished(true);
         }
       } catch (err) {
         console.error('Error parsing sync event:', err);
         setSyncProgressMsg('❌ Lỗi xử lý phản hồi đồng bộ từ máy chủ.');
         eventSource.close();
-        setIsSyncing(false);
+        setSyncFinished(true);
       }
     };
 
@@ -512,7 +515,7 @@ export const CustomersPage: React.FC = () => {
       console.error('EventSource connection error:', err);
       setSyncProgressMsg('❌ Lỗi kết nối máy chủ đồng bộ.');
       eventSource.close();
-      setIsSyncing(false);
+      setSyncFinished(true);
     };
   };
 
@@ -1743,6 +1746,15 @@ export const CustomersPage: React.FC = () => {
               <div className="text-xs text-slate-400 font-medium">
                 Vui lòng không tắt hoặc tải lại trang web trong quá trình đồng bộ này.
               </div>
+
+              {syncFinished && (
+                <button
+                  onClick={() => setIsSyncing(false)}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-sm transition-all active:scale-98 shadow-md"
+                >
+                  Đóng cửa sổ
+                </button>
+              )}
             </motion.div>
           </div>
         )}

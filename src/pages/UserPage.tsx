@@ -45,6 +45,7 @@ const REPORT_PERMISSION_PREFIX = 'report:';
 const REPORTS_TO_MANAGE = [
   { id: 'report:revenue', label: 'Doanh thu' },
   { id: 'report:page_overview', label: 'Báo cáo theo Page' },
+  { id: 'report:ad_spend', label: 'Báo cáo chi phí quảng cáo' },
   { id: 'report:cskh_personal', label: 'Báo cáo cá nhân CSKH' },
   { id: 'report:page_messages', label: 'Khách mới nhắn Page theo nhân viên' },
 ];

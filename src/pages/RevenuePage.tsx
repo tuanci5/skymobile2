@@ -34,7 +34,7 @@ import {
   getOrderStatusLabel
 } from '../services/revenueReport';
 
-type PageReportType = 'page_overview';
+type PageReportType = 'page_overview' | 'ad_spend';
 type ReportType = 'revenue' | PageReportType | 'page_messages' | 'cskh_personal';
 
 type ReportDefinition = {
@@ -194,7 +194,7 @@ const EMPTY_PAGE_REPORT: PageReportData = {
   }
 };
 
-const PAGE_REPORT_TYPES = ['page_overview'] as const;
+const PAGE_REPORT_TYPES = ['page_overview', 'ad_spend'] as const;
 
 const isPageReportType = (report: ReportType): report is PageReportType =>
   PAGE_REPORT_TYPES.includes(report as PageReportType);
@@ -209,6 +209,11 @@ const REPORTS: ReportDefinition[] = [
     id: 'page_overview',
     label: 'Báo cáo theo Page',
     description: 'Tin nhắn, doanh thu và chi phí quảng cáo trên cùng một màn hình, lọc theo Fanpage.'
+  },
+  {
+    id: 'ad_spend',
+    label: 'Báo cáo chi phí quảng cáo',
+    description: 'Chi phí Ads, số hội thoại từ Ads, lượt click, giá mỗi hội thoại (CPA), lượt nhấp (CPC) và tỷ suất đầu tư (ROAS).'
   },
   {
     id: 'cskh_personal',
@@ -887,6 +892,148 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
     );
   };
 
+  const renderAdSpendReport = () => {
+    // CPC
+    const averageCpc = pageSummary.ad_click_count > 0 ? Math.round(pageSummary.ad_cost / pageSummary.ad_click_count) : 0;
+    // CPA (Cost per Conversation)
+    const averageCpa = pageSummary.ad_conversation_count > 0 ? Math.round(pageSummary.ad_cost / pageSummary.ad_conversation_count) : 0;
+
+    const adSpendOverviewStats = [
+      { title: 'Tổng chi phí Ads', value: formatYen(pageSummary.ad_cost), icon: <Megaphone className="w-6 h-6 text-rose-600" />, color: 'bg-rose-100' },
+      { title: 'Số lượt nhấp Ads', value: formatNumber(pageSummary.ad_click_count), icon: <Activity className="w-6 h-6 text-blue-600" />, color: 'bg-blue-100' },
+      { title: 'Hội thoại từ Ads', value: formatNumber(pageSummary.ad_conversation_count), icon: <MessageSquare className="w-6 h-6 text-violet-600" />, color: 'bg-violet-100' },
+      { title: 'Doanh thu từ Page', value: formatYen(pageSummary.revenue), icon: <DollarSign className="w-6 h-6 text-emerald-600" />, color: 'bg-emerald-100' },
+      { title: 'ROAS quảng cáo', value: `${formatRatio(pageSummary.roas)}x`, icon: <TrendingUp className="w-6 h-6 text-emerald-600" />, color: 'bg-emerald-100' },
+      { title: 'Giá/Hội thoại (CPA)', value: formatYen(averageCpa), icon: <Target className="w-6 h-6 text-amber-600" />, color: 'bg-amber-100' },
+      { title: 'Giá/Lượt nhấp (CPC)', value: formatYen(averageCpc), icon: <Timer className="w-6 h-6 text-cyan-600" />, color: 'bg-cyan-100' },
+      { title: 'Lãi sau chi phí Ads', value: formatYen(pageSummary.profit_after_ads), icon: <Wallet className="w-6 h-6 text-amber-600" />, color: 'bg-amber-100' }
+    ];
+
+    return (
+      <>
+        {pageReportError && (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-medium text-rose-700">
+            {pageReportError}
+          </div>
+        )}
+
+        {/* Dropdown Page Selection */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 md:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div>
+              <h3 className="font-black text-slate-900 text-lg">Báo cáo chi phí quảng cáo</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Xem thống kê chi tiết hiệu suất chiến dịch quảng cáo, chi phí click, giá lead nhắn tin và hiệu quả ROAS của từng Fanpage.
+              </p>
+            </div>
+            <div className="relative min-w-full sm:min-w-[320px] lg:min-w-[360px]">
+              <select
+                value={selectedPageId}
+                onChange={(e) => setSelectedPageId(e.target.value)}
+                className="appearance-none w-full bg-white border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
+              >
+                <option value="all">Tất cả Page</option>
+                {pageOptions.map(page => (
+                  <option key={page.page_id} value={page.page_id}>{page.page_name}</option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Overview Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {adSpendOverviewStats.map((stat, idx) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              key={stat.title}
+              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={`p-3 rounded-2xl ${stat.color}`}>{stat.icon}</div>
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">{dateRangeLabel}</span>
+              </div>
+              <p className="text-slate-500 font-medium text-sm mb-1">{stat.title}</p>
+              <h3 className="text-2xl font-black text-slate-800">{stat.value}</h3>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Detailed Table */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">Hiệu suất ngân sách theo Fanpage</h3>
+              <p className="text-slate-500 text-sm mt-1">
+                Đối chiếu chi phí, số clicks, chi phí CPA hội thoại và ROAS tổng hợp theo từng Fanpage.
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full shrink-0">
+              {selectedPageName}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Fanpage</th>
+                  <th className="px-6 py-4 text-right">Chi phí Ads</th>
+                  <th className="px-6 py-4 text-right">Lượt Clicks</th>
+                  <th className="px-6 py-4 text-right">CPC trung bình</th>
+                  <th className="px-6 py-4 text-right">Hội thoại Ads</th>
+                  <th className="px-6 py-4 text-right">CPA trung bình</th>
+                  <th className="px-6 py-4 text-right">Doanh thu</th>
+                  <th className="px-6 py-4 text-right">Lãi sau Ads</th>
+                  <th className="px-6 py-4 text-right">ROAS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {isLoadingPageReport ? (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
+                      <Loader2 className="w-5 h-5 animate-spin inline mr-2" /> Đang tải dữ liệu...
+                    </td>
+                  </tr>
+                ) : selectedPageRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
+                      Chưa có dữ liệu chi phí quảng cáo trong kỳ này.
+                    </td>
+                  </tr>
+                ) : selectedPageRows.map(row => {
+                  const cpc = row.ad_click_count > 0 ? Math.round(row.ad_cost / row.ad_click_count) : 0;
+                  const cpa = row.ad_conversation_count > 0 ? Math.round(row.ad_cost / row.ad_conversation_count) : 0;
+                  return (
+                    <tr key={row.page_id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-slate-800">{row.page_name}</p>
+                        {row.page_id !== 'unassigned' && <p className="text-xs text-slate-400">ID: {row.page_id}</p>}
+                      </td>
+                      <td className="px-6 py-4 text-right font-bold text-rose-600">{formatYen(row.ad_cost)}</td>
+                      <td className="px-6 py-4 text-right font-bold text-blue-700">{formatNumber(row.ad_click_count)}</td>
+                      <td className="px-6 py-4 text-right font-medium text-slate-600">{formatYen(cpc)}</td>
+                      <td className="px-6 py-4 text-right font-bold text-violet-700">{formatNumber(row.ad_conversation_count)}</td>
+                      <td className="px-6 py-4 text-right font-medium text-slate-600">{formatYen(cpa)}</td>
+                      <td className="px-6 py-4 text-right font-black text-emerald-700">{formatYen(row.revenue)}</td>
+                      <td className="px-6 py-4 text-right font-black text-slate-900">{formatYen(row.profit_after_ads)}</td>
+                      <td className="px-6 py-4 text-right font-black text-slate-900">{formatRatio(row.roas)}x</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   const renderRevenueReport = () => (
     <>
       {revenueReportError && (
@@ -1423,9 +1570,11 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               ? <MessageSquare className="w-5 h-5" />
               : selectedReport === 'page_overview'
                 ? <BarChart3 className="w-5 h-5" />
-                : selectedReport === 'cskh_personal'
-                  ? <Users className="w-5 h-5" />
-                  : <DollarSign className="w-5 h-5" />}
+                : selectedReport === 'ad_spend'
+                  ? <Megaphone className="w-5 h-5" />
+                  : selectedReport === 'cskh_personal'
+                    ? <Users className="w-5 h-5" />
+                    : <DollarSign className="w-5 h-5" />}
           </div>
           <div>
             <h2 className="font-black text-slate-900">{selectedReportInfo.label}</h2>
@@ -1434,13 +1583,15 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
         </div>
       </div>
 
-      {isPageReportSelected
+      {selectedReport === 'page_overview'
         ? renderPageReport()
-        : selectedReport === 'page_messages'
-          ? renderMessageReport()
-          : selectedReport === 'cskh_personal'
-            ? renderCskhPersonalReport()
-            : renderRevenueReport()}
+        : selectedReport === 'ad_spend'
+          ? renderAdSpendReport()
+          : selectedReport === 'page_messages'
+            ? renderMessageReport()
+            : selectedReport === 'cskh_personal'
+              ? renderCskhPersonalReport()
+              : renderRevenueReport()}
     </div>
   );
 };
