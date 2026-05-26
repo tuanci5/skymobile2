@@ -22,6 +22,58 @@ run_as_deploy_user() {
   fi
 }
 
+run_npm_with_dev_deps() {
+  run_as_deploy_user env \
+    NODE_ENV=development \
+    NPM_CONFIG_PRODUCTION=false \
+    npm_config_production=false \
+    npm_config_omit= \
+    npm_config_include=dev \
+    npm_config_bin_links=true \
+    npm_config_ignore_scripts=false \
+    npm "$@"
+}
+
+ensure_node_bin() {
+  local package_name="$1"
+  local bin_path="$2"
+
+  if [ -x "node_modules/.bin/${package_name}" ]; then
+    return 0
+  fi
+
+  if [ -f "$bin_path" ]; then
+    log "⚠️ node_modules/.bin/${package_name} is missing; using ${bin_path} directly."
+    return 0
+  fi
+
+  log "⚠️ Missing ${package_name} binary after npm install. Reinstalling dependencies with bin-links enabled..."
+  run_as_deploy_user rm -rf node_modules
+  if [ -f package-lock.json ]; then
+    run_npm_with_dev_deps ci --include=dev --bin-links=true
+  else
+    run_npm_with_dev_deps install --include=dev --bin-links=true
+  fi
+
+  if [ ! -x "node_modules/.bin/${package_name}" ] && [ ! -f "$bin_path" ]; then
+    log "❌ ${package_name} is still missing after reinstall. Check npm config, package-lock, and server disk permissions."
+    run_as_deploy_user npm config list || true
+    exit 1
+  fi
+}
+
+run_node_bin() {
+  local package_name="$1"
+  local fallback_path="$2"
+  shift 2
+
+  if [ -x "node_modules/.bin/${package_name}" ]; then
+    run_as_deploy_user "./node_modules/.bin/${package_name}" "$@"
+  else
+    run_as_deploy_user node "$fallback_path" "$@"
+  fi
+}
+
 main() {
   log "------------------------------------------"
   log "🚀 Starting Sky Mobile deployment"
@@ -49,17 +101,26 @@ main() {
   run_as_deploy_user git reset --hard "origin/${BRANCH}"
 
   log "📦 Installing dependencies..."
+  log "npm version: $(run_as_deploy_user npm --version)"
+  log "node version: $(run_as_deploy_user node --version)"
+  log "npm omit config: $(run_as_deploy_user npm config get omit 2>/dev/null || true)"
+  log "npm bin-links config: $(run_as_deploy_user npm config get bin-links 2>/dev/null || true)"
+
   if [ -f package-lock.json ]; then
-    run_as_deploy_user npm ci --include=dev
+    run_npm_with_dev_deps ci --include=dev --bin-links=true
   else
-    run_as_deploy_user npm install --include=dev
+    run_npm_with_dev_deps install --include=dev --bin-links=true
   fi
 
+  ensure_node_bin "vite" "node_modules/vite/bin/vite.js"
+  ensure_node_bin "tsc" "node_modules/typescript/bin/tsc"
+  ensure_node_bin "tsx" "node_modules/tsx/dist/cli.mjs"
+
   log "🏗️ Building frontend assets..."
-  run_as_deploy_user npm run build
+  run_node_bin "vite" "node_modules/vite/bin/vite.js" build
 
   log "🧪 Type-checking project..."
-  run_as_deploy_user npm run lint
+  run_node_bin "tsc" "node_modules/typescript/bin/tsc" --noEmit
 
   log "🧹 Releasing API port ${API_PORT} if needed..."
   if command -v fuser >/dev/null 2>&1; then
