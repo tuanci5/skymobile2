@@ -2586,11 +2586,14 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                             <div className="p-5">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                                 <div>
-                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Page Access Token</p>
+                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                    <span>Page Access Token</span>
+                                    {page.access_token_preview && <span className="text-[10px] text-blue-600 font-mono">{page.access_token_preview}</span>}
+                                  </p>
                                   <input
                                     type="password"
                                     className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Dán Page Access Token mới để nhắn tin Page..."
+                                    placeholder={page.access_token_preview ? `${page.access_token_preview} — dán token mới nếu cần đổi` : 'Dán Page Access Token mới để nhắn tin Page...'}
                                     value={editingPage?.id === page.page_id ? editingPage.token : ''}
                                     onChange={(e) => {
                                       const newToken = e.target.value;
@@ -2615,12 +2618,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
                                 <div>
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
                                     <span>User Access Token</span>
-                                    {page.has_user_access_token && <span className="text-[10px] text-emerald-600">Đã lưu</span>}
+                                    {page.user_access_token_preview && <span className="text-[10px] text-purple-600 font-mono">{page.user_access_token_preview}</span>}
                                   </p>
                                   <input
                                     type="password"
                                     className="w-full bg-white border border-slate-200 p-2.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500"
-                                    placeholder="Dán User/System token có ads_read..."
+                                    placeholder={page.user_access_token_preview ? `${page.user_access_token_preview} — dán token mới nếu cần đổi` : 'Dán User/System token có ads_read...'}
                                     value={editingPage?.id === page.page_id ? editingPage.userToken : ''}
                                     onChange={(e) => {
                                       const newUserToken = e.target.value;

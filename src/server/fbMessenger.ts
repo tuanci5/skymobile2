@@ -464,11 +464,17 @@ async function resolveFacebookUidFromConversationGraph(pageId: string, psid: str
   };
 }
 
+
+const FB_PAGE_SELECT_FIELDS = `id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour,
+  CASE WHEN access_token IS NOT NULL AND access_token <> '' THEN CONCAT(LEFT(access_token, 10), 'xxx') ELSE NULL END AS access_token_preview,
+  CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN CONCAT(LEFT(user_access_token, 10), 'xxx') ELSE NULL END AS user_access_token_preview,
+  CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`;
+
 // ─── FB PAGES ───
 
 router.get('/pages', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> \'\' THEN true ELSE false END AS has_user_access_token FROM fb_pages ORDER BY created_at DESC');
+    const { rows } = await pool.query(`SELECT ${FB_PAGE_SELECT_FIELDS} FROM fb_pages ORDER BY created_at DESC`);
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -545,7 +551,7 @@ router.put('/pages/:page_id', async (req, res) => {
     }
 
     params.push(page_id);
-    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`;
+    const query = `UPDATE fb_pages SET ${setClauses.join(', ')} WHERE page_id = $${paramIndex} RETURNING ${FB_PAGE_SELECT_FIELDS}`;
     
     console.log(`📡 Updating Page ${page_id}:`, updates);
     
@@ -652,7 +658,7 @@ router.put('/pages/:id/assign-users', async (req, res) => {
     const { assigned_users } = req.body;
     
     const result = await pool.query(
-      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`,
+      `UPDATE fb_pages SET assigned_users = $1::jsonb WHERE page_id = $2 RETURNING ${FB_PAGE_SELECT_FIELDS}`,
       [JSON.stringify(assigned_users || []), id]
     );
     if (result.rowCount === 0) {
@@ -671,7 +677,7 @@ router.put('/pages/:id/assign-ads-users', async (req, res) => {
     const { assigned_ads_users } = req.body;
 
     const result = await pool.query(
-      `UPDATE fb_pages SET assigned_ads_users = $1::jsonb WHERE page_id = $2 RETURNING id, page_id, page_name, is_active, dify_api_key, facebook_ad_account_id, business_id, distribution_mode, assigned_users, assigned_ads_users, ai_reply_delay, ai_start_hour, ai_end_hour, CASE WHEN user_access_token IS NOT NULL AND user_access_token <> '' THEN true ELSE false END AS has_user_access_token`,
+      `UPDATE fb_pages SET assigned_ads_users = $1::jsonb WHERE page_id = $2 RETURNING ${FB_PAGE_SELECT_FIELDS}`,
       [JSON.stringify(assigned_ads_users || []), id]
     );
     if (result.rowCount === 0) {
