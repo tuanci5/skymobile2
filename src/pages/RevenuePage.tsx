@@ -1256,8 +1256,8 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="space-y-6">
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="p-6 md:p-8 border-b border-slate-100">
             <h3 className="font-bold text-slate-800 text-lg">Khách mới nhắn tin theo Page và nhân viên</h3>
             <p className="text-slate-500 text-sm mt-1">Mỗi khách/Page chỉ tính một lần, tại thời điểm khách gửi tin đầu tiên trong kỳ đã chọn.</p>
