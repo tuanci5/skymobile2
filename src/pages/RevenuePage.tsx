@@ -58,6 +58,12 @@ type MessageReportRow = {
   response_count: number;
   total_response_seconds: number;
   average_response_seconds: number;
+  business_response_count: number;
+  business_total_response_seconds: number;
+  business_average_response_seconds: number;
+  after_hours_response_count: number;
+  after_hours_total_response_seconds: number;
+  after_hours_average_response_seconds: number;
   first_message_at?: string | null;
   last_message_at?: string | null;
 };
@@ -72,6 +78,12 @@ type MessageReportData = {
     response_count: number;
     total_response_seconds: number;
     average_response_seconds: number;
+    business_response_count: number;
+    business_total_response_seconds: number;
+    business_average_response_seconds: number;
+    after_hours_response_count: number;
+    after_hours_total_response_seconds: number;
+    after_hours_average_response_seconds: number;
     page_count: number;
     staff_count: number;
   };
@@ -668,6 +680,12 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
     response_count: 0,
     total_response_seconds: 0,
     average_response_seconds: 0,
+    business_response_count: 0,
+    business_total_response_seconds: 0,
+    business_average_response_seconds: 0,
+    after_hours_response_count: 0,
+    after_hours_total_response_seconds: 0,
+    after_hours_average_response_seconds: 0,
     page_count: 0,
     staff_count: 0
   };
@@ -676,15 +694,19 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
     : 0;
 
   const staffTotals = useMemo(() => {
-    const totals = new Map<string, { name: string; role: string; customers: number; conversations: number; messages: number; responseCount: number; responseSecondsTotal: number }>();
+    const totals = new Map<string, { name: string; role: string; customers: number; conversations: number; messages: number; responseCount: number; responseSecondsTotal: number; businessResponseCount: number; businessResponseSecondsTotal: number; afterHoursResponseCount: number; afterHoursResponseSecondsTotal: number }>();
     messageRows.forEach(row => {
       const key = row.staff_email || row.staff_key || row.staff_name;
-      const current = totals.get(key) || { name: row.staff_name, role: row.staff_role || '', customers: 0, conversations: 0, messages: 0, responseCount: 0, responseSecondsTotal: 0 };
+      const current = totals.get(key) || { name: row.staff_name, role: row.staff_role || '', customers: 0, conversations: 0, messages: 0, responseCount: 0, responseSecondsTotal: 0, businessResponseCount: 0, businessResponseSecondsTotal: 0, afterHoursResponseCount: 0, afterHoursResponseSecondsTotal: 0 };
       current.customers += Number(row.customer_count || 0);
       current.conversations += Number(row.conversation_count || 0);
       current.messages += Number(row.message_count || 0);
       current.responseCount += Number(row.response_count || 0);
       current.responseSecondsTotal += Number(row.total_response_seconds || 0);
+      current.businessResponseCount += Number(row.business_response_count || 0);
+      current.businessResponseSecondsTotal += Number(row.business_total_response_seconds || 0);
+      current.afterHoursResponseCount += Number(row.after_hours_response_count || 0);
+      current.afterHoursResponseSecondsTotal += Number(row.after_hours_total_response_seconds || 0);
       totals.set(key, current);
     });
     return Array.from(totals.values()).sort((a, b) => b.customers - a.customers);
@@ -1206,12 +1228,13 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
 
   const renderMessageReport = () => (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-6">
         {[
           { title: 'Khách mới nhắn tin', value: messageSummary.customer_count, icon: <MessageSquare className="w-6 h-6 text-blue-600" />, color: 'bg-blue-100' },
           { title: 'Số tin nhắn', value: messageSummary.message_count, icon: <Inbox className="w-6 h-6 text-emerald-600" />, color: 'bg-emerald-100' },
           { title: 'Tin nhắn / Hội thoại', value: messagesPerConversation.toFixed(1), icon: <FileText className="w-6 h-6 text-violet-600" />, color: 'bg-violet-100' },
-          { title: 'Phản hồi TB', value: formatDuration(messageSummary.average_response_seconds), icon: <Timer className="w-6 h-6 text-cyan-600" />, color: 'bg-cyan-100' },
+          { title: 'Phản hồi HC TB', value: formatDuration(messageSummary.business_average_response_seconds), icon: <Timer className="w-6 h-6 text-cyan-600" />, color: 'bg-cyan-100' },
+          { title: 'Phản hồi ngoài giờ TB', value: formatDuration(messageSummary.after_hours_average_response_seconds), icon: <Timer className="w-6 h-6 text-indigo-600" />, color: 'bg-indigo-100' },
           { title: 'Khách chưa giao', value: messageSummary.unassigned_customer_count, icon: <AlertCircle className="w-6 h-6 text-amber-600" />, color: 'bg-amber-100' }
         ].map((stat, idx) => (
           <motion.div
@@ -1260,7 +1283,8 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                     <th className="px-6 py-4 text-right">Khách mới</th>
                     <th className="px-6 py-4 text-right">Tin nhắn</th>
                     <th className="px-6 py-4 text-right">Tin/Hội thoại</th>
-                    <th className="px-6 py-4 text-right">Phản hồi TB</th>
+                    <th className="px-6 py-4 text-right">Phản hồi HC TB</th>
+                    <th className="px-6 py-4 text-right">Phản hồi ngoài giờ TB</th>
                     <th className="px-6 py-4">Khách mới nhất</th>
                     <th className="px-6 py-4">Nhân viên</th>
                   </tr>
@@ -1277,7 +1301,8 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                       <td className="px-6 py-4 text-right text-slate-700 font-bold">
                         {row.conversation_count > 0 ? (Number(row.message_count || 0) / Number(row.conversation_count)).toFixed(1) : '0.0'}
                       </td>
-                      <td className="px-6 py-4 text-right text-slate-700 font-bold">{formatDuration(row.average_response_seconds)}</td>
+                      <td className="px-6 py-4 text-right text-slate-700 font-bold">{formatDuration(row.business_average_response_seconds)}</td>
+                      <td className="px-6 py-4 text-right text-slate-700 font-bold">{formatDuration(row.after_hours_average_response_seconds)}</td>
                       <td className="px-6 py-4 text-slate-500">{formatDateTime(row.last_message_at)}</td>
                       <td className="px-6 py-4">
                         <p className="font-bold text-slate-700">{row.staff_name}</p>
@@ -1306,7 +1331,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
                     <div className="min-w-0">
                       <p className="font-bold text-slate-700 text-sm truncate">{staff.name}</p>
                       <p className="text-xs text-slate-500">
-                        {staff.customers.toLocaleString('vi-VN')} khách mới · {staff.messages.toLocaleString('vi-VN')} tin nhắn · {formatDuration(staff.responseCount > 0 ? staff.responseSecondsTotal / staff.responseCount : 0)} phản hồi TB
+                        {staff.customers.toLocaleString('vi-VN')} khách mới · {staff.messages.toLocaleString('vi-VN')} tin nhắn · HC {formatDuration(staff.businessResponseCount > 0 ? staff.businessResponseSecondsTotal / staff.businessResponseCount : 0)} · Ngoài giờ {formatDuration(staff.afterHoursResponseCount > 0 ? staff.afterHoursResponseSecondsTotal / staff.afterHoursResponseCount : 0)}
                       </p>
                     </div>
                     <p className="font-black text-slate-900 text-sm">{staff.customers.toLocaleString('vi-VN')}</p>

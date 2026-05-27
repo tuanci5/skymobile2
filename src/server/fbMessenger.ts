@@ -1917,13 +1917,13 @@ router.get('/reports/new-messages', async (req, res) => {
             p.assigned_users,
             p.assigned_ads_users
         ),
-        first_human_responses AS (
+        first_staff_or_ai_responses AS (
           SELECT
             cfm.conversation_id,
             MIN(reply.created_at) AS first_response_at
           FROM customer_first_messages cfm
           JOIN fb_messages reply ON reply.conversation_id = cfm.conversation_id
-            AND reply.sender_type = 'human'
+            AND reply.sender_type IN ('human', 'ai')
             AND reply.created_at > cfm.first_message_at
           GROUP BY cfm.conversation_id
         )
@@ -1937,13 +1937,19 @@ router.get('/reports/new-messages', async (req, res) => {
           COUNT(*)::int AS customer_count,
           COUNT(*)::int AS conversation_count,
           SUM(cfm.message_count)::int AS message_count,
-          COUNT(fhr.first_response_at)::int AS response_count,
-          COALESCE(SUM(EXTRACT(EPOCH FROM (fhr.first_response_at - cfm.first_message_at))) FILTER (WHERE fhr.first_response_at IS NOT NULL), 0)::int AS total_response_seconds,
-          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fhr.first_response_at - cfm.first_message_at))) FILTER (WHERE fhr.first_response_at IS NOT NULL)), 0)::int AS average_response_seconds,
+          COUNT(fsr.first_response_at)::int AS response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL), 0)::int AS total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL)), 0)::int AS average_response_seconds,
+          COUNT(fsr.first_response_at) FILTER (WHERE fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00')::int AS business_response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00'), 0)::int AS business_total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00')), 0)::int AS business_average_response_seconds,
+          COUNT(fsr.first_response_at) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00'))::int AS after_hours_response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00')), 0)::int AS after_hours_total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00'))), 0)::int AS after_hours_average_response_seconds,
           MIN(cfm.first_message_at) AS first_message_at,
           MAX(cfm.first_message_at) AS last_message_at
         FROM customer_first_messages cfm
-        LEFT JOIN first_human_responses fhr ON fhr.conversation_id = cfm.conversation_id
+        LEFT JOIN first_staff_or_ai_responses fsr ON fsr.conversation_id = cfm.conversation_id
         WHERE ${dateFilter}
           ${scopeFilter}
         GROUP BY
@@ -1971,6 +1977,12 @@ router.get('/reports/new-messages', async (req, res) => {
       response_count: Number(row.response_count || 0),
       total_response_seconds: Number(row.total_response_seconds || 0),
       average_response_seconds: Number(row.average_response_seconds || 0),
+      business_response_count: Number(row.business_response_count || 0),
+      business_total_response_seconds: Number(row.business_total_response_seconds || 0),
+      business_average_response_seconds: Number(row.business_average_response_seconds || 0),
+      after_hours_response_count: Number(row.after_hours_response_count || 0),
+      after_hours_total_response_seconds: Number(row.after_hours_total_response_seconds || 0),
+      after_hours_average_response_seconds: Number(row.after_hours_average_response_seconds || 0),
       first_message_at: row.first_message_at || null,
       last_message_at: row.last_message_at || null
     }));
@@ -1981,6 +1993,10 @@ router.get('/reports/new-messages', async (req, res) => {
       acc.message_count += Number(row.message_count || 0);
       acc.response_count += Number(row.response_count || 0);
       acc.total_response_seconds += Number(row.total_response_seconds || 0);
+      acc.business_response_count += Number(row.business_response_count || 0);
+      acc.business_total_response_seconds += Number(row.business_total_response_seconds || 0);
+      acc.after_hours_response_count += Number(row.after_hours_response_count || 0);
+      acc.after_hours_total_response_seconds += Number(row.after_hours_total_response_seconds || 0);
       if (row.staff_key === 'Chưa giao') acc.unassigned_customer_count += Number(row.customer_count || 0);
       acc.page_ids.add(row.page_id);
       acc.staff_keys.add(row.staff_key);
@@ -1992,6 +2008,10 @@ router.get('/reports/new-messages', async (req, res) => {
       unassigned_customer_count: 0,
       response_count: 0,
       total_response_seconds: 0,
+      business_response_count: 0,
+      business_total_response_seconds: 0,
+      after_hours_response_count: 0,
+      after_hours_total_response_seconds: 0,
       page_ids: new Set<string>(),
       staff_keys: new Set<string>()
     });
@@ -2007,6 +2027,12 @@ router.get('/reports/new-messages', async (req, res) => {
         response_count: totals.response_count,
         total_response_seconds: totals.total_response_seconds,
         average_response_seconds: totals.response_count > 0 ? Math.round(totals.total_response_seconds / totals.response_count) : 0,
+        business_response_count: totals.business_response_count,
+        business_total_response_seconds: totals.business_total_response_seconds,
+        business_average_response_seconds: totals.business_response_count > 0 ? Math.round(totals.business_total_response_seconds / totals.business_response_count) : 0,
+        after_hours_response_count: totals.after_hours_response_count,
+        after_hours_total_response_seconds: totals.after_hours_total_response_seconds,
+        after_hours_average_response_seconds: totals.after_hours_response_count > 0 ? Math.round(totals.after_hours_total_response_seconds / totals.after_hours_response_count) : 0,
         page_count: totals.page_ids.size,
         staff_count: totals.staff_keys.size
       }

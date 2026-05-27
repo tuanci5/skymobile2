@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, DollarSign, ShoppingCart, Users, Activity, ArrowUpRight, ArrowDownRight, Calendar, MessageSquare, Inbox, FileText, BarChart3, Megaphone } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingCart, Users, Activity, ArrowUpRight, ArrowDownRight, Calendar, MessageSquare, Inbox, FileText, BarChart3, Megaphone, Timer } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { EMPTY_REVENUE_REPORT, calculateGrowth, fetchRevenueReport, formatYen } from '../../services/revenueReport';
 import { API_BASE_URL } from '../../components/messenger/api';
@@ -90,6 +90,8 @@ type MessageMobileReport = {
     customer_count: number;
     page_count: number;
     staff_count: number;
+    business_average_response_seconds: number;
+    after_hours_average_response_seconds: number;
   };
   rows: Array<{
     page_id: string;
@@ -99,6 +101,8 @@ type MessageMobileReport = {
     message_count: number;
     conversation_count: number;
     customer_count: number;
+    business_average_response_seconds: number;
+    after_hours_average_response_seconds: number;
   }>;
 };
 
@@ -132,7 +136,9 @@ const EMPTY_MESSAGE_REPORT: MessageMobileReport = {
     conversation_count: 0,
     customer_count: 0,
     page_count: 0,
-    staff_count: 0
+    staff_count: 0,
+    business_average_response_seconds: 0,
+    after_hours_average_response_seconds: 0
   },
   rows: []
 };
@@ -146,6 +152,24 @@ const normalizeRole = (role?: string | null) =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+const formatDuration = (seconds?: number | null) => {
+  const totalSeconds = Math.round(Number(seconds || 0));
+  if (totalSeconds <= 0) return '-';
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  if (minutes < 60) return remainingSeconds > 0 ? `${minutes}p ${remainingSeconds}s` : `${minutes}p`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) return remainingMinutes > 0 ? `${hours}g ${remainingMinutes}p` : `${hours}g`;
+
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours > 0 ? `${days}n ${remainingHours}g` : `${days}n`;
+};
 
 const parseAllowedPermissions = (allowedTabs: any): string[] => {
   if (Array.isArray(allowedTabs)) return allowedTabs;
@@ -414,7 +438,9 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
             conversation_count: toNumber(data?.summary?.conversation_count),
             customer_count: toNumber(data?.summary?.customer_count),
             page_count: toNumber(data?.summary?.page_count),
-            staff_count: toNumber(data?.summary?.staff_count)
+            staff_count: toNumber(data?.summary?.staff_count),
+            business_average_response_seconds: toNumber(data?.summary?.business_average_response_seconds),
+            after_hours_average_response_seconds: toNumber(data?.summary?.after_hours_average_response_seconds)
           },
           rows: Array.isArray(data?.rows)
             ? data.rows.map((row: any) => ({
@@ -424,7 +450,9 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
               staff_name: String(row?.staff_name || 'Chưa phân công'),
               message_count: toNumber(row?.message_count),
               conversation_count: toNumber(row?.conversation_count),
-              customer_count: toNumber(row?.customer_count)
+              customer_count: toNumber(row?.customer_count),
+              business_average_response_seconds: toNumber(row?.business_average_response_seconds),
+              after_hours_average_response_seconds: toNumber(row?.after_hours_average_response_seconds)
             }))
             : []
         });
@@ -461,7 +489,8 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
           { title: 'Khách mới', value: messageReport.summary.customer_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-rose-100 text-rose-600' },
           { title: 'Hội thoại', value: messageReport.summary.conversation_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: MessageSquare, color: 'bg-blue-100 text-blue-600' },
           { title: 'Tin nhắn', value: messageReport.summary.message_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Inbox, color: 'bg-violet-100 text-violet-600' },
-          { title: 'Nhân viên', value: messageReport.summary.staff_count.toLocaleString('vi-VN'), badge: rangeLabel, icon: Users, color: 'bg-emerald-100 text-emerald-600' },
+          { title: 'Phản hồi HC', value: formatDuration(messageReport.summary.business_average_response_seconds), badge: '08:00-17:00', icon: Timer, color: 'bg-cyan-100 text-cyan-600' },
+          { title: 'Phản hồi ngoài giờ', value: formatDuration(messageReport.summary.after_hours_average_response_seconds), badge: rangeLabel, icon: Timer, color: 'bg-indigo-100 text-indigo-600' },
         ]
         : isCskhPersonal
       ? [
@@ -661,7 +690,7 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
                       <div className="min-w-0">
                         <p className="font-bold text-xs text-slate-700 truncate">{row.staff_name}</p>
                         <p className="text-[10px] text-slate-400 truncate">
-                          {row.page_name} · {row.conversation_count.toLocaleString('vi-VN')} hội thoại · {row.message_count.toLocaleString('vi-VN')} tin
+                          {row.page_name} · {row.conversation_count.toLocaleString('vi-VN')} hội thoại · HC {formatDuration(row.business_average_response_seconds)} · Ngoài giờ {formatDuration(row.after_hours_average_response_seconds)}
                         </p>
                       </div>
                       <p className="font-bold text-xs text-slate-900 whitespace-nowrap">{row.customer_count.toLocaleString('vi-VN')} khách</p>
