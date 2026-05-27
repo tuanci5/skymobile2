@@ -42,6 +42,7 @@ import { TabType } from './types';
 import { LECTURE_CULTURE_ATTITUDE } from './data/lecture_culture_attitude';
 import { LECTURE_RESPONSIBILITY } from './data/lecture_responsibility';
 import { LECTURE_PROFESSIONAL_CONDUCT } from './data/lecture_professional_conduct';
+import { LECTURE_SALES_CLOSING_UPSELL_OBJECTIONS } from './data/lecture_sales_closing_upsell_objections';
 
 const GOOGLE_CLIENT_ID = '637002508826-b7jmlrenhbagrh6rjp4m4uq8n210fq9a.apps.googleusercontent.com';
 
@@ -69,6 +70,7 @@ function AppContent() {
     'van-hoa': LECTURE_CULTURE_ATTITUDE,
     'trach-nhiem': LECTURE_RESPONSIBILITY,
     'tac-phong': LECTURE_PROFESSIONAL_CONDUCT,
+    'ky-nang-sale': LECTURE_SALES_CLOSING_UPSELL_OBJECTIONS,
   };
 
   const internalRoleId = user?.role ? (ROLE_MAPPING[user.role] || 'guest') : null;

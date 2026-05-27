@@ -128,6 +128,7 @@ export const TrainingPage = ({ courseSlug, lectureSlug, lectureData }: TrainingP
                     'Tư duy trách nhiệm: Không đổ lỗi, không né việc': 'trach-nhiem',
                     'Văn hóa & Thái độ': 'van-hoa',
                     'Tác phong làm việc chuyên nghiệp, có checklist': 'tac-phong',
+                    'Kỹ năng chốt đơn, upsell, xử lý từ chối (Sale)': 'ky-nang-sale',
                   };
                   
                   const contentMap: Record<string, string> = {
