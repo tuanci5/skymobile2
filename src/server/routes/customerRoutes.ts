@@ -930,6 +930,7 @@ router.get('/:id/orders', async (req, res) => {
 // GET /api/customers/sync - Trigger Playwright Sync (Server-Sent Events)
 router.get('/sync', async (req, res) => {
   // Use chunked transfer encoding to stream status logs to the UI!
+  const mode = req.query.mode === 'full' ? 'full' : 'incremental';
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -941,9 +942,10 @@ router.get('/sync', async (req, res) => {
   };
 
   try {
+    sendProgress('✅ Đã kết nối máy chủ đồng bộ, bắt đầu xử lý...');
     const result = await syncFromSkyMobile((msg) => {
       sendProgress(msg);
-    });
+    }, { mode });
 
     if (result.success) {
       res.write(`data: ${JSON.stringify({ status: 'success', result })}\n\n`);

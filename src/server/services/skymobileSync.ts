@@ -34,6 +34,8 @@ const ensureOkResponse = async (res: Response, context: string) => {
 
 export interface SyncResult {
   success: boolean;
+  mode?: 'incremental' | 'full';
+  syncFrom?: string | null;
   ordersProcessed: number;
   ordersInserted: number;
   ordersUpdated: number;
@@ -46,13 +48,68 @@ export interface SyncResult {
   error?: string;
 }
 
-export async function syncFromSkyMobile(progressCallback?: (msg: string) => void): Promise<SyncResult> {
+interface SyncOptions {
+  mode?: 'incremental' | 'full';
+}
+
+const toValidDate = (value: unknown) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getItemDate = (item: any) => toValidDate(item?.updatedAt || item?.createdAt || item?.CreatedAt || item?.dateCreated);
+
+const isItemOnOrAfter = (item: any, since: Date | null) => {
+  if (!since) return true;
+  const itemDate = getItemDate(item);
+  if (!itemDate) return true;
+  return itemDate >= since;
+};
+
+const isPageDefinitelyOlderThan = (items: any[], since: Date | null) => {
+  if (!since || items.length === 0) return false;
+  return items.every(item => {
+    const itemDate = getItemDate(item);
+    return itemDate ? itemDate < since : false;
+  });
+};
+
+const getIncrementalStartDate = async () => {
+  const { rows } = await pool.query(`
+    SELECT GREATEST(
+      COALESCE((SELECT MAX(created_at) FROM orders WHERE skymobile_order_id IS NOT NULL), '1970-01-01'::timestamp),
+      COALESCE((SELECT MAX(created_at) FROM customers WHERE skymobile_customer_id IS NOT NULL), '1970-01-01'::timestamp),
+      COALESCE((SELECT MAX(created_at) FROM promotions WHERE skymobile_promo_id IS NOT NULL), '1970-01-01'::timestamp)
+    ) AS latest_created_at
+  `);
+
+  const latest = rows[0]?.latest_created_at ? new Date(rows[0].latest_created_at) : null;
+  if (!latest || latest.getFullYear() <= 1970) return null;
+
+  // Đồng bộ lại từ đầu ngày gần nhất để không bỏ sót bản ghi cập nhật muộn trong ngày đó.
+  latest.setHours(0, 0, 0, 0);
+  return latest;
+};
+
+export async function syncFromSkyMobile(progressCallback?: (msg: string) => void, options: SyncOptions = {}): Promise<SyncResult> {
   const log = (msg: string) => {
     console.log(`[Sync] ${msg}`);
     if (progressCallback) progressCallback(msg);
   };
 
+  const mode = options.mode || 'incremental';
+  const incrementalSince = mode === 'incremental' ? await getIncrementalStartDate() : null;
+  const incrementalSinceLabel = incrementalSince ? incrementalSince.toISOString().slice(0, 10) : null;
+
   log('🚀 Khởi tạo đồng bộ dữ liệu Sky Mobile...');
+  if (mode === 'incremental') {
+    log(incrementalSinceLabel
+      ? `🔎 Chế độ bổ sung: chỉ xử lý dữ liệu từ ${incrementalSinceLabel} đến hiện tại.`
+      : '🔎 Chế độ bổ sung: chưa có mốc dữ liệu cũ, sẽ đồng bộ toàn bộ lần đầu.');
+  } else {
+    log('🔁 Chế độ toàn bộ: tải lại tất cả dữ liệu từ Sky Mobile.');
+  }
    
   let browser;
   try {
@@ -123,9 +180,9 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
       const data = await res.json() as any;
       const items = data.items || [];
-      ordersList.push(...items);
+      ordersList.push(...items.filter((item: any) => isItemOnOrAfter(item, incrementalSince)));
 
-      if (items.length < 100) {
+      if (items.length < 100 || isPageDefinitelyOlderThan(items, incrementalSince)) {
         hasMoreOrders = false;
       } else {
         orderPage++;
@@ -159,9 +216,9 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
       const data = await res.json() as any;
       const items = data.items || [];
-      customersList.push(...items);
+      customersList.push(...items.filter((item: any) => isItemOnOrAfter(item, incrementalSince)));
 
-      if (items.length < 100) {
+      if (items.length < 100 || isPageDefinitelyOlderThan(items, incrementalSince)) {
         hasMoreCustomers = false;
       } else {
         customerPage++;
@@ -195,9 +252,9 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
 
       const data = await res.json() as any;
       const items = data.items || [];
-      promotionsList.push(...items);
+      promotionsList.push(...items.filter((item: any) => isItemOnOrAfter(item, incrementalSince)));
 
-      if (items.length < 100) {
+      if (items.length < 100 || isPageDefinitelyOlderThan(items, incrementalSince)) {
         hasMorePromotions = false;
       } else {
         promoPage++;
@@ -524,10 +581,13 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
       }
 
       await client.query('COMMIT');
-      log(`🎉 Đồng bộ hoàn tất! Cập nhật thành công ${customersProcessed} khách hàng, ${ordersProcessed} đơn hàng & ${promotionsProcessed} khuyến mại.`);
+      log(`🎉 Đồng bộ hoàn tất! Đã xử lý ${customersProcessed} khách hàng, ${ordersProcessed} đơn hàng & ${promotionsProcessed} khuyến mại${incrementalSinceLabel ? ` từ ${incrementalSinceLabel}` : ''}.`);
+      log(`📊 Kết quả: đơn +${ordersInserted}/cập nhật ${ordersUpdated}, khách +${customersInserted}/cập nhật ${customersUpdated}, khuyến mại +${promotionsInserted}/cập nhật ${promotionsUpdated}.`);
       
       return {
         success: true,
+        mode,
+        syncFrom: incrementalSinceLabel,
         ordersProcessed,
         ordersInserted,
         ordersUpdated,
@@ -552,6 +612,8 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
     }
     return {
       success: false,
+      mode,
+      syncFrom: incrementalSinceLabel,
       ordersProcessed: 0,
       ordersInserted: 0,
       ordersUpdated: 0,

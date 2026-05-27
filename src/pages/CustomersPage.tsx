@@ -475,10 +475,10 @@ export const CustomersPage: React.FC = () => {
   const handleSync = () => {
     setIsSyncing(true);
     setSyncFinished(false);
-    setSyncLogs([]);
-    setSyncProgressMsg('Đang khởi tạo kết nối đồng bộ...');
+    setSyncLogs(['🔌 Đang kết nối máy chủ đồng bộ...']);
+    setSyncProgressMsg('Đang khởi tạo kết nối đồng bộ bổ sung...');
 
-    const eventSource = new EventSource(`${API_BASE_URL}/api/customers/sync`);
+    const eventSource = new EventSource(`${API_BASE_URL}/api/customers/sync?mode=incremental`);
 
     eventSource.onmessage = (event) => {
       try {
@@ -487,8 +487,11 @@ export const CustomersPage: React.FC = () => {
           setSyncProgressMsg(data.message);
           setSyncLogs(prev => [...prev, data.message]);
         } else if (data.status === 'success') {
-          setSyncProgressMsg('🎉 Đồng bộ thành công hoàn toàn!');
-          setSyncLogs(prev => [...prev, '🎉 Đồng bộ thành công cơ sở dữ liệu.']);
+          const summary = data.result?.syncFrom
+            ? `🎉 Đồng bộ bổ sung thành công từ ${data.result.syncFrom} đến hiện tại.`
+            : '🎉 Đồng bộ thành công cơ sở dữ liệu.';
+          setSyncProgressMsg(summary);
+          setSyncLogs(prev => [...prev, summary]);
           eventSource.close();
           setSyncFinished(true);
           setTimeout(() => {
@@ -1722,7 +1725,7 @@ export const CustomersPage: React.FC = () => {
 
               <div>
                 <h3 className="text-xl font-black text-slate-800">Đồng Bộ Dữ Liệu Sky Mobile</h3>
-                <p className="text-sm text-slate-500 mt-2 font-medium">Hệ thống đang mở trình duyệt tự động để bắt token bảo mật và cào API đơn hàng/khách hàng.</p>
+                <p className="text-sm text-slate-500 mt-2 font-medium">Hệ thống đang đồng bộ bổ sung: chỉ lấy dữ liệu còn thiếu từ mốc mới nhất trong hệ thống đến hiện tại.</p>
               </div>
 
               {/* Progress Bar */}
