@@ -14,6 +14,7 @@ import teamRoutes from './routes/teamRoutes';
 import aiRoutes from './routes/aiRoutes';
 import productRoutes from './routes/productRoutes';
 import customerRoutes from './routes/customerRoutes';
+import { syncFromSkyMobile } from './services/skymobileSync';
 
 const app = express();
 app.use(cors());
@@ -156,12 +157,57 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+// ─── BACKGROUND SKY MOBILE SYNC ────────────────────────────────────────────────
+
+const SKY_MOBILE_AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+let isSkyMobileAutoSyncRunning = false;
+
+const runSkyMobileAutoSync = async () => {
+  if (isSkyMobileAutoSyncRunning) {
+    console.log('[SkyMobile AutoSync] Bỏ qua vì lần đồng bộ trước chưa hoàn tất.');
+    return;
+  }
+
+  isSkyMobileAutoSyncRunning = true;
+  const startedAt = new Date();
+  console.log(`[SkyMobile AutoSync] Bắt đầu đồng bộ bổ sung lúc ${startedAt.toISOString()}.`);
+
+  try {
+    const result = await syncFromSkyMobile((msg) => {
+      console.log(`[SkyMobile AutoSync] ${msg}`);
+    }, { mode: 'incremental' });
+
+    if (result.success) {
+      console.log(`[SkyMobile AutoSync] Hoàn tất. Đơn: +${result.ordersInserted}/cập nhật ${result.ordersUpdated}; khách: +${result.customersInserted}/cập nhật ${result.customersUpdated}; khuyến mại: +${result.promotionsInserted || 0}/cập nhật ${result.promotionsUpdated || 0}.`);
+    } else {
+      console.error(`[SkyMobile AutoSync] Thất bại: ${result.error || 'Không rõ lỗi'}`);
+    }
+  } catch (error: any) {
+    console.error('[SkyMobile AutoSync] Lỗi ngoài dự kiến:', error?.message || error);
+  } finally {
+    isSkyMobileAutoSyncRunning = false;
+  }
+};
+
+const startSkyMobileAutoSync = () => {
+  if (process.env.SKYMOBILE_AUTO_SYNC_DISABLED === 'true') {
+    console.log('[SkyMobile AutoSync] Đã tắt qua SKYMOBILE_AUTO_SYNC_DISABLED=true.');
+    return;
+  }
+
+  console.log('[SkyMobile AutoSync] Đã bật lịch đồng bộ bổ sung mỗi 1 giờ.');
+  setInterval(runSkyMobileAutoSync, SKY_MOBILE_AUTO_SYNC_INTERVAL_MS);
+};
+
 // ─── EXPORT/START ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT || 3006);
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
+    dbInitPromise
+      .then(startSkyMobileAutoSync)
+      .catch((err) => console.error('[SkyMobile AutoSync] Không thể khởi động vì DB init lỗi:', err?.message || err));
   });
 }
 
