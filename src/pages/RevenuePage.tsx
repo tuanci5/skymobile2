@@ -1549,6 +1549,7 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
               <option value="Hôm nay">Hôm nay</option>
               <option value="Hôm qua">Hôm qua</option>
               <option value="Tuần này">Tuần này</option>
+              <option value="Tuần trước">Tuần trước</option>
               <option value="Tháng này">Tháng này</option>
               <option value="Năm nay">Năm nay</option>
               <option value="Khoảng ngày">Khoảng ngày</option>

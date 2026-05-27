@@ -4,7 +4,7 @@ import { syncFromSkyMobile } from '../services/skymobileSync';
 
 const router = express.Router();
 
-type RevenueReportRange = 'today' | 'yesterday' | 'week' | 'month' | 'year' | 'custom';
+type RevenueReportRange = 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'year' | 'custom';
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -18,6 +18,7 @@ const normalizeReportRange = (range: unknown): RevenueReportRange => {
 
   if (normalized === 'today' || normalized.includes('hom nay')) return 'today';
   if (normalized === 'yesterday' || normalized.includes('hom qua')) return 'yesterday';
+  if (normalized === 'last_week' || normalized.includes('tuan truoc')) return 'last_week';
   if (normalized === 'week' || normalized.includes('tuan nay')) return 'week';
   if (normalized === 'year' || normalized.includes('nam nay')) return 'year';
   if (normalized === 'custom' || normalized.includes('khoang ngay')) return 'custom';
@@ -69,6 +70,16 @@ const getRevenueReportConfig = (range: RevenueReportRange, startDate?: unknown, 
         currentStartSql: `date_trunc('week', ${now})`,
         currentEndSql: now,
         previousStartSql: `date_trunc('week', ${now}) - interval '1 week'`,
+        seriesStep: '1 day',
+        truncUnit: 'day',
+        labelFormat: 'DD/MM'
+      };
+    case 'last_week':
+      return {
+        range,
+        currentStartSql: `date_trunc('week', ${now}) - interval '1 week'`,
+        currentEndSql: `date_trunc('week', ${now})`,
+        previousStartSql: `date_trunc('week', ${now}) - interval '2 weeks'`,
         seriesStep: '1 day',
         truncUnit: 'day',
         labelFormat: 'DD/MM'

@@ -536,7 +536,7 @@ export const MobileRevenuePage = ({ user }: { user?: any }) => {
           <div className="relative">
             <select aria-label="Chọn khoảng thời gian báo cáo" value={range} onChange={e => setRange(e.target.value)}
               className="bg-slate-100 border-none rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-700 outline-none appearance-none">
-              <option>Hôm nay</option><option>Hôm qua</option><option>Tuần này</option><option>Tháng này</option><option>Năm nay</option><option>Khoảng ngày</option>
+              <option>Hôm nay</option><option>Hôm qua</option><option>Tuần này</option><option>Tuần trước</option><option>Tháng này</option><option>Năm nay</option><option>Khoảng ngày</option>
             </select>
             <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>

@@ -81,6 +81,9 @@ const getReportDateFilter = (range?: string | null, column = 'm.created_at', sta
   if (normalized.includes('hom nay') || normalized === 'today') {
     return `${column} >= CURRENT_DATE`;
   }
+  if (normalized.includes('tuan truoc') || normalized === 'last_week') {
+    return `${column} >= date_trunc('week', CURRENT_DATE) - INTERVAL '1 week' AND ${column} < date_trunc('week', CURRENT_DATE)`;
+  }
   if (normalized.includes('tuan nay') || normalized === 'week') {
     return `${column} >= date_trunc('week', CURRENT_DATE)`;
   }
@@ -115,6 +118,21 @@ const getFBDateRangeForInsights = (range?: string | null, startDate?: unknown, e
   if (normalized.includes('hom nay') || normalized === 'today') {
     const dateStr = new Date().toISOString().slice(0, 10);
     return { since: dateStr, until: dateStr };
+  }
+
+  if (normalized.includes('tuan truoc') || normalized === 'last_week') {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfThisWeek = new Date(d.setDate(diff));
+    const startOfLastWeek = new Date(startOfThisWeek);
+    startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
+    const endOfLastWeek = new Date(startOfThisWeek);
+    endOfLastWeek.setDate(startOfThisWeek.getDate() - 1);
+    return {
+      since: startOfLastWeek.toISOString().slice(0, 10),
+      until: endOfLastWeek.toISOString().slice(0, 10)
+    };
   }
 
   if (normalized.includes('tuan nay') || normalized === 'week') {
