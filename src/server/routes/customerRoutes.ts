@@ -750,6 +750,40 @@ router.get('/lookup', async (req, res) => {
   }
 });
 
+// GET /api/customers/sync - Trigger Playwright Sync (Server-Sent Events)
+router.get('/sync', async (req, res) => {
+  // Use chunked transfer encoding to stream status logs to the UI!
+  const mode = req.query.mode === 'full' ? 'full' : 'incremental';
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendProgress = (msg: string) => {
+    res.write(`data: ${JSON.stringify({ status: 'progress', message: msg })}\n\n`);
+  };
+
+  try {
+    sendProgress('✅ Đã kết nối máy chủ đồng bộ, bắt đầu xử lý...');
+    const result = await syncFromSkyMobile((msg) => {
+      sendProgress(msg);
+    }, { mode });
+
+    if (result.success) {
+      res.write(`data: ${JSON.stringify({ status: 'success', result })}\n\n`);
+    } else {
+      res.write(`data: ${JSON.stringify({ status: 'error', error: result.error })}\n\n`);
+    }
+    res.end();
+  } catch (error: any) {
+    console.error('API sync error:', error);
+    res.write(`data: ${JSON.stringify({ status: 'error', error: error.message })}\n\n`);
+    res.end();
+  }
+});
+
+
 // GET /api/customers/:id - Fetch a single customer's details
 router.get('/:id', async (req, res) => {
   try {
@@ -924,39 +958,6 @@ router.get('/:id/orders', async (req, res) => {
   } catch (error) {
     console.error('Error fetching customer orders:', error);
     res.status(500).json({ error: 'Failed to fetch customer orders' });
-  }
-});
-
-// GET /api/customers/sync - Trigger Playwright Sync (Server-Sent Events)
-router.get('/sync', async (req, res) => {
-  // Use chunked transfer encoding to stream status logs to the UI!
-  const mode = req.query.mode === 'full' ? 'full' : 'incremental';
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const sendProgress = (msg: string) => {
-    res.write(`data: ${JSON.stringify({ status: 'progress', message: msg })}\n\n`);
-  };
-
-  try {
-    sendProgress('✅ Đã kết nối máy chủ đồng bộ, bắt đầu xử lý...');
-    const result = await syncFromSkyMobile((msg) => {
-      sendProgress(msg);
-    }, { mode });
-
-    if (result.success) {
-      res.write(`data: ${JSON.stringify({ status: 'success', result })}\n\n`);
-    } else {
-      res.write(`data: ${JSON.stringify({ status: 'error', error: result.error })}\n\n`);
-    }
-    res.end();
-  } catch (error: any) {
-    console.error('API sync error:', error);
-    res.write(`data: ${JSON.stringify({ status: 'error', error: error.message })}\n\n`);
-    res.end();
   }
 });
 
