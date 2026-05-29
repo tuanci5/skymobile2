@@ -115,7 +115,10 @@ export async function syncFromSkyMobile(progressCallback?: (msg: string) => void
   try {
     const credentials = getSkyMobileCredentials();
 
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
     const context = await browser.newContext();
     const page = await context.newPage();
 

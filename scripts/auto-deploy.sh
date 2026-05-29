@@ -141,6 +141,10 @@ main() {
   ensure_node_bin "vite" "node_modules/vite/bin/vite.js"
   ensure_node_bin "tsc" "node_modules/typescript/bin/tsc"
   ensure_node_bin "tsx" "node_modules/tsx/dist/cli.mjs"
+  ensure_node_bin "playwright" "node_modules/playwright/cli.js"
+
+  log "🎭 Ensuring Playwright Chromium is installed for Sky Mobile sync..."
+  run_node_bin "playwright" "node_modules/playwright/cli.js" install chromium
 
   log "🏗️ Building frontend assets..."
   run_node_bin "vite" "node_modules/vite/bin/vite.js" build
