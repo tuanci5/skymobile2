@@ -385,6 +385,97 @@ const buildPageReportSummary = (rows: PageReportRow[]): PageReportData['summary'
   };
 };
 
+type GrowthChartPoint = {
+  label: string;
+  value: number;
+  secondaryValue?: number;
+  secondaryLabel?: string;
+};
+
+const GrowthBarChart: React.FC<{
+  title: string;
+  subtitle: string;
+  data: GrowthChartPoint[];
+  valueLabel: string;
+  valueFormatter?: (value: number) => string;
+  secondaryFormatter?: (value: number) => string;
+  colorClass?: string;
+  isLoading?: boolean;
+  emptyText?: string;
+}> = ({
+  title,
+  subtitle,
+  data,
+  valueLabel,
+  valueFormatter = formatNumber,
+  secondaryFormatter = formatNumber,
+  colorClass = 'bg-blue-500',
+  isLoading = false,
+  emptyText = 'Chưa có dữ liệu để hiển thị biểu đồ.'
+}) => {
+  const visibleData = data.filter(point => Number(point.value || 0) > 0 || Number(point.secondaryValue || 0) > 0).slice(0, 12);
+  const maxValue = Math.max(1, ...visibleData.map(point => Number(point.value || 0)));
+
+  return (
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-6">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-black uppercase tracking-wider mb-3">
+            <TrendingUp className="w-3.5 h-3.5" />
+            Tốc độ phát triển
+          </div>
+          <h3 className="font-black text-slate-900 text-lg">{title}</h3>
+          <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+        </div>
+        <span className="text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full shrink-0">
+          {valueLabel}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="h-72 flex items-center justify-center text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Đang tải biểu đồ...
+        </div>
+      ) : visibleData.length === 0 ? (
+        <div className="h-72 flex flex-col items-center justify-center text-slate-400 text-center">
+          <BarChart3 className="w-12 h-12 mb-3 text-slate-300" />
+          <p className="font-bold">{emptyText}</p>
+        </div>
+      ) : (
+        <div className="h-80 flex items-end gap-3 overflow-x-auto pb-2">
+          {visibleData.map((point, index) => {
+            const height = Math.max(6, (Number(point.value || 0) / maxValue) * 100);
+            return (
+              <div key={`${point.label}-${index}`} className="min-w-[78px] flex-1 h-full flex flex-col justify-end gap-3 group">
+                <div className="relative flex-1 flex items-end rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden">
+                  <div
+                    className={`w-full rounded-t-2xl ${colorClass} group-hover:brightness-95 transition-all`}
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${valueFormatter(point.value)}`}
+                  />
+                  <div className="absolute inset-x-1 bottom-2 text-center">
+                    <span className="inline-flex rounded-lg bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-slate-700 shadow-sm">
+                      {valueFormatter(point.value)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-center min-h-[44px]">
+                  <p className="text-[11px] font-black text-slate-700 truncate" title={point.label}>{point.label}</p>
+                  {point.secondaryValue !== undefined && (
+                    <p className="text-[10px] font-bold text-slate-400 truncate">
+                      {point.secondaryLabel ? `${point.secondaryLabel}: ` : ''}{secondaryFormatter(point.secondaryValue)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
   const { rolePermissions } = useAuth();
   const [dateRange, setDateRange] = useState('Hôm nay');
@@ -738,6 +829,40 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
     ? 'Tất cả Page'
     : pageOptions.find(page => page.page_id === selectedPageId)?.page_name || 'Fanpage';
 
+  const pageGrowthChartData = selectedPageRows
+    .map(row => ({
+      label: row.page_name,
+      value: row.revenue,
+      secondaryValue: row.new_customer_count,
+      secondaryLabel: 'Khách mới'
+    }))
+    .sort((a, b) => b.value - a.value);
+  const adSpendGrowthChartData = selectedPageRows
+    .map(row => ({
+      label: row.page_name,
+      value: row.ad_cost,
+      secondaryValue: row.ad_conversation_count,
+      secondaryLabel: 'Hội thoại'
+    }))
+    .sort((a, b) => b.value - a.value);
+  const messageGrowthChartData = messageRows
+    .map(row => ({
+      label: `${row.page_name} - ${row.staff_name}`,
+      value: row.customer_count,
+      secondaryValue: row.message_count,
+      secondaryLabel: 'Tin nhắn'
+    }))
+    .sort((a, b) => b.value - a.value);
+  const cskhGrowthChartData = cskhPersonalRows
+    .map(row => ({
+      label: row.page_name,
+      value: row.sent_message_count,
+      secondaryValue: row.new_customer_count,
+      secondaryLabel: 'Khách mới'
+    }))
+    .sort((a, b) => b.value - a.value);
+
+
   useEffect(() => {
     if (selectedPageId === 'all') return;
     if (!pageOptions.some(page => page.page_id === selectedPageId)) {
@@ -910,6 +1035,17 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
             </table>
           </div>
         </div>
+
+        <GrowthBarChart
+          title="Biểu đồ phát triển theo Fanpage"
+          subtitle="So sánh doanh thu và khách mới giữa các Fanpage trong kỳ đang chọn."
+          data={pageGrowthChartData}
+          valueLabel={dateRangeLabel}
+          valueFormatter={formatYen}
+          colorClass="bg-emerald-500"
+          isLoading={isLoadingPageReport}
+          emptyText="Chưa có dữ liệu Fanpage để vẽ biểu đồ."
+        />
       </>
     );
   };
@@ -1052,6 +1188,17 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
             </table>
           </div>
         </div>
+
+        <GrowthBarChart
+          title="Biểu đồ phát triển chi phí quảng cáo"
+          subtitle="Theo dõi ngân sách Ads và số hội thoại tạo ra theo từng Fanpage."
+          data={adSpendGrowthChartData}
+          valueLabel={dateRangeLabel}
+          valueFormatter={formatYen}
+          colorClass="bg-rose-500"
+          isLoading={isLoadingPageReport}
+          emptyText="Chưa có dữ liệu chi phí Ads để vẽ biểu đồ."
+        />
       </>
     );
   };
@@ -1164,6 +1311,22 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           )}
         </div>
       </div>
+
+      <GrowthBarChart
+        title="Biểu đồ tăng trưởng doanh thu"
+        subtitle="Theo dõi doanh thu theo từng mốc thời gian trong kỳ báo cáo."
+        data={revenueReport.chart.map(point => ({
+          label: point.label,
+          value: point.revenue,
+          secondaryValue: point.orders,
+          secondaryLabel: 'Đơn'
+        }))}
+        valueLabel={dateRangeLabel}
+        valueFormatter={formatYen}
+        colorClass="bg-emerald-500"
+        isLoading={isLoadingRevenue}
+        emptyText="Chưa có dữ liệu doanh thu để vẽ biểu đồ."
+      />
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 md:p-8 border-b border-slate-100 flex items-center justify-between">
@@ -1345,6 +1508,16 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           )}
         </div>
       </div>
+
+      <GrowthBarChart
+        title="Biểu đồ phát triển khách mới theo nhân viên"
+        subtitle="So sánh số khách mới và tin nhắn theo từng Page/nhân viên phụ trách."
+        data={messageGrowthChartData}
+        valueLabel={dateRangeLabel}
+        colorClass="bg-blue-500"
+        isLoading={isLoadingMessages}
+        emptyText="Chưa có dữ liệu khách mới để vẽ biểu đồ."
+      />
     </>
   );
 
@@ -1486,6 +1659,16 @@ export const RevenuePage: React.FC<{ user?: any }> = ({ user }) => {
           )}
         </div>
       </div>
+
+      <GrowthBarChart
+        title="Biểu đồ phát triển CSKH cá nhân"
+        subtitle="Theo dõi số tin CSKH đã gửi và khách mới của tài khoản hiện tại theo Fanpage."
+        data={cskhGrowthChartData}
+        valueLabel={dateRangeLabel}
+        colorClass="bg-violet-500"
+        isLoading={isLoadingCskhPersonal}
+        emptyText="Chưa có dữ liệu CSKH cá nhân để vẽ biểu đồ."
+      />
     </>
   );
 
