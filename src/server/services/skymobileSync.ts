@@ -3,9 +3,14 @@ import { pool } from '../db';
 
 const SKY_MOBILE_BASE_URL = 'https://skymobile.vn';
 
+const normalizeEnvCredential = (value?: string) => {
+  const trimmed = (value || '').trim();
+  return trimmed.replace(/^(["'])(.*)\1$/, '$2').trim();
+};
+
 const getSkyMobileCredentials = () => {
-  const email = (process.env.SKYMOBILE_EMAIL || process.env.SKY_MOBILE_EMAIL || '').trim();
-  const password = (process.env.SKYMOBILE_PASSWORD || process.env.SKY_MOBILE_PASSWORD || '').trim();
+  const email = normalizeEnvCredential(process.env.SKYMOBILE_EMAIL || process.env.SKY_MOBILE_EMAIL);
+  const password = normalizeEnvCredential(process.env.SKYMOBILE_PASSWORD || process.env.SKY_MOBILE_PASSWORD);
 
   if (!email || !password) {
     throw new Error('Thiếu cấu hình đăng nhập Sky Mobile. Vui lòng thiết lập SKYMOBILE_EMAIL/SKYMOBILE_PASSWORD hoặc SKY_MOBILE_EMAIL/SKY_MOBILE_PASSWORD trong biến môi trường.');
