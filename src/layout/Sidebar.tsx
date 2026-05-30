@@ -64,7 +64,6 @@ export const Sidebar = ({
     { id: 'products', label: 'Sản phẩm & Dịch vụ', icon: <ShoppingCart className="w-5 h-5" /> },
     { id: 'customers', label: 'Quản lý khách hàng', icon: <Users className="w-5 h-5" /> },
     { id: 'customer-debts', label: 'Công nợ khách hàng', icon: <ReceiptText className="w-5 h-5" /> },
-    { id: 'payroll', label: 'Phiếu lương', icon: <WalletCards className="w-5 h-5" /> },
     { id: 'settings', label: 'Cài đặt', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   ];
 
@@ -90,6 +89,7 @@ export const Sidebar = ({
     { id: 'hr-jd', label: 'Mô tả công việc', icon: <FileText className="w-5 h-5" />, indent: true, small: true },
     { id: 'hr-plan', label: 'Kế hoạch tuyển dụng', icon: <ClipboardList className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || isHR || isManager },
     { id: 'hr-interview', label: 'Danh sách PV', icon: <Users className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || isHR || isManager },
+    { id: 'hr-payroll', label: 'Phiếu lương', icon: <WalletCards className="w-5 h-5" />, indent: true, small: true, visible: isAdmin || allowedTabs.includes('payroll') },
   ];
 
   const settingsLinks = [
@@ -115,6 +115,8 @@ export const Sidebar = ({
       navigate('/hr/plan');
     } else if (item.id === 'hr-interview') {
       navigate('/hr/interview');
+    } else if (item.id === 'hr-payroll') {
+      navigate('/hr/payroll');
     } else if (item.id === 'settings-general') {
       navigate('/settings');
     } else if (item.id === 'settings-users') {
@@ -193,7 +195,7 @@ export const Sidebar = ({
           <nav className="space-y-1 flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
             {baseMenuItems.map((item) => {
               if (item.adminOnly && !isSystemAdmin) return null;
-              if (!isSystemAdmin && !allowedTabs.includes(item.id)) return null;
+              if (!isSystemAdmin && !allowedTabs.includes(item.id) && !(item.id === 'hr' && allowedTabs.includes('payroll'))) return null;
 
               const subItems = item.id === 'model'
                 ? deptLinks
@@ -202,7 +204,7 @@ export const Sidebar = ({
                   : (item.id === 'settings' ? settingsLinks : []));
               const hasSubItems = subItems.length > 0;
               const isExpanded = expanded[item.id];
-              const isActive = activeTab === item.id && (item.id !== 'hr' || !hrSubTab);
+              const isActive = activeTab === item.id && (item.id !== 'hr' || !hrSubTab || hrSubTab === 'jd');
 
               return (
                 <div key={item.id} className="space-y-1">
@@ -249,16 +251,17 @@ export const Sidebar = ({
                       >
                         {subItems.map(subItem => {
                           const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
-                          const HR_IDS = ['hr-jd', 'hr-plan', 'hr-interview'];
+                          const HR_IDS = ['hr-jd', 'hr-plan', 'hr-interview', 'hr-payroll'];
                           const SETTINGS_IDS = ['settings-general', 'settings-users'];
                           let isSubActive = false;
 
                           if (DEPT_IDS.includes(subItem.id)) {
                             isSubActive = activeDept === subItem.id;
                           } else if (HR_IDS.includes(subItem.id)) {
-                            if (subItem.id === 'hr-jd') isSubActive = activeTab === 'hr' && hrSubTab !== 'interview' && hrSubTab !== 'plan';
+                            if (subItem.id === 'hr-jd') isSubActive = activeTab === 'hr' && hrSubTab !== 'interview' && hrSubTab !== 'plan' && hrSubTab !== 'payroll';
                             if (subItem.id === 'hr-plan') isSubActive = activeTab === 'hr' && hrSubTab === 'plan';
                             if (subItem.id === 'hr-interview') isSubActive = activeTab === 'hr' && hrSubTab === 'interview';
+                            if (subItem.id === 'hr-payroll') isSubActive = activeTab === 'hr' && hrSubTab === 'payroll';
                           } else if (SETTINGS_IDS.includes(subItem.id)) {
                             if (subItem.id === 'settings-general') isSubActive = activeTab === 'settings' && settingsSubPage === 'general';
                             if (subItem.id === 'settings-users') isSubActive = activeTab === 'settings' && settingsSubPage === 'users';

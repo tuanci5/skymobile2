@@ -64,7 +64,7 @@ function AppContent() {
   const isMobileMenu = rootSeg === 'mobile-menu';
   const activeDept = (activeTab === 'model' && ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(subSeg)) ? subSeg : null;
   const activeTeam = (activeDept === 'sales-mkt' && ['marketing', 'sale', 'cskh'].includes(teamSeg)) ? teamSeg as any : null;
-  const hrSubTab = activeTab === 'hr' ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : 'jd')) : 'jd';
+  const hrSubTab = activeTab === 'hr' ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : (subSeg === 'payroll' ? 'payroll' : 'jd'))) : 'jd';
   const settingsSubPage = rootSeg === 'users' || (activeTab === 'settings' && subSeg === 'users') ? 'users' : 'general';
 
   const LECTURE_SLUGS: Record<string, any> = {
@@ -119,7 +119,7 @@ function AppContent() {
     return [];
   })();
   const restrictedView = !isSystemAdmin && internalRoleId !== 'admin';
-  const requiredPermissionTab: TabType = settingsSubPage === 'users' ? 'users' : activeTab;
+  const requiredPermissionTab: TabType = settingsSubPage === 'users' ? 'users' : (activeTab === 'hr' && hrSubTab === 'payroll' ? 'payroll' : activeTab);
 
   const goToTab = (tab: TabType) => {
     if (!hasPermission(tab)) {
@@ -155,12 +155,12 @@ function AppContent() {
                   goToTeam={(team) => navigate(team ? `/model/sales-mkt/${team}` : '/model/sales-mkt')} />
               </div>
             )}
-            {activeTab === 'hr' && <div className="p-4 pb-24"><HRPage selectedRole={restrictedView ? internalRoleId : activeRole} setSelectedRole={restrictedView ? () => {} : setActiveRole} setActiveTab={goToTab} restricted={restrictedView} hrSubTab={hrSubTab} user={user} /></div>}
+            {activeTab === 'hr' && hrSubTab === 'payroll' && <div className="p-4 pb-24"><PayrollPage user={user} /></div>}
+            {activeTab === 'hr' && hrSubTab !== 'payroll' && <div className="p-4 pb-24"><HRPage selectedRole={restrictedView ? internalRoleId : activeRole} setSelectedRole={restrictedView ? () => {} : setActiveRole} setActiveTab={goToTab} restricted={restrictedView} hrSubTab={hrSubTab} user={user} /></div>}
             {activeTab === 'training' && <div className="p-4 pb-24"><TrainingPage courseSlug={subSeg === 'course' ? teamSeg : null} lectureSlug={subSeg === 'lecture' ? teamSeg : null} lectureData={subSeg === 'lecture' ? LECTURE_SLUGS[teamSeg] : null} /></div>}
             {activeTab === 'business' && <div className="p-4 pb-24"><BusinessPlanPage initialSubTab="finance" /></div>}
             {activeTab === 'customers' && <div className="p-4 pb-24"><CustomersPage /></div>}
             {activeTab === 'customer-debts' && <div className="p-4 pb-24"><CustomerDebtsPage /></div>}
-            {activeTab === 'payroll' && <div className="p-4 pb-24"><PayrollPage user={user} /></div>}
             {activeTab === 'settings' && (
               <div className="p-4 pb-24">
                 {settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />}
@@ -209,7 +209,8 @@ function AppContent() {
               goToTeam={(team) => navigate(team ? `/model/sales-mkt/${team}` : '/model/sales-mkt')}
             />
           )}
-          {activeTab === 'hr' && (
+          {activeTab === 'hr' && hrSubTab === 'payroll' && <PayrollPage user={user} />}
+          {activeTab === 'hr' && hrSubTab !== 'payroll' && (
             <HRPage
               selectedRole={restrictedView ? internalRoleId : activeRole}
               setSelectedRole={restrictedView ? () => { } : setActiveRole}
@@ -234,7 +235,6 @@ function AppContent() {
           {activeTab === 'revenue' && <RevenuePage user={user} />}
           {activeTab === 'customers' && <CustomersPage />}
           {activeTab === 'customer-debts' && <CustomerDebtsPage />}
-          {activeTab === 'payroll' && <PayrollPage user={user} />}
           {activeTab === 'settings' && (settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />)}
         </>
       )}

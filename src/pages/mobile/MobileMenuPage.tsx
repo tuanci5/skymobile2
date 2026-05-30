@@ -9,6 +9,7 @@ type Props = { user: any; onLogout: () => void; isSystemAdmin: boolean; allowedT
 const MENU_ITEMS = [
   { id: 'model', label: 'Mô hình Vận hành', icon: Users, path: '/model' },
   { id: 'hr', label: 'Nhân sự & JD', icon: UserCog, path: '/hr' },
+  { id: 'payroll', label: 'Phiếu lương', icon: WalletCards, path: '/hr/payroll', child: true },
   { id: 'training', label: 'Đào tạo & Văn hóa', icon: GraduationCap, path: '/training' },
   { id: 'business', label: 'Kế hoạch kinh doanh', icon: TrendingUp, path: '/business', adminOnly: true },
   { id: 'customer-debts', label: 'Công nợ khách hàng', icon: ReceiptText, WalletCards, path: '/customer-debts' },
