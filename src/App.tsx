@@ -24,6 +24,7 @@ import { ModelPage } from './pages/ModelPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { CustomerDebtsPage } from './pages/CustomerDebtsPage';
+import { PayrollPage } from './pages/PayrollPage';
 
 import { MobileMessengerPage } from './pages/mobile/MobileMessengerPage';
 import { MobileTaskPage } from './pages/mobile/MobileTaskPage';
@@ -159,6 +160,7 @@ function AppContent() {
             {activeTab === 'business' && <div className="p-4 pb-24"><BusinessPlanPage initialSubTab="finance" /></div>}
             {activeTab === 'customers' && <div className="p-4 pb-24"><CustomersPage /></div>}
             {activeTab === 'customer-debts' && <div className="p-4 pb-24"><CustomerDebtsPage /></div>}
+            {activeTab === 'payroll' && <div className="p-4 pb-24"><PayrollPage user={user} /></div>}
             {activeTab === 'settings' && (
               <div className="p-4 pb-24">
                 {settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />}
@@ -232,6 +234,7 @@ function AppContent() {
           {activeTab === 'revenue' && <RevenuePage user={user} />}
           {activeTab === 'customers' && <CustomersPage />}
           {activeTab === 'customer-debts' && <CustomerDebtsPage />}
+          {activeTab === 'payroll' && <PayrollPage user={user} />}
           {activeTab === 'settings' && (settingsSubPage === 'users' ? <UserPage /> : <SettingsPage />)}
         </>
       )}

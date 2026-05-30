@@ -13,6 +13,7 @@ export const TAB_TO_PATH: Record<TabType, string> = {
   revenue: '/revenue',
   customers: '/customers',
   'customer-debts': '/customer-debts',
+  payroll: '/payroll',
   settings: '/settings',
 };
 
@@ -29,5 +30,6 @@ export const PATH_TO_TAB: Record<string, TabType> = {
   revenue: 'revenue',
   customers: 'customers',
   'customer-debts': 'customer-debts',
+  payroll: 'payroll',
   settings: 'settings',
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, UserCog, GraduationCap, TrendingUp, Settings, LogOut, Wifi, ChevronRight, ReceiptText
+  Users, UserCog, GraduationCap, TrendingUp, Settings, LogOut, Wifi, ChevronRight, ReceiptText, WalletCards
 } from 'lucide-react';
 
 type Props = { user: any; onLogout: () => void; isSystemAdmin: boolean; allowedTabs: string[] };
@@ -11,7 +11,7 @@ const MENU_ITEMS = [
   { id: 'hr', label: 'Nhân sự & JD', icon: UserCog, path: '/hr' },
   { id: 'training', label: 'Đào tạo & Văn hóa', icon: GraduationCap, path: '/training' },
   { id: 'business', label: 'Kế hoạch kinh doanh', icon: TrendingUp, path: '/business', adminOnly: true },
-  { id: 'customer-debts', label: 'Công nợ khách hàng', icon: ReceiptText, path: '/customer-debts' },
+  { id: 'customer-debts', label: 'Công nợ khách hàng', icon: ReceiptText, WalletCards, path: '/customer-debts' },
   { id: 'settings', label: 'Cài đặt', icon: Settings, path: '/settings', adminOnly: true },
   { id: 'settings-users', label: 'Quản lý người dùng', icon: UserCog, path: '/settings/users', adminOnly: true, child: true },
 ];
