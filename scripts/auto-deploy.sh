@@ -143,7 +143,12 @@ main() {
   ensure_node_bin "tsx" "node_modules/tsx/dist/cli.mjs"
   ensure_node_bin "playwright" "node_modules/playwright/cli.js"
 
-  log "🎭 Ensuring Playwright Chromium is installed for Sky Mobile sync..."
+  log "🎭 Ensuring Playwright system dependencies and Chromium are installed for Sky Mobile sync..."
+  if [ "$(id -u)" = "0" ]; then
+    node "node_modules/playwright/cli.js" install-deps chromium || log "⚠️ Could not auto-install Playwright system dependencies. You may need to run: npx playwright install --with-deps chromium"
+  else
+    log "⚠️ Not running as root; skipping Playwright system dependency install. If sync browser fails, run as root: npx playwright install --with-deps chromium"
+  fi
   run_node_bin "playwright" "node_modules/playwright/cli.js" install chromium
 
   log "🏗️ Building frontend assets..."
