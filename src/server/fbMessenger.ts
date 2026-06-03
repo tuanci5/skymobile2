@@ -171,6 +171,79 @@ const graphGet = async (path: string, accessToken: string, params: Record<string
   }
   return data;
 };
+
+const toAvatarProxyUrl = (rawUrl?: string | null) => {
+  if (!rawUrl) return null;
+  if (rawUrl.startsWith('/api/fb/avatar-proxy?url=')) return rawUrl;
+  return `/api/fb/avatar-proxy?url=${encodeURIComponent(rawUrl)}`;
+};
+
+const pickProfileFromParticipants = (items: any[] = [], customerPsid: string) => {
+  const user = items.find((item: any) => String(item?.id || '') === String(customerPsid));
+  if (!user) return { name: null as string | null, avatarUrl: null as string | null };
+  const rawAvatar = user?.picture?.data?.url || user?.profile_pic || user?.profile_picture;
+  return {
+    name: user?.name || null,
+    avatarUrl: toAvatarProxyUrl(rawAvatar)
+  };
+};
+
+const resolveFacebookCustomerProfile = async (pageId: string, customerPsid: string, accessToken: string) => {
+  let name: string | null = null;
+  let avatarUrl: string | null = null;
+
+  try {
+    const convSearchData = await graphGet(`${pageId}/conversations`, accessToken, {
+      user_id: customerPsid,
+      fields: 'id,participants.fields(id,name,picture,profile_pic),senders.fields(id,name,picture,profile_pic)',
+      limit: '5'
+    });
+
+    console.log(`[PROFILE_FETCH] Conversation profile result for ${customerPsid}:`, JSON.stringify(convSearchData).substring(0, 300));
+
+    const graphConversation = Array.isArray(convSearchData?.data) ? convSearchData.data[0] : null;
+    const participants = graphConversation?.participants?.data || [];
+    const senders = graphConversation?.senders?.data || [];
+
+    const participantProfile = pickProfileFromParticipants(participants, customerPsid);
+    const senderProfile = pickProfileFromParticipants(senders, customerPsid);
+
+    name = participantProfile.name || senderProfile.name || null;
+    avatarUrl = participantProfile.avatarUrl || senderProfile.avatarUrl || null;
+
+    if (!avatarUrl && graphConversation?.id) {
+      try {
+        const detailData = await graphGet(graphConversation.id, accessToken, {
+          fields: 'participants.fields(id,name,picture,profile_pic),senders.fields(id,name,picture,profile_pic)'
+        });
+        console.log(`[PROFILE_FETCH] Conversation detail result for ${customerPsid}:`, JSON.stringify(detailData).substring(0, 300));
+        const detailParticipantProfile = pickProfileFromParticipants(detailData?.participants?.data || [], customerPsid);
+        const detailSenderProfile = pickProfileFromParticipants(detailData?.senders?.data || [], customerPsid);
+        name = name || detailParticipantProfile.name || detailSenderProfile.name || null;
+        avatarUrl = detailParticipantProfile.avatarUrl || detailSenderProfile.avatarUrl || null;
+      } catch (detailError: any) {
+        console.warn('[PROFILE_FETCH] Conversation detail avatar fetch failed:', detailError?.graphError || detailError?.message || detailError);
+      }
+    }
+  } catch (conversationError: any) {
+    console.warn('[PROFILE_FETCH] Conversation profile fetch failed:', conversationError?.graphError || conversationError?.message || conversationError);
+  }
+
+  if (!name || !avatarUrl) {
+    try {
+      const profileData = await graphGet(customerPsid, accessToken, {
+        fields: 'name,picture.type(large),profile_pic'
+      });
+      console.log(`[PROFILE_FETCH] Direct profile result for ${customerPsid}:`, JSON.stringify(profileData).substring(0, 300));
+      name = name || profileData?.name || null;
+      avatarUrl = avatarUrl || toAvatarProxyUrl(profileData?.picture?.data?.url || profileData?.profile_pic);
+    } catch (directError: any) {
+      console.warn('[PROFILE_FETCH] Direct profile fallback failed:', directError?.graphError || directError?.message || directError);
+    }
+  }
+
+  return { name, avatarUrl };
+};
 const SUPPORTED_FB_ATTACHMENT_TYPES = ['image', 'sticker', 'like', 'fallback'] as const;
 
 const normalizeFacebookAttachmentType = (attachment: any): string => {
@@ -1110,43 +1183,16 @@ router.post('/webhook', (req, res) => {
             }
           }
 
-          // Fetch Customer Profile via conversations/participants (works for PSIDs)
+          // Fetch Customer Profile via conversations participants/senders (works better for Messenger PSIDs)
           let customer_name = 'Khách hàng FB';
-          let customer_avatar = null;
+          let customer_avatar: string | null = null;
           try {
-            // Method 1: Get name from conversations participants
-            const convSearchRes = await fetch(
-              `https://graph.facebook.com/v25.0/${page_id}/conversations?user_id=${sender_psid}&fields=participants&access_token=${page.access_token}`
-            );
-            const convSearchData = await convSearchRes.json();
-            console.log(`[PROFILE_FETCH] Method 1 result for ${sender_psid}:`, JSON.stringify(convSearchData).substring(0, 200));
-
-            if (convSearchData.data && convSearchData.data.length > 0) {
-              const participants = convSearchData.data[0].participants?.data || [];
-              const userParticipant = participants.find((p: any) => p.id === sender_psid);
-              if (userParticipant?.name) {
-                customer_name = userParticipant.name;
-                console.log(`[PROFILE] Got name from participants: ${customer_name}`);
-              }
-            }
-
-            // Method 2: Try direct profile (works for some users)
-            if (customer_name === 'Khách hàng FB' || !customer_avatar) {
-              const profileRes = await fetch(
-                `https://graph.facebook.com/v25.0/${sender_psid}?fields=name,profile_pic&access_token=${page.access_token}`
-              );
-              const profileData = await profileRes.json();
-              console.log(`[PROFILE_FETCH] Method 2 result for ${sender_psid}:`, JSON.stringify(profileData));
-
-              if (profileData.name && customer_name === 'Khách hàng FB') customer_name = profileData.name;
-              if (profileData.profile_pic) {
-                customer_avatar = `/api/fb/avatar-proxy?url=${encodeURIComponent(profileData.profile_pic)}`;
-              }
-            }
-
+            const profile = await resolveFacebookCustomerProfile(page_id, sender_psid, page.access_token);
+            if (profile.name) customer_name = profile.name;
+            if (profile.avatarUrl) customer_avatar = profile.avatarUrl;
             console.log(`[PROFILE] Final: name=${customer_name}, has_avatar=${!!customer_avatar}`);
-          } catch (err) {
-            console.error('Error fetching FB profile:', err);
+          } catch (err: any) {
+            console.error('Error fetching FB profile:', err?.message || err);
           }
 
           // Upsert Conversation
@@ -1155,13 +1201,14 @@ router.post('/webhook', (req, res) => {
 
           const { rows: convs } = await pool.query(
             `INSERT INTO fb_conversations (
-              page_id, customer_id, customer_name, customer_avatar, last_message, unread_count, assigned_to,
+              page_id, customer_id, customer_name, customer_avatar, avatar_url, last_message, unread_count, assigned_to,
               ad_id, ad_name, adset_id, adset_name, campaign_id, campaign_name, creative_id,
               ad_image, ad_message, ad_permalink_url, ad_source_status, ad_source_error, ad_referral_raw, ad_source_updated_at
-            ) VALUES ($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+            ) VALUES ($1,$2,$3,$4,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
             ON CONFLICT (page_id, customer_id) DO UPDATE SET
               customer_name = CASE WHEN fb_conversations.customer_name = 'Khách hàng FB' OR fb_conversations.customer_name IS NULL THEN EXCLUDED.customer_name ELSE fb_conversations.customer_name END,
               customer_avatar = COALESCE(EXCLUDED.customer_avatar, fb_conversations.customer_avatar),
+              avatar_url = COALESCE(EXCLUDED.avatar_url, fb_conversations.avatar_url),
               last_message = EXCLUDED.last_message,
               last_message_at = CURRENT_TIMESTAMP,
               unread_count = fb_conversations.unread_count + 1,
@@ -2832,68 +2879,19 @@ router.post('/conversations/:id/refresh-profile', async (req, res) => {
     if (convs.length === 0) return res.status(404).json({ error: 'Conversation not found' });
     const { customer_id, access_token, page_id } = convs[0];
 
-    let name = 'Khách hàng FB';
-    let avatar: string | null = null;
-
-    // Method 1: Get name from conversations/participants (most reliable)
-    try {
-      const convSearchRes = await fetch(
-        `https://graph.facebook.com/v25.0/${page_id}/conversations?user_id=${customer_id}&fields=participants&access_token=${access_token}`
-      );
-      const convSearchData = await convSearchRes.json();
-      console.log(`[REFRESH_PROFILE] Method 1 result for ${customer_id}:`, JSON.stringify(convSearchData).substring(0, 200));
-
-      if (convSearchData.data && convSearchData.data.length > 0) {
-        const participants = convSearchData.data[0].participants?.data || [];
-        const userParticipant = participants.find((p: any) => p.id === customer_id);
-        if (userParticipant?.name) name = userParticipant.name;
-      }
-    } catch (e) { console.error('participants fetch error', e); }
-
-    // Method 2: Try direct profile for avatar
-    try {
-      const profileRes = await fetch(
-        `https://graph.facebook.com/v25.0/${customer_id}?fields=name,profile_pic&access_token=${access_token}`
-      );
-      const profileData = await profileRes.json();
-      console.log(`[REFRESH_PROFILE] Method 2 result for ${customer_id}:`, JSON.stringify(profileData));
-
-      if (profileData.name && name === 'Khách hàng FB') name = profileData.name;
-      if (profileData.profile_pic) {
-        avatar = `/api/fb/avatar-proxy?url=${encodeURIComponent(profileData.profile_pic)}`;
-      }
-    } catch (e) { /* fallback, no avatar */ }
-
-    // Method 3: Get picture via conversation senders/participants email
-    if (!avatar) {
-      try {
-        const convRes = await fetch(
-          `https://graph.facebook.com/v25.0/${page_id}/conversations?user_id=${customer_id}&fields=senders,participants&access_token=${access_token}`
-        );
-        const convData = await convRes.json();
-        if (convData.data && convData.data.length > 0) {
-          const senders = convData.data[0].senders?.data || convData.data[0].participants?.data || [];
-          const user = senders.find((s: any) => s.id === customer_id);
-          if (user?.picture?.data?.url) {
-            avatar = `/api/fb/avatar-proxy?url=${encodeURIComponent(user.picture.data.url)}`;
-          }
-          // Try with picture field specifically
-          const convId = convData.data[0].id;
-          const detailRes = await fetch(
-            `https://graph.facebook.com/v25.0/${convId}?fields=participants.fields(name,picture,profile_pic)&access_token=${access_token}`
-          );
-          const detailData = await detailRes.json();
-          const userDetail = (detailData.participants?.data || []).find((p: any) => p.id === customer_id);
-          const rawUrl = userDetail?.picture?.data?.url || userDetail?.profile_pic;
-          if (rawUrl) {
-            avatar = `/api/fb/avatar-proxy?url=${encodeURIComponent(rawUrl)}`;
-          }
-        }
-      } catch (e) { /* no avatar via conv */ }
-    }
+    const profile = await resolveFacebookCustomerProfile(page_id, customer_id, access_token);
+    const name = profile.name || 'Khách hàng FB';
+    const avatar = profile.avatarUrl;
 
     await pool.query(
-      'UPDATE fb_conversations SET customer_name = $1, customer_avatar = $2 WHERE id = $3',
+      `UPDATE fb_conversations
+       SET customer_name = CASE
+             WHEN $1 = 'Khách hàng FB' AND customer_name IS NOT NULL THEN customer_name
+             ELSE $1
+           END,
+           customer_avatar = COALESCE($2, customer_avatar),
+           avatar_url = COALESCE($2, avatar_url)
+       WHERE id = $3`,
       [name, avatar, id]
     );
 
@@ -2901,6 +2899,8 @@ router.post('/conversations/:id/refresh-profile', async (req, res) => {
       success: true,
       customer_name: name,
       customer_avatar: avatar,
+      avatarUrl: avatar,
+      avatar_url: avatar,
       profile_link: `https://business.facebook.com/latest/people/${customer_id}?asset_id=${page_id}`
     });
   } catch (err: any) {
