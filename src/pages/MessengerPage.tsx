@@ -1706,7 +1706,7 @@ export const MessengerPage = ({ user }: { user?: any }) => {
         <div className="flex-1 overflow-y-auto overflow-x-hidden" onScroll={handleConversationListScroll}>
           {isLoadingConversations && conversations.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> ?ang t?i tin nh?n...
+              <Loader2 className="w-4 h-4 animate-spin" /> Đang tải tin nhắn...
             </div>
           ) : displayedConversations.length === 0 ? (
             <div className="p-8 text-center text-slate-500 text-sm">
@@ -1781,12 +1781,12 @@ export const MessengerPage = ({ user }: { user?: any }) => {
             )))}
           {isLoadingMoreConversations && (
             <div className="p-4 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> ?ang t?i th?m h?i tho?i...
+              <Loader2 className="w-4 h-4 animate-spin" /> Đang tải thêm hội thoại...
             </div>
           )}
           {!hasMoreConversations && displayedConversations.length > 0 && (
             <div className="p-4 text-center text-slate-400 text-[11px]">
-              ?? t?i h?t h?i tho?i.
+              Đã tải hết hội thoại.
             </div>
           )}
         </div>

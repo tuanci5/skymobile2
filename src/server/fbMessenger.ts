@@ -227,6 +227,201 @@ const mapMessageRow = (row: any) => ({
   attachment_proxy_url: buildAttachmentProxyUrl(row.id, row.attachment_type)
 });
 
+const historySyncInFlight = new Set<string>();
+
+const parseFacebookMessageTime = (value?: string | null) => {
+  const date = value ? new Date(value) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+};
+
+const getMessageAttachmentInfo = (message: any) => {
+  const supportedAttachment = getFirstSupportedAttachment(message);
+  const attachmentType = supportedAttachment ? normalizeFacebookAttachmentType(supportedAttachment) : null;
+  const attachmentLabel = attachmentType === 'sticker'
+    ? '[Sticker]'
+    : attachmentType === 'like'
+      ? '[Like]'
+      : attachmentType === 'image'
+        ? '[Ảnh]'
+        : '';
+  return {
+    supportedAttachment,
+    attachmentType,
+    attachmentLabel,
+    attachmentUrl: supportedAttachment?.payload?.url || null,
+    facebookAttachmentId: supportedAttachment?.payload?.attachment_id || supportedAttachment?.payload?.sticker_id || supportedAttachment?.payload?.id || null
+  };
+};
+
+const getGraphPagingNext = (data: any) => {
+  const next = data?.paging?.next;
+  return typeof next === 'string' && next.startsWith('https://graph.facebook.com/') ? next : null;
+};
+
+const graphFetchUrl = async (url: string) => {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) {
+    const err: any = new Error(data.error?.message || `Facebook Graph API error ${response.status}`);
+    err.graphError = data.error || { status: response.status };
+    throw err;
+  }
+  return data;
+};
+
+const syncFacebookConversationHistory = async (args: {
+  localConversationId: number;
+  pageId: string;
+  customerPsid: string;
+  accessToken: string;
+  force?: boolean;
+}) => {
+  const { localConversationId, pageId, customerPsid, accessToken, force = false } = args;
+  const lockKey = `${pageId}:${customerPsid}`;
+  if (historySyncInFlight.has(lockKey)) {
+    console.log(`[HISTORY_SYNC] Skip; already running for ${lockKey}`);
+    return { inserted: 0, skipped: 0, reason: 'in_flight' };
+  }
+
+  historySyncInFlight.add(lockKey);
+  try {
+    if (!force) {
+      const { rows } = await pool.query(
+        'SELECT history_synced_at FROM fb_conversations WHERE id = $1',
+        [localConversationId]
+      );
+      if (rows[0]?.history_synced_at) {
+        return { inserted: 0, skipped: 0, reason: 'already_synced' };
+      }
+    }
+
+    console.log(`[HISTORY_SYNC] Start page=${pageId} customer=${customerPsid} conv=${localConversationId}`);
+
+    const conversationSearch = await graphGet(`${pageId}/conversations`, accessToken, {
+      user_id: customerPsid,
+      fields: 'id,updated_time,participants,senders',
+      limit: '5'
+    });
+    const graphConversation = Array.isArray(conversationSearch?.data) ? conversationSearch.data[0] : null;
+    if (!graphConversation?.id) {
+      await pool.query('UPDATE fb_conversations SET history_synced_at = CURRENT_TIMESTAMP WHERE id = $1', [localConversationId]);
+      console.log(`[HISTORY_SYNC] No Graph conversation for ${lockKey}`);
+      return { inserted: 0, skipped: 0, reason: 'not_found' };
+    }
+
+    let nextUrl: string | null = `https://graph.facebook.com/${FB_GRAPH_VERSION}/${encodeURIComponent(graphConversation.id)}/messages?fields=id,message,created_time,from,attachments&limit=100&access_token=${encodeURIComponent(accessToken)}`;
+    let inserted = 0;
+    let skipped = 0;
+    let pages = 0;
+    const maxPages = 20; // up to ~2,000 messages per auto backfill; keeps webhook background safe.
+
+    while (nextUrl && pages < maxPages) {
+      pages += 1;
+      const data = await graphFetchUrl(nextUrl);
+      const messages = Array.isArray(data?.data) ? data.data : [];
+
+      for (const fbMessage of messages) {
+        const facebookMessageId = fbMessage?.id ? String(fbMessage.id) : null;
+        const { supportedAttachment, attachmentType, attachmentLabel, attachmentUrl, facebookAttachmentId } = getMessageAttachmentInfo(fbMessage);
+        const messageText = fbMessage?.message || attachmentLabel;
+        if (!messageText && !supportedAttachment) {
+          skipped += 1;
+          continue;
+        }
+
+        const fromId = String(fbMessage?.from?.id || '');
+        const senderType = fromId === pageId ? 'human' : 'user';
+        const createdAt = parseFacebookMessageTime(fbMessage?.created_time);
+
+        if (facebookMessageId) {
+          const result = await pool.query(
+            `INSERT INTO fb_messages (
+              conversation_id, sender_type, sender_name, message_text, attachment_type, attachment_url,
+              attachment_payload, facebook_attachment_id, facebook_message_id, created_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            ON CONFLICT (conversation_id, facebook_message_id) WHERE facebook_message_id IS NOT NULL DO NOTHING`,
+            [
+              localConversationId,
+              senderType,
+              fbMessage?.from?.name || null,
+              messageText,
+              attachmentType,
+              attachmentUrl,
+              supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null,
+              facebookAttachmentId,
+              facebookMessageId,
+              createdAt
+            ]
+          );
+          if (result.rowCount > 0) inserted += 1;
+          else skipped += 1;
+        } else {
+          const existing = await pool.query(
+            `SELECT id FROM fb_messages
+             WHERE conversation_id = $1 AND sender_type = $2 AND message_text = $3
+               AND created_at BETWEEN $4::timestamp - INTERVAL '2 seconds' AND $4::timestamp + INTERVAL '2 seconds'
+             LIMIT 1`,
+            [localConversationId, senderType, messageText, createdAt]
+          );
+          if (existing.rows.length) {
+            skipped += 1;
+            continue;
+          }
+          await pool.query(
+            `INSERT INTO fb_messages (
+              conversation_id, sender_type, sender_name, message_text, attachment_type, attachment_url,
+              attachment_payload, facebook_attachment_id, created_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [
+              localConversationId,
+              senderType,
+              fbMessage?.from?.name || null,
+              messageText,
+              attachmentType,
+              attachmentUrl,
+              supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null,
+              facebookAttachmentId,
+              createdAt
+            ]
+          );
+          inserted += 1;
+        }
+      }
+
+      nextUrl = getGraphPagingNext(data);
+    }
+
+    await pool.query(
+      `UPDATE fb_conversations
+       SET history_synced_at = CURRENT_TIMESTAMP,
+           last_message = COALESCE((
+             SELECT message_text
+             FROM fb_messages
+             WHERE conversation_id = $1
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1
+           ), last_message),
+           last_message_at = COALESCE((
+             SELECT created_at
+             FROM fb_messages
+             WHERE conversation_id = $1
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1
+           ), last_message_at)
+       WHERE id = $1`,
+      [localConversationId]
+    );
+
+    console.log(`[HISTORY_SYNC] Done page=${pageId} customer=${customerPsid} inserted=${inserted} skipped=${skipped} pages=${pages}`);
+    return { inserted, skipped, pages, reason: pages >= maxPages && nextUrl ? 'page_limit_reached' : 'ok' };
+  } catch (error: any) {
+    console.error(`[HISTORY_SYNC] Error for ${lockKey}:`, error?.graphError || error?.message || error);
+    throw error;
+  } finally {
+    historySyncInFlight.delete(lockKey);
+  }
+};
+
 const sendFacebookImage = async (accessToken: string, customerId: string, imageUrl: string) => {
   const response = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/me/messages?access_token=${accessToken}`, {
     method: 'POST',
@@ -880,19 +1075,16 @@ router.post('/webhook', (req, res) => {
               continue;
             }
 
-            const supportedAttachment = getFirstSupportedAttachment(webhook_event.message);
-            const attachmentType = supportedAttachment ? normalizeFacebookAttachmentType(supportedAttachment) : null;
-            const attachmentLabel = attachmentType === 'sticker'
-              ? '[Sticker]'
-              : attachmentType === 'like'
-                ? '[Like]'
-                : attachmentType === 'image'
-                  ? '[Ảnh]'
-                  : '';
+            const {
+              supportedAttachment,
+              attachmentType,
+              attachmentLabel,
+              attachmentUrl,
+              facebookAttachmentId
+            } = getMessageAttachmentInfo(webhook_event.message);
             const messageText = webhook_event.message.text || attachmentLabel;
             if (!messageText && !supportedAttachment) continue;
-            const attachmentUrl = supportedAttachment?.payload?.url || null;
-            const facebookAttachmentId = supportedAttachment?.payload?.attachment_id || supportedAttachment?.payload?.sticker_id || supportedAttachment?.payload?.id || null;
+            const webhookFacebookMessageId = webhook_event.message.mid ? String(webhook_event.message.mid) : null;
 
             const adSource = await resolveAdSourceFromWebhook(webhook_event, page.access_token);
 
@@ -1005,6 +1197,19 @@ router.post('/webhook', (req, res) => {
           dify_conversation_id = convs[0].dify_conversation_id;
           is_human_intervened = convs[0].is_human_intervened;
 
+          // Auto-backfill old Facebook messages once per conversation when a customer messages again.
+          // Webhook only delivers new events, so this imports prior chat history from Graph API without a UI button.
+          try {
+            await syncFacebookConversationHistory({
+              localConversationId: convId,
+              pageId: page_id,
+              customerPsid: sender_psid,
+              accessToken: page.access_token
+            });
+          } catch (historyError: any) {
+            console.error('[HISTORY_SYNC] Continuing webhook despite sync failure:', historyError?.message || historyError);
+          }
+
           // --- AI SCHEDULE CHECK ---
           let isWithinAISchedule = true;
           if (page.ai_start_hour !== undefined && page.ai_end_hour !== undefined) {
@@ -1020,13 +1225,23 @@ router.post('/webhook', (req, res) => {
             }
           }
 
-          // Insert Message
-          await pool.query(
-            `INSERT INTO fb_messages (
-              conversation_id, sender_type, message_text, attachment_type, attachment_url, attachment_payload, facebook_attachment_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [convId, 'user', messageText, attachmentType, attachmentUrl, supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null, facebookAttachmentId]
-          );
+          // Insert Message. If history sync already imported this MID, do not duplicate it.
+          if (webhookFacebookMessageId) {
+            await pool.query(
+              `INSERT INTO fb_messages (
+                conversation_id, sender_type, message_text, attachment_type, attachment_url, attachment_payload, facebook_attachment_id, facebook_message_id
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (conversation_id, facebook_message_id) WHERE facebook_message_id IS NOT NULL DO NOTHING`,
+              [convId, 'user', messageText, attachmentType, attachmentUrl, supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null, facebookAttachmentId, webhookFacebookMessageId]
+            );
+          } else {
+            await pool.query(
+              `INSERT INTO fb_messages (
+                conversation_id, sender_type, message_text, attachment_type, attachment_url, attachment_payload, facebook_attachment_id
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [convId, 'user', messageText, attachmentType, attachmentUrl, supportedAttachment ? JSON.stringify(supportedAttachment.payload || {}) : null, facebookAttachmentId]
+            );
+          }
 
           // --- DIFY AI BATCHING LOGIC (5s delay to group messages) ---
           if (!is_human_intervened && page.dify_api_key && isWithinAISchedule) {

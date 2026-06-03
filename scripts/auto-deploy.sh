@@ -6,7 +6,7 @@ PROJECT_DIR="/www/wwwroot/skymobile"
 BRANCH="main"
 API_PORT="3006"
 PM2_APP_NAME="skymobile-api"
-DEPLOY_USER="www"
+DEPLOY_USER="root"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"

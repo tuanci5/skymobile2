@@ -290,6 +290,9 @@ export async function initDBUtils() {
     try {
       await client.query("ALTER TABLE fb_conversations ADD COLUMN facebook_uid VARCHAR(100)");
     } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_conversations ADD COLUMN history_synced_at TIMESTAMP");
+    } catch (e) {}
     await client.query("CREATE INDEX IF NOT EXISTS idx_fb_conversations_facebook_uid ON fb_conversations(facebook_uid)");
 
     await client.query(`
@@ -334,6 +337,15 @@ export async function initDBUtils() {
     } catch (e) {}
     try {
       await client.query("ALTER TABLE fb_messages ADD COLUMN facebook_attachment_id TEXT");
+    } catch (e) {}
+    try {
+      await client.query("ALTER TABLE fb_messages ADD COLUMN facebook_message_id TEXT");
+    } catch (e) {}
+    try {
+      await client.query("CREATE UNIQUE INDEX IF NOT EXISTS uniq_fb_messages_conversation_facebook_mid ON fb_messages(conversation_id, facebook_message_id) WHERE facebook_message_id IS NOT NULL");
+    } catch (e) {}
+    try {
+      await client.query("CREATE INDEX IF NOT EXISTS idx_fb_messages_conversation_created_at ON fb_messages(conversation_id, created_at)");
     } catch (e) {}
 
     await client.query(`
