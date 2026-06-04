@@ -57,6 +57,10 @@ const canViewAllMessengerReports = (role?: string | null) => {
 };
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const REPORT_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const BUSINESS_HOURS_START = '08:00';
+const BUSINESS_HOURS_END = '17:00';
+const toVietnamLocalTimeSql = (column: string) => `(${column} AT TIME ZONE 'UTC' AT TIME ZONE '${REPORT_TIMEZONE}')`;
 
 const getReportDateFilter = (range?: string | null, column = 'm.created_at', startDate?: unknown, endDate?: unknown) => {
   const normalized = String(range || '')
@@ -68,29 +72,33 @@ const getReportDateFilter = (range?: string | null, column = 'm.created_at', sta
   const customStartDate = String(startDate || '').trim();
   const customEndDate = String(endDate || '').trim();
 
+  const vnColumn = toVietnamLocalTimeSql(column);
+  const vnNow = `timezone('${REPORT_TIMEZONE}', now())`;
+  const vnCurrentDate = `${vnNow}::date`;
+
   if (normalized.includes('khoang ngay') || normalized === 'custom') {
     if (!ISO_DATE_PATTERN.test(customStartDate) || !ISO_DATE_PATTERN.test(customEndDate)) {
       throw new Error('Khoảng ngày không hợp lệ.');
     }
-    return `${column} >= '${customStartDate}'::date AND ${column} < '${customEndDate}'::date + INTERVAL '1 day'`;
+    return `${vnColumn} >= '${customStartDate}'::date AND ${vnColumn} < '${customEndDate}'::date + INTERVAL '1 day'`;
   }
 
   if (normalized.includes('hom qua') || normalized === 'yesterday') {
-    return `${column} >= CURRENT_DATE - INTERVAL '1 day' AND ${column} < CURRENT_DATE`;
+    return `${vnColumn} >= ${vnCurrentDate} - INTERVAL '1 day' AND ${vnColumn} < ${vnCurrentDate}`;
   }
   if (normalized.includes('hom nay') || normalized === 'today') {
-    return `${column} >= CURRENT_DATE`;
+    return `${vnColumn} >= ${vnCurrentDate}`;
   }
   if (normalized.includes('tuan truoc') || normalized === 'last_week') {
-    return `${column} >= date_trunc('week', CURRENT_DATE) - INTERVAL '1 week' AND ${column} < date_trunc('week', CURRENT_DATE)`;
+    return `${vnColumn} >= date_trunc('week', ${vnNow}) - INTERVAL '1 week' AND ${vnColumn} < date_trunc('week', ${vnNow})`;
   }
   if (normalized.includes('tuan nay') || normalized === 'week') {
-    return `${column} >= date_trunc('week', CURRENT_DATE)`;
+    return `${vnColumn} >= date_trunc('week', ${vnNow})`;
   }
   if (normalized.includes('nam nay') || normalized === 'year') {
-    return `${column} >= date_trunc('year', CURRENT_DATE)`;
+    return `${vnColumn} >= date_trunc('year', ${vnNow})`;
   }
-  return `${column} >= date_trunc('month', CURRENT_DATE)`;
+  return `${vnColumn} >= date_trunc('month', ${vnNow})`;
 };
 
 const getFBDateRangeForInsights = (range?: string | null, startDate?: unknown, endDate?: unknown) => {
@@ -2220,12 +2228,12 @@ router.get('/reports/new-messages', async (req, res) => {
           COUNT(fsr.first_response_at)::int AS response_count,
           COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL), 0)::int AS total_response_seconds,
           COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL)), 0)::int AS average_response_seconds,
-          COUNT(fsr.first_response_at) FILTER (WHERE fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00')::int AS business_response_count,
-          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00'), 0)::int AS business_total_response_seconds,
-          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND fsr.first_response_at::time >= TIME '08:00' AND fsr.first_response_at::time < TIME '17:00')), 0)::int AS business_average_response_seconds,
-          COUNT(fsr.first_response_at) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00'))::int AS after_hours_response_count,
-          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00')), 0)::int AS after_hours_total_response_seconds,
-          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (fsr.first_response_at::time < TIME '08:00' OR fsr.first_response_at::time >= TIME '17:00'))), 0)::int AS after_hours_average_response_seconds,
+          COUNT(fsr.first_response_at) FILTER (WHERE ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_START}' AND ${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_END}')::int AS business_response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_START}' AND ${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_END}'), 0)::int AS business_total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_START}' AND ${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_END}')), 0)::int AS business_average_response_seconds,
+          COUNT(fsr.first_response_at) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_START}' OR ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_END}'))::int AS after_hours_response_count,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_START}' OR ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_END}')), 0)::int AS after_hours_total_response_seconds,
+          COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fsr.first_response_at - cfm.first_message_at))) FILTER (WHERE fsr.first_response_at IS NOT NULL AND (${toVietnamLocalTimeSql('fsr.first_response_at')}::time < TIME '${BUSINESS_HOURS_START}' OR ${toVietnamLocalTimeSql('fsr.first_response_at')}::time >= TIME '${BUSINESS_HOURS_END}'))), 0)::int AS after_hours_average_response_seconds,
           MIN(cfm.first_message_at) AS first_message_at,
           MAX(cfm.first_message_at) AS last_message_at
         FROM customer_first_messages cfm

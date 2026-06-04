@@ -736,12 +736,27 @@ export async function initDBUtils() {
       } catch (e) {}
     }
 
+    // Diagram editor tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS diagram_pages (
+        id VARCHAR(100) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT DEFAULT '',
+        sort_order INT DEFAULT 0,
+        data JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Automatically ensure customer/order approval/debt permissions for core roles
     try {
       await client.query(`
         INSERT INTO role_permissions (role, allowed_tabs)
         VALUES
           ('Quản trị', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "customer-debts", "order-approvals"]'::jsonb),
+          ('Giám đốc / CEO', '["model", "hr", "salary", "training", "business", "action-plan", "products", "users", "tasks", "messenger", "revenue", "customers", "customer-debts", "order-approvals"]'::jsonb),
+          ('Cổ đông', '["model", "business", "revenue"]'::jsonb),
           ('Trưởng phòng Kinh doanh Marketing', '["model", "hr", "training", "business", "tasks", "messenger", "revenue", "customers", "customer-debts", "order-approvals"]'::jsonb),
           ('Nhân viên CSKH', '["model", "tasks", "messenger", "revenue"]'::jsonb),
           ('Nhân viên Chăm sóc khách hàng', '["model", "tasks", "messenger", "revenue"]'::jsonb)

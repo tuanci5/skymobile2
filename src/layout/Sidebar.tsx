@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Building2,
   FileText,
   GraduationCap,
   LogOut,
@@ -67,13 +68,23 @@ export const Sidebar = ({
     { id: 'settings', label: 'Cài đặt', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   ];
 
-  const deptLinks = DEPARTMENTS.map(dept => ({
-    id: dept.id,
-    label: `P. ${dept.title.replace('Phòng ', '')}`,
-    icon: dept.icon,
-    indent: true,
-    small: true,
-  })).filter(link => {
+  const deptLinks = [
+    {
+      id: 'org-chart',
+      label: 'Sơ đồ tổ chức',
+      icon: <Building2 className="w-5 h-5" />,
+      indent: true,
+      small: true,
+    },
+    ...DEPARTMENTS.map(dept => ({
+      id: dept.id,
+      label: `P. ${dept.title.replace('Phòng ', '')}`,
+      icon: dept.icon,
+      indent: true,
+      small: true,
+    }))
+  ].filter(link => {
+    if (link.id === 'org-chart') return true;
     if (isAdminRole(user.role)) return true;
     if (user.role === 'Trưởng nhóm Marketing' && link.id === 'sales-mkt') return true;
     if (user.role === 'Trưởng nhóm CSKH' && link.id === 'sales-mkt') return true;
@@ -106,7 +117,7 @@ export const Sidebar = ({
   const handleNavigate = (item: any) => {
     const hasSubItems = (item.id === 'model' && deptLinks.length > 0) || (item.id === 'hr' && hrLinks.some(l => l.visible !== false));
 
-    const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
+    const DEPT_IDS = ['org-chart', 'sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
     if (DEPT_IDS.includes(item.id)) {
       navigate(`/model/${item.id}`);
     } else if (item.id === 'hr-jd') {
@@ -250,7 +261,7 @@ export const Sidebar = ({
                         className="overflow-hidden space-y-1"
                       >
                         {subItems.map(subItem => {
-                          const DEPT_IDS = ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
+                          const DEPT_IDS = ['org-chart', 'sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'];
                           const HR_IDS = ['hr-jd', 'hr-plan', 'hr-interview', 'hr-payroll'];
                           const SETTINGS_IDS = ['settings-general', 'settings-users'];
                           let isSubActive = false;

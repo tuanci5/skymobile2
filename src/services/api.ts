@@ -72,6 +72,13 @@ export const productService = {
   delete: (id: number) => api.delete(`/api/products/${id}`),
 };
 
+export const diagramService = {
+  getPages: () => api.get('/api/diagrams/pages'),
+  savePage: (page: any) => page.id ? api.post('/api/diagrams/pages', page) : api.post('/api/diagrams/pages', page),
+  updatePage: (id: string, page: any) => api.put(`/api/diagrams/pages/${id}`, page),
+  deletePage: (id: string) => api.delete(`/api/diagrams/pages/${id}`),
+};
+
 export const settingService = {
   getAll: () => api.get('/api/settings'),
   save: (settings: Record<string, string>) => api.post('/api/settings', settings),

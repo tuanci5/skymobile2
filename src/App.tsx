@@ -62,7 +62,7 @@ function AppContent() {
 
   const activeTab: TabType = (rootSeg === 'mobile-menu' ? 'model' : PATH_TO_TAB[rootSeg]) ?? 'model';
   const isMobileMenu = rootSeg === 'mobile-menu';
-  const activeDept = (activeTab === 'model' && ['sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(subSeg)) ? subSeg : null;
+  const activeDept = (activeTab === 'model' && ['org-chart', 'sales-mkt', 'comms-dept', 'hr-dept', 'finance-dept', 'technical'].includes(subSeg)) ? subSeg : null;
   const activeTeam = (activeDept === 'sales-mkt' && ['marketing', 'sale', 'cskh'].includes(teamSeg)) ? teamSeg as any : null;
   const hrSubTab = activeTab === 'hr' ? (subSeg === 'interview' ? 'interview' : (subSeg === 'plan' ? 'plan' : (subSeg === 'payroll' ? 'payroll' : 'jd'))) : 'jd';
   const settingsSubPage = rootSeg === 'users' || (activeTab === 'settings' && subSeg === 'users') ? 'users' : 'general';

@@ -15,6 +15,7 @@ import teamRoutes from './routes/teamRoutes';
 import aiRoutes from './routes/aiRoutes';
 import productRoutes from './routes/productRoutes';
 import customerRoutes from './routes/customerRoutes';
+import diagramRoutes from './routes/diagramRoutes';
 import { syncFromSkyMobile } from './services/skymobileSync';
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/diagrams', diagramRoutes);
 
 app.get('/api/settings', async (req, res) => {
   try {

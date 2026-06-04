@@ -1,5 +1,7 @@
 export const ROLE_MAPPING: Record<string, string> = {
   'Quản trị': 'admin',
+  'Giám đốc / CEO': 'ceo',
+  'Cổ đông': 'shareholder',
   'Trưởng nhóm Marketing': 'mkt_lead',
   'Trưởng nhóm Sale': 'sale_lead',
   'Trưởng nhóm CSKH': 'cskh_lead',

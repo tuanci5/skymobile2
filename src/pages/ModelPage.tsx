@@ -27,6 +27,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { DEPARTMENTS, PROCESS_STEPS } from '../data/modelData';
 import { ROLES } from '../data/hrData';
 import type { Role } from '../types';
+import { OrganizationChartPage } from './OrganizationChartPage';
 
 const Header = () => (
   <header className="mb-12 text-center">
@@ -496,6 +497,17 @@ export const ModelPage = ({
   goToTeam,
 }: ModelPageProps) => {
   const currentRole = ROLES.find(r => r.id === activeRole) || ROLES[0];
+
+  if (activeDept === 'org-chart') {
+    return (
+      <div>
+        <button onClick={() => goToDept(null)} className="mb-8 text-blue-600 font-bold flex items-center gap-2 hover:bg-blue-50 px-4 py-2 rounded-xl transition-colors w-fit">
+          &larr; Quay lại Mô hình vận hành
+        </button>
+        <OrganizationChartPage />
+      </div>
+    );
+  }
 
   if (!activeDept) {
     return (

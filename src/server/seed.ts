@@ -37,6 +37,8 @@ async function seed() {
     // Insert default role permissions
     const roles = [
       { role: 'Quản trị', allowed_tabs: ['model', 'hr', 'salary', 'training', 'business', 'action-plan', 'products', 'users', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts', 'order-approvals'] },
+      { role: 'Giám đốc / CEO', allowed_tabs: ['model', 'hr', 'salary', 'training', 'business', 'action-plan', 'products', 'users', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts', 'order-approvals'] },
+      { role: 'Cổ đông', allowed_tabs: ['model', 'business', 'revenue'] },
       { role: 'Trưởng phòng Kinh doanh Marketing', allowed_tabs: ['model', 'hr', 'training', 'business', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts', 'order-approvals'] },
       { role: 'Trưởng nhóm Marketing', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts'] },
       { role: 'Trưởng nhóm Sale', allowed_tabs: ['model', 'hr', 'training', 'tasks', 'messenger', 'revenue', 'customers', 'customer-debts'] },

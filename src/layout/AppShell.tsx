@@ -32,6 +32,8 @@ type ImpersonationUser = {
 
 const ROLE_OPTIONS = [
   'Quản trị',
+  'Giám đốc / CEO',
+  'Cổ đông',
   'Trưởng phòng Kinh doanh Marketing',
   'Trưởng nhóm Marketing',
   'Trưởng nhóm Sale',
