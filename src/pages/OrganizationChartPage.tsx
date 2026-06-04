@@ -1026,14 +1026,29 @@ export const OrganizationChartPage = () => {
       return `M ${a.x} ${a.y} L ${a.x} ${midY} L ${b.x} ${midY} L ${b.x} ${b.y}`;
     };
 
+    const labelPointBetween = (a: { x: number; y: number }, b: { x: number; y: number }, kind: ConnectorKind, labelOffsetY: number) => {
+      const bend = connector.bend ?? 0;
+      if (kind === 'curved') {
+        const t = 0.5;
+        const oneMinusT = 1 - t;
+        const c1 = { x: a.x + (b.x - a.x) * 0.35, y: a.y + bend };
+        const c2 = { x: a.x + (b.x - a.x) * 0.65, y: b.y + bend };
+        return {
+          x: oneMinusT ** 3 * a.x + 3 * oneMinusT ** 2 * t * c1.x + 3 * oneMinusT * t ** 2 * c2.x + t ** 3 * b.x,
+          y: oneMinusT ** 3 * a.y + 3 * oneMinusT ** 2 * t * c1.y + 3 * oneMinusT * t ** 2 * c2.y + t ** 3 * b.y + labelOffsetY,
+        };
+      }
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 + labelOffsetY };
+    };
+
     return {
       singlePath: pathBetween(start, end, connector.kind),
       forwardPath: pathBetween(forwardStart, forwardEnd, connector.kind),
       backwardPath: pathBetween(backwardStart, backwardEnd, connector.kind),
       labels: {
-        single: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - 8 },
-        forward: { x: (forwardStart.x + forwardEnd.x) / 2, y: (forwardStart.y + forwardEnd.y) / 2 - 14 },
-        backward: { x: (backwardStart.x + backwardEnd.x) / 2, y: (backwardStart.y + backwardEnd.y) / 2 + 22 },
+        single: labelPointBetween(start, end, connector.kind, connector.kind === 'curved' ? -6 : -8),
+        forward: labelPointBetween(forwardStart, forwardEnd, connector.kind, connector.kind === 'curved' ? -10 : -14),
+        backward: labelPointBetween(backwardStart, backwardEnd, connector.kind, connector.kind === 'curved' ? 16 : 22),
       },
     };
   };
