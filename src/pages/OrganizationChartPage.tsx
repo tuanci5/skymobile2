@@ -299,6 +299,7 @@ export const OrganizationChartPage = () => {
   const connectorSingleDetailTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const nodeElementRefs = useRef<Record<string, HTMLElement | null>>({});
   const [pages, setPages] = useState<DiagramPage[]>(createDefaultPages());
+  const pagesRef = useRef<DiagramPage[]>(pages);
   const [activePageId, setActivePageId] = useState('company-overview');
   const [selectedId, setSelectedId] = useState('sales-mkt');
   const [selectedIds, setSelectedIds] = useState<string[]>(['sales-mkt']);
@@ -378,8 +379,15 @@ export const OrganizationChartPage = () => {
     return { x: point.x - canvasOrigin.x, y: canvasOrigin.y - point.y };
   };
 
+  const setDiagramPages = (updater: DiagramPage[] | ((prev: DiagramPage[]) => DiagramPage[])) => {
+    const next = typeof updater === 'function' ? updater(pagesRef.current) : updater;
+    pagesRef.current = next;
+    setPages(next);
+    return next;
+  };
+
   const updateActivePageData = (updater: (data: DiagramData) => DiagramData) => {
-    setPages(prev => prev.map(page => page.id === activePageId ? { ...page, data: updater(page.data) } : page));
+    setDiagramPages(prev => prev.map(page => page.id === activePageId ? { ...page, data: updater(page.data) } : page));
   };
 
   useEffect(() => {
@@ -449,7 +457,7 @@ export const OrganizationChartPage = () => {
       }
 
       if (localPages) {
-        setPages(localPages);
+        setDiagramPages(localPages);
         setActivePageId(localPages[0].id);
         setHydrated(true);
       }
@@ -458,7 +466,7 @@ export const OrganizationChartPage = () => {
         const rows = await diagramService.getPages();
         if (Array.isArray(rows) && rows.length > 0) {
           const normalized = ensureRequiredDiagramPages(normalizePages(rows));
-          setPages(normalized);
+          setDiagramPages(normalized);
           for (const pageId of ['sales-flow', 'system-map']) {
             const requiredPage = normalized.find(page => page.id === pageId);
             if (requiredPage && !(rows as any[]).some(row => row.id === pageId && (row.data?.nodes || []).length > 0)) await diagramService.savePage(requiredPage);
@@ -466,7 +474,7 @@ export const OrganizationChartPage = () => {
           setActivePageId(current => normalized.some(page => page.id === current) ? current : normalized[0].id);
         } else if (!localPages) {
           const defaults = ensureRequiredDiagramPages(createDefaultPages());
-          setPages(defaults);
+          setDiagramPages(defaults);
           setActivePageId(defaults[0].id);
           for (const page of defaults) {
             await diagramService.savePage(page);
@@ -489,7 +497,9 @@ export const OrganizationChartPage = () => {
   const savePagesToDatabase = async () => {
     setSaveStatus('saving');
     try {
-      for (const page of pages) {
+      const latestPages = pagesRef.current;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(latestPages));
+      for (const page of latestPages) {
         await diagramService.savePage(page);
       }
       setSaveStatus('saved');
@@ -619,7 +629,7 @@ export const OrganizationChartPage = () => {
   const addPage = () => {
     const id = `page-${Date.now()}`;
     const newPage: DiagramPage = { id, title: 'Sơ đồ mới', description: 'Trang sơ đồ con', sort_order: pages.length, data: normalizeDiagramData({}) };
-    setPages(prev => [...prev, newPage]);
+    setDiagramPages(prev => [...prev, newPage]);
     setActivePageId(id);
     setSelectedId('');
     setSelectedIds([]);
@@ -628,7 +638,7 @@ export const OrganizationChartPage = () => {
 
 
   const updateActivePageMeta = (patch: Partial<Pick<DiagramPage, 'title' | 'description'>>) => {
-    setPages(prev => prev.map(page => page.id === activePageId ? { ...page, ...patch } : page));
+    setDiagramPages(prev => prev.map(page => page.id === activePageId ? { ...page, ...patch } : page));
   };
 
   const addShape = (shape: typeof shapeLibrary[number]) => {
@@ -759,6 +769,7 @@ export const OrganizationChartPage = () => {
         lockedGroups: (data.lockedGroups || []).map(group => group.filter(id => id !== selectedNode.id)).filter(group => group.length > 1),
         lockedNodeIds: (data.lockedNodeIds || []).filter(id => id !== selectedNode.id),
         assignments: restAssignments,
+        memberAssignments: restMemberAssignments,
       };
     });
     setSelectedId('');
@@ -929,7 +940,7 @@ export const OrganizationChartPage = () => {
   };
 
   const resetLayout = () => {
-    setPages(prev => prev.map(page => page.id === activePageId ? { ...page, data: createDefaultData() } : page));
+    setDiagramPages(prev => prev.map(page => page.id === activePageId ? { ...page, data: createDefaultData() } : page));
     setSelectedId('sales-mkt');
     setSelectedIds(['sales-mkt']);
   };
