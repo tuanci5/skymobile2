@@ -191,19 +191,24 @@ const createDefaultPages = (): DiagramPage[] => [
   { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 2, data: createWebsiteAppData() },
 ];
 
-const ensureSalesFlowPage = (items: DiagramPage[]): DiagramPage[] => {
-  const salesDescription = 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.';
-  const salesIndex = items.findIndex(page => page.id === 'sales-flow');
-  if (salesIndex === -1) {
-    return [
-      ...items,
-      { id: 'sales-flow', title: 'Quy trình Sale', description: salesDescription, sort_order: items.length, data: createSalesFlowData() },
-    ];
-  }
-  return items.map((page, index) => {
-    if (index !== salesIndex || page.data.nodes.length > 0) return page;
-    return { ...page, title: page.title || 'Quy trình Sale', description: page.description || salesDescription, data: createSalesFlowData() };
+const ensureRequiredDiagramPages = (items: DiagramPage[]): DiagramPage[] => {
+  const requiredPages: DiagramPage[] = [
+    { id: 'sales-flow', title: 'Quy trình Sale', description: 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.', sort_order: 1, data: createSalesFlowData() },
+    { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 2, data: createWebsiteAppData() },
+  ];
+
+  let next = [...items];
+  requiredPages.forEach(requiredPage => {
+    const pageIndex = next.findIndex(page => page.id === requiredPage.id);
+    if (pageIndex === -1) {
+      next = [...next, { ...requiredPage, sort_order: next.length }];
+      return;
+    }
+    const page = next[pageIndex];
+    if ((page.data?.nodes || []).length > 0) return;
+    next = next.map((item, index) => index === pageIndex ? { ...item, title: item.title || requiredPage.title, description: item.description || requiredPage.description, data: requiredPage.data } : item);
   });
+  return next;
 };
 
 const colorClass: Record<string, { header: string; soft: string; border: string; dot: string }> = {
@@ -437,7 +442,7 @@ export const OrganizationChartPage = () => {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved) as DiagramPage[];
-          if (Array.isArray(parsed) && parsed.length) localPages = ensureSalesFlowPage(normalizePages(parsed));
+          if (Array.isArray(parsed) && parsed.length) localPages = ensureRequiredDiagramPages(normalizePages(parsed));
         }
       } catch (err) {
         console.warn('Cannot read local diagram pages:', err);
@@ -452,13 +457,15 @@ export const OrganizationChartPage = () => {
       try {
         const rows = await diagramService.getPages();
         if (Array.isArray(rows) && rows.length > 0) {
-          const normalized = ensureSalesFlowPage(normalizePages(rows));
+          const normalized = ensureRequiredDiagramPages(normalizePages(rows));
           setPages(normalized);
-          const salesFlowPage = normalized.find(page => page.id === 'sales-flow');
-          if (salesFlowPage && !(rows as any[]).some(row => row.id === 'sales-flow' && (row.data?.nodes || []).length > 0)) await diagramService.savePage(salesFlowPage);
+          for (const pageId of ['sales-flow', 'system-map']) {
+            const requiredPage = normalized.find(page => page.id === pageId);
+            if (requiredPage && !(rows as any[]).some(row => row.id === pageId && (row.data?.nodes || []).length > 0)) await diagramService.savePage(requiredPage);
+          }
           setActivePageId(current => normalized.some(page => page.id === current) ? current : normalized[0].id);
         } else if (!localPages) {
-          const defaults = ensureSalesFlowPage(createDefaultPages());
+          const defaults = ensureRequiredDiagramPages(createDefaultPages());
           setPages(defaults);
           setActivePageId(defaults[0].id);
           for (const page of defaults) {
