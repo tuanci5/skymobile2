@@ -146,10 +146,49 @@ const createSalesFlowData = (): DiagramData => normalizeDiagramData({
   lockedGroups: [],
   lockedNodeIds: [],
 });
+
+const createWebsiteAppData = (): DiagramData => normalizeDiagramData({
+  nodes: [
+    { id: 'website-company', kind: 'website', title: 'WEBSITE CÔNG TY', subtitle: 'Trang giới thiệu thương hiệu, dịch vụ, tin tức', detail: 'Website công ty là kênh chính thức: giới thiệu thương hiệu Skymobile, dịch vụ, bảng giá, tin tức, chính sách, thông tin liên hệ và điểm đến SEO dài hạn.', color: 'indigo', x: -520, y: 240, w: 270, h: 160, teams: ['Website', 'SEO', 'Thương hiệu'] },
+    { id: 'landing-sales', kind: 'website', title: 'LADIPAGE BÁN HÀNG', subtitle: 'Landing page theo chiến dịch / thị trường', detail: 'Các Ladipage bán hàng phục vụ quảng cáo chuyển đổi: thiết kế theo từng dịch vụ, thị trường, ưu đãi, form đăng ký và đo lường conversion.', color: 'rose', x: -520, y: 0, w: 270, h: 160, teams: ['Landing page', 'Ads', 'Conversion'] },
+    { id: 'main-fanpage', kind: 'marketing-channel', title: 'FANPAGE CHÍNH', subtitle: 'Kênh truyền thông, inbox, chăm sóc khách', detail: 'Fanpage chính dùng để xây dựng thương hiệu, đăng nội dung, chạy quảng cáo, tiếp nhận inbox/comment và điều hướng lead sang Sale/CSKH.', color: 'blue', x: -520, y: -240, w: 270, h: 160, teams: ['Facebook', 'Messenger', 'Brand'] },
+    { id: 'market-fanpages', kind: 'marketing-channel', title: 'FANPAGE PHỤ THEO THỊ TRƯỜNG', subtitle: 'Fanpage cho từng quốc gia/khu vực/dịch vụ', detail: 'Các Fanpage phụ triển khai theo thị trường hoặc nhóm dịch vụ: nội dung bản địa hoá, quảng cáo riêng, remarketing và tracking hiệu quả từng thị trường.', color: 'blue', x: -520, y: -480, w: 280, h: 170, teams: ['Thị trường', 'Ads', 'Local content'] },
+    { id: 'customer-app', kind: 'app', title: 'APP KHÁCH HÀNG ANDROID / iOS', subtitle: 'Đăng ký dịch vụ, theo dõi đơn, nhận truyền thông App', detail: 'App khách hàng trên Android/iOS để đăng ký dịch vụ, quản lý thông tin, theo dõi đơn hàng, nhận thông báo, ưu đãi và chương trình chăm sóc.', color: 'emerald', x: -80, y: 180, w: 300, h: 175, teams: ['Android', 'iOS', 'Khách hàng'] },
+    { id: 'employee-app', kind: 'app', title: 'APP NHÂN VIÊN', subtitle: 'Sale/CSKH/vận hành xử lý công việc nội bộ', detail: 'App nhân viên hỗ trợ Sale, CSKH và vận hành: nhận lead, cập nhật trạng thái, ghi chú khách hàng, xử lý đơn, giao việc và theo dõi KPI.', color: 'emerald', x: -80, y: -80, w: 300, h: 175, teams: ['Sale', 'CSKH', 'Vận hành'] },
+    { id: 'map-location', kind: 'external', title: 'MAP / ĐỊA ĐIỂM', subtitle: 'Google Map, điểm bán, khu vực phục vụ', detail: 'Map hiển thị điểm bán/điểm hỗ trợ/khu vực phục vụ, hỗ trợ khách tìm địa điểm gần nhất và tăng độ tin cậy khi tìm kiếm trên Google.', color: 'amber', x: -80, y: -340, w: 280, h: 160, teams: ['Google Map', 'Địa điểm'] },
+    { id: 'crm-customer-data', kind: 'database', title: 'CRM / DỮ LIỆU KHÁCH HÀNG', subtitle: 'Lưu lead, khách hàng, đơn hàng, lịch sử chăm sóc', detail: 'CRM là trung tâm lưu trữ dữ liệu khách hàng: nguồn lead, lịch sử tư vấn, đơn hàng, thanh toán, chăm sóc sau bán, phân loại thị trường và báo cáo.', color: 'slate', x: 360, y: 0, w: 310, h: 190, teams: ['CRM', 'Data', 'Customer 360'] },
+    { id: 'order-payment', kind: 'process', title: 'ĐƠN HÀNG / THANH TOÁN', subtitle: 'Tạo đơn, đối soát thanh toán, trạng thái dịch vụ', detail: 'Module đơn hàng và thanh toán quản lý báo giá, tạo đơn, trạng thái thanh toán, công nợ, đối soát và bàn giao sang vận hành.', color: 'rose', x: 760, y: 160, w: 290, h: 165, teams: ['Order', 'Payment'] },
+    { id: 'notification-system', kind: 'system', title: 'THÔNG BÁO / TRUYỀN THÔNG APP', subtitle: 'Push notification, campaign, remarketing', detail: 'Hệ thống thông báo gửi push notification, tin chăm sóc, ưu đãi, nhắc gia hạn, chiến dịch remarketing và truyền thông qua App.', color: 'indigo', x: 760, y: -100, w: 290, h: 165, teams: ['Push', 'Campaign'] },
+    { id: 'analytics-dashboard', kind: 'system', title: 'BÁO CÁO / DASHBOARD', subtitle: 'Lead, doanh thu, hiệu quả kênh, KPI', detail: 'Dashboard tổng hợp dữ liệu từ Website, Ladipage, Fanpage, App, CRM để theo dõi lead, doanh thu, tỷ lệ chuyển đổi, hiệu quả thị trường và KPI đội ngũ.', color: 'amber', x: 1160, y: 20, w: 300, h: 175, teams: ['BI', 'KPI', 'Analytics'] },
+    { id: 'external-integrations', kind: 'external', title: 'TÍCH HỢP NGOÀI', subtitle: 'Facebook, Google Ads, Zalo, WhatsApp, Line, API', detail: 'Các tích hợp ngoài gồm Facebook/Messenger, Google Ads/Search/Map, Zalo, WhatsApp, Line, cổng thanh toán và API đối tác để đồng bộ lead/dữ liệu.', color: 'slate', x: 360, y: -320, w: 310, h: 175, teams: ['API', 'Ads', 'Messaging'] },
+  ],
+  connectors: [
+    { id: 'company-to-crm', from: 'website-company', to: 'crm-customer-data', kind: 'elbow', arrow: 'one-way', label: 'form / liên hệ' },
+    { id: 'landing-to-crm', from: 'landing-sales', to: 'crm-customer-data', kind: 'straight', arrow: 'one-way', label: 'lead đăng ký' },
+    { id: 'main-fanpage-to-crm', from: 'main-fanpage', to: 'crm-customer-data', kind: 'elbow', arrow: 'one-way', label: 'inbox / comment' },
+    { id: 'market-fanpages-to-crm', from: 'market-fanpages', to: 'crm-customer-data', kind: 'elbow', arrow: 'one-way', label: 'lead thị trường' },
+    { id: 'customer-app-to-crm', from: 'customer-app', to: 'crm-customer-data', kind: 'straight', arrow: 'two-way', forwardLabel: 'đăng ký / cập nhật', backwardLabel: 'trạng thái / CSKH' },
+    { id: 'employee-app-to-crm', from: 'employee-app', to: 'crm-customer-data', kind: 'straight', arrow: 'two-way', forwardLabel: 'xử lý lead', backwardLabel: 'dữ liệu công việc' },
+    { id: 'map-to-website', from: 'map-location', to: 'website-company', kind: 'curved', arrow: 'one-way', label: 'điều hướng khách', bend: -90 },
+    { id: 'crm-to-order', from: 'crm-customer-data', to: 'order-payment', kind: 'elbow', arrow: 'one-way', label: 'chốt đơn' },
+    { id: 'order-to-customer-app', from: 'order-payment', to: 'customer-app', kind: 'curved', arrow: 'one-way', label: 'trạng thái đơn', bend: -80 },
+    { id: 'crm-to-notification', from: 'crm-customer-data', to: 'notification-system', kind: 'elbow', arrow: 'one-way', label: 'phân nhóm khách' },
+    { id: 'notification-to-customer-app', from: 'notification-system', to: 'customer-app', kind: 'curved', arrow: 'one-way', label: 'push / ưu đãi', bend: 90 },
+    { id: 'integrations-to-crm', from: 'external-integrations', to: 'crm-customer-data', kind: 'straight', arrow: 'two-way', forwardLabel: 'đồng bộ lead', backwardLabel: 'tracking' },
+    { id: 'crm-to-dashboard', from: 'crm-customer-data', to: 'analytics-dashboard', kind: 'straight', arrow: 'one-way', label: 'dữ liệu báo cáo' },
+    { id: 'order-to-dashboard', from: 'order-payment', to: 'analytics-dashboard', kind: 'elbow', arrow: 'one-way', label: 'doanh thu' },
+    { id: 'integrations-to-dashboard', from: 'external-integrations', to: 'analytics-dashboard', kind: 'elbow', arrow: 'one-way', label: 'hiệu quả ads' },
+  ],
+  assignments: {},
+  memberAssignments: {},
+  lockedGroups: [],
+  lockedNodeIds: [],
+});
+
 const createDefaultPages = (): DiagramPage[] => [
   { id: 'company-overview', title: 'Sơ đồ tổng công ty', description: 'Tổng quan tổ chức, hệ thống, website/app và dữ liệu Skymobile.', sort_order: 0, data: createDefaultData() },
   { id: 'sales-flow', title: 'Quy trình Sale', description: 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.', sort_order: 1, data: createSalesFlowData() },
-  { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Kiến trúc website, app, CRM, database và tích hợp ngoài.', sort_order: 2, data: normalizeDiagramData({}) },
+  { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 2, data: createWebsiteAppData() },
 ];
 
 const ensureSalesFlowPage = (items: DiagramPage[]): DiagramPage[] => {
