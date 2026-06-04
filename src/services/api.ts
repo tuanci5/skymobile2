@@ -9,7 +9,7 @@ async function handleResponse(response: Response) {
 }
 
 export const api = {
-  get: (endpoint: string) => fetch(`${API_BASE_URL}${endpoint}`).then(handleResponse),
+  get: (endpoint: string) => fetch(`${API_BASE_URL}${endpoint}`, { cache: 'no-store' }).then(handleResponse),
   post: (endpoint: string, data: any) => fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

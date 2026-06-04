@@ -445,43 +445,46 @@ export const OrganizationChartPage = () => {
     }));
 
     const loadPages = async () => {
-      let localPages: DiagramPage[] | null = null;
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as DiagramPage[];
-          if (Array.isArray(parsed) && parsed.length) localPages = ensureRequiredDiagramPages(normalizePages(parsed));
-        }
-      } catch (err) {
-        console.warn('Cannot read local diagram pages:', err);
-      }
-
-      if (localPages) {
-        setDiagramPages(localPages);
-        setActivePageId(localPages[0].id);
-        setHydrated(true);
-      }
-
       try {
         const rows = await diagramService.getPages();
         if (Array.isArray(rows) && rows.length > 0) {
           const normalized = ensureRequiredDiagramPages(normalizePages(rows));
           setDiagramPages(normalized);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
           for (const pageId of ['sales-flow', 'system-map']) {
             const requiredPage = normalized.find(page => page.id === pageId);
             if (requiredPage && !(rows as any[]).some(row => row.id === pageId && (row.data?.nodes || []).length > 0)) await diagramService.savePage(requiredPage);
           }
           setActivePageId(current => normalized.some(page => page.id === current) ? current : normalized[0].id);
-        } else if (!localPages) {
-          const defaults = ensureRequiredDiagramPages(createDefaultPages());
-          setDiagramPages(defaults);
-          setActivePageId(defaults[0].id);
-          for (const page of defaults) {
-            await diagramService.savePage(page);
-          }
+          return;
+        }
+
+        const defaults = ensureRequiredDiagramPages(createDefaultPages());
+        setDiagramPages(defaults);
+        setActivePageId(defaults[0].id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+        for (const page of defaults) {
+          await diagramService.savePage(page);
         }
       } catch (err) {
         console.warn('Diagram API unavailable, using local/default pages:', err);
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved) as DiagramPage[];
+            if (Array.isArray(parsed) && parsed.length) {
+              const localPages = ensureRequiredDiagramPages(normalizePages(parsed));
+              setDiagramPages(localPages);
+              setActivePageId(localPages[0].id);
+              return;
+            }
+          }
+        } catch (localErr) {
+          console.warn('Cannot read local diagram pages:', localErr);
+        }
+        const defaults = ensureRequiredDiagramPages(createDefaultPages());
+        setDiagramPages(defaults);
+        setActivePageId(defaults[0].id);
       } finally {
         setHydrated(true);
       }
