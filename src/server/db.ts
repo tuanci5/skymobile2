@@ -517,45 +517,17 @@ export async function initDBUtils() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(255),
-        account_type VARCHAR(100),
-        category VARCHAR(100) DEFAULT 'other',
-        login_url TEXT,
-        username VARCHAR(255),
+        account_type VARCHAR(100) NOT NULL,
+        username VARCHAR(255) NOT NULL,
         password VARCHAR(255),
         email VARCHAR(255),
         phone VARCHAR(100),
         two_factor TEXT,
-        twofa_secret TEXT,
         recovery_email VARCHAR(255),
-        recovery_email_password VARCHAR(255),
-        recovery_phone VARCHAR(100),
-        backup_codes JSONB DEFAULT '[]'::jsonb,
-        api_key TEXT,
-        api_secret TEXT,
-        api_credentials JSONB DEFAULT '[]'::jsonb,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-
-    const accountColumns = [
-      "ALTER TABLE accounts ALTER COLUMN account_type DROP NOT NULL",
-      "ALTER TABLE accounts ALTER COLUMN username DROP NOT NULL",
-      "ALTER TABLE accounts ADD COLUMN name VARCHAR(255)",
-      "ALTER TABLE accounts ADD COLUMN category VARCHAR(100) DEFAULT 'other'",
-      "ALTER TABLE accounts ADD COLUMN login_url TEXT",
-      "ALTER TABLE accounts ADD COLUMN twofa_secret TEXT",
-      "ALTER TABLE accounts ADD COLUMN recovery_email_password VARCHAR(255)",
-      "ALTER TABLE accounts ADD COLUMN recovery_phone VARCHAR(100)",
-      "ALTER TABLE accounts ADD COLUMN backup_codes JSONB DEFAULT '[]'::jsonb",
-      "ALTER TABLE accounts ADD COLUMN api_key TEXT",
-      "ALTER TABLE accounts ADD COLUMN api_secret TEXT",
-      "ALTER TABLE accounts ADD COLUMN api_credentials JSONB DEFAULT '[]'::jsonb"
-    ];
-    for (const alterSql of accountColumns) {
-      try { await client.query(alterSql); } catch (e) {}
-    }
 
     // Ensure product inventory table exists
     await client.query(`
