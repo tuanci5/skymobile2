@@ -517,8 +517,8 @@ export async function initDBUtils() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
-        account_type VARCHAR(100) NOT NULL,
-        username VARCHAR(255) NOT NULL,
+        account_type VARCHAR(100),
+        username VARCHAR(255),
         password VARCHAR(255),
         email VARCHAR(255),
         phone VARCHAR(100),
@@ -528,6 +528,28 @@ export async function initDBUtils() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Keep accounts schema compatible with newer Account UI builds.
+    // Using IF NOT EXISTS makes this safe for existing deployments.
+    const accountColumns = [
+      "ALTER TABLE accounts ALTER COLUMN account_type DROP NOT NULL",
+      "ALTER TABLE accounts ALTER COLUMN username DROP NOT NULL",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS name VARCHAR(255)",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'other'",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS login_url TEXT",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS twofa_secret TEXT",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS recovery_email_password VARCHAR(255)",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS recovery_phone VARCHAR(100)",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS backup_codes JSONB DEFAULT '[]'::jsonb",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS api_key TEXT",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS api_secret TEXT",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS api_credentials JSONB DEFAULT '[]'::jsonb"
+    ];
+    for (const alterSql of accountColumns) {
+      try {
+        await client.query(alterSql);
+      } catch (e) {}
+    }
 
     // Ensure product inventory table exists
     await client.query(`

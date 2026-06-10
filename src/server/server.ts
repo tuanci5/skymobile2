@@ -97,30 +97,117 @@ app.get('/api/accounts', async (req, res) => {
 
 app.post('/api/accounts', async (req, res) => {
   try {
-    const { account_type, username, password, email, phone, two_factor, recovery_email, notes } = req.body;
+    const {
+      name,
+      category,
+      account_type,
+      username,
+      password,
+      email,
+      phone,
+      two_factor,
+      twofa_secret,
+      recovery_email,
+      recovery_email_password,
+      recovery_phone,
+      backup_codes,
+      api_key,
+      api_secret,
+      api_credentials,
+      login_url,
+      notes
+    } = req.body;
+
+    const finalAccountType = account_type || category || 'Khác';
+    const finalCategory = category || account_type || 'other';
+    const finalTwoFactor = two_factor || twofa_secret || '';
+
     const { rows } = await pool.query(
-      'INSERT INTO accounts (account_type, username, password, email, phone, two_factor, recovery_email, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [account_type, username, password, email, phone, two_factor, recovery_email, notes]
+      `INSERT INTO accounts (
+        name, category, account_type, username, password, email, phone,
+        two_factor, twofa_secret, recovery_email, recovery_email_password,
+        recovery_phone, backup_codes, api_key, api_secret, api_credentials,
+        login_url, notes
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11,
+        $12, $13::jsonb, $14, $15, $16::jsonb,
+        $17, $18
+      ) RETURNING *`,
+      [
+        name || username || '', finalCategory, finalAccountType, username || '', password || '', email || '', phone || '',
+        finalTwoFactor, twofa_secret || finalTwoFactor, recovery_email || '', recovery_email_password || '',
+        recovery_phone || '', JSON.stringify(Array.isArray(backup_codes) ? backup_codes : []), api_key || '', api_secret || '', JSON.stringify(Array.isArray(api_credentials) ? api_credentials : []),
+        login_url || '', notes || ''
+      ]
     );
     res.json(rows[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating account:', error);
-    res.status(500).json({ error: 'Failed to create account' });
+    res.status(500).json({ error: 'Failed to create account', details: error?.message });
   }
 });
 
 app.put('/api/accounts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { account_type, username, password, email, phone, two_factor, recovery_email, notes } = req.body;
+    const {
+      name,
+      category,
+      account_type,
+      username,
+      password,
+      email,
+      phone,
+      two_factor,
+      twofa_secret,
+      recovery_email,
+      recovery_email_password,
+      recovery_phone,
+      backup_codes,
+      api_key,
+      api_secret,
+      api_credentials,
+      login_url,
+      notes
+    } = req.body;
+
+    const finalAccountType = account_type || category || 'Khác';
+    const finalCategory = category || account_type || 'other';
+    const finalTwoFactor = two_factor || twofa_secret || '';
+
     const { rows } = await pool.query(
-      'UPDATE accounts SET account_type = $1, username = $2, password = $3, email = $4, phone = $5, two_factor = $6, recovery_email = $7, notes = $8 WHERE id = $9 RETURNING *',
-      [account_type, username, password, email, phone, two_factor, recovery_email, notes, id]
+      `UPDATE accounts SET
+        name = $1,
+        category = $2,
+        account_type = $3,
+        username = $4,
+        password = $5,
+        email = $6,
+        phone = $7,
+        two_factor = $8,
+        twofa_secret = $9,
+        recovery_email = $10,
+        recovery_email_password = $11,
+        recovery_phone = $12,
+        backup_codes = $13::jsonb,
+        api_key = $14,
+        api_secret = $15,
+        api_credentials = $16::jsonb,
+        login_url = $17,
+        notes = $18
+      WHERE id = $19 RETURNING *`,
+      [
+        name || username || '', finalCategory, finalAccountType, username || '', password || '', email || '', phone || '',
+        finalTwoFactor, twofa_secret || finalTwoFactor, recovery_email || '', recovery_email_password || '',
+        recovery_phone || '', JSON.stringify(Array.isArray(backup_codes) ? backup_codes : []), api_key || '', api_secret || '', JSON.stringify(Array.isArray(api_credentials) ? api_credentials : []),
+        login_url || '', notes || '', id
+      ]
     );
     res.json(rows[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating account:', error);
-    res.status(500).json({ error: 'Failed to update account' });
+    res.status(500).json({ error: 'Failed to update account', details: error?.message });
   }
 });
 
