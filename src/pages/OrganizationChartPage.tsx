@@ -588,21 +588,9 @@ export const OrganizationChartPage = () => {
   }, [diagram.nodes, selectedId, selectedIds, selectedConnectorId, viewMode, editFullscreen, selectedNode, selectedConnector, pages, nodeClipboard]);
 
   useEffect(() => {
+    // Không tự động gán lại nhân sự theo role khi tải lại trang.
+    // Việc gỡ phụ trách phải được giữ nguyên sau khi lưu DB và F5.
     if (!orgUsers.length) return;
-    updateActivePageData(data => {
-      const currentKeys = new Set(Object.values(data.assignments || {}).flat());
-      const nextAssignments = { ...(data.assignments || {}) };
-      let changed = false;
-      orgUsers.forEach(user => {
-        const key = userKey(user);
-        if (currentKeys.has(key)) return;
-        const deptId = data.nodes.some(node => node.id === inferDepartmentFromRole(user.role)) ? inferDepartmentFromRole(user.role) : data.nodes.find(node => node.kind === 'department')?.id;
-        if (!deptId) return;
-        nextAssignments[deptId] = [...(nextAssignments[deptId] ?? []), key];
-        changed = true;
-      });
-      return changed ? { ...data, assignments: nextAssignments } : data;
-    });
   }, [orgUsers.length, activePageId]);
 
   useEffect(() => {
