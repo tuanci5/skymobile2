@@ -111,6 +111,21 @@ const normalizeDiagramData = (data: Partial<DiagramData> = {}): DiagramData => {
   };
 };
 const createDefaultData = (): DiagramData => normalizeDiagramData({ nodes: defaultNodes, connectors: defaultConnectors, assignments: createAssignments(defaultNodes), memberAssignments: {}, lockedGroups: [], lockedNodeIds: [] });
+const createGovernanceData = (): DiagramData => normalizeDiagramData({
+  nodes: [
+    { id: 'shareholder-council', kind: 'department', title: 'HỘI ĐỒNG CỔ ĐÔNG', subtitle: 'Cơ quan quyết định định hướng và giám sát cao nhất', color: 'slate', x: 760, y: 220, w: 320, h: 170, teams: ['Thông qua chiến lược', 'Giám sát hoạt động', 'Quyết định đầu tư lớn'] },
+    { id: 'director', kind: 'ceo', title: 'GIÁM ĐỐC / CEO', subtitle: 'Điều hành hoạt động hằng ngày', color: 'blue', x: 760, y: 0, w: 300, h: 110, teams: [] },
+    { id: 'accountant', kind: 'person', title: 'KẾ TOÁN', subtitle: 'Báo cáo, thu chi, đối soát', color: 'rose', x: 760, y: -220, w: 280, h: 130, teams: [] },
+  ],
+  connectors: [
+    { id: 'council-to-director', from: 'shareholder-council', to: 'director', kind: 'elbow', arrow: 'one-way', label: 'ủy quyền điều hành' },
+    { id: 'director-to-accountant', from: 'director', to: 'accountant', kind: 'elbow', arrow: 'one-way', label: 'chỉ đạo nghiệp vụ' },
+  ],
+  assignments: {},
+  memberAssignments: {},
+  lockedGroups: [],
+  lockedNodeIds: [],
+});
 const createSalesFlowData = (): DiagramData => normalizeDiagramData({
   nodes: [
     { id: 'ads-facebook', kind: 'marketing-channel', title: 'QUẢNG CÁO FANPAGE FACEBOOK', subtitle: 'Nguồn lead chính hiện tại: Ads, bài viết, form, inbox', detail: 'Chạy quảng cáo Fanpage Facebook để tìm kiếm khách hàng mới. Lead phát sinh từ inbox Messenger, form, bình luận hoặc chiến dịch remarketing.', color: 'blue', x: -720, y: 240, w: 260, h: 145, teams: [] },
@@ -187,14 +202,16 @@ const createWebsiteAppData = (): DiagramData => normalizeDiagramData({
 
 const createDefaultPages = (): DiagramPage[] => [
   { id: 'company-overview', title: 'Sơ đồ tổng công ty', description: 'Tổng quan tổ chức, hệ thống, website/app và dữ liệu Skymobile.', sort_order: 0, data: createDefaultData() },
-  { id: 'sales-flow', title: 'Quy trình Sale', description: 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.', sort_order: 1, data: createSalesFlowData() },
-  { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 2, data: createWebsiteAppData() },
+  { id: 'governance-chart', title: 'Sơ đồ quản trị', description: 'Mối quan hệ giữa Hội đồng cổ đông, Giám đốc và Kế toán.', sort_order: 1, data: createGovernanceData() },
+  { id: 'sales-flow', title: 'Quy trình Sale', description: 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.', sort_order: 2, data: createSalesFlowData() },
+  { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 3, data: createWebsiteAppData() },
 ];
 
 const ensureRequiredDiagramPages = (items: DiagramPage[]): DiagramPage[] => {
   const requiredPages: DiagramPage[] = [
+    { id: 'governance-chart', title: 'Sơ đồ quản trị', description: 'Mối quan hệ giữa Hội đồng cổ đông, Giám đốc và Kế toán.', sort_order: 1, data: createGovernanceData() },
     { id: 'sales-flow', title: 'Quy trình Sale', description: 'Mô hình vận hành Sale: nguồn lead Facebook/Google/App/Affiliate, Sale CSKH Messenger, Telesale, chốt đơn và chăm sóc sau bán.', sort_order: 1, data: createSalesFlowData() },
-    { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 2, data: createWebsiteAppData() },
+    { id: 'system-map', title: 'Sơ đồ Website/App', description: 'Hệ sinh thái Website công ty, Ladipage bán hàng, Fanpage, App khách hàng/nhân viên, Map, CRM và các tích hợp.', sort_order: 3, data: createWebsiteAppData() },
   ];
 
   let next = [...items];
@@ -205,7 +222,11 @@ const ensureRequiredDiagramPages = (items: DiagramPage[]): DiagramPage[] => {
       return;
     }
     const page = next[pageIndex];
-    if ((page.data?.nodes || []).length > 0) return;
+    const nodeIds = new Set((page.data?.nodes || []).map(node => node.id));
+    const requiresRefresh = requiredPage.id === 'governance-chart'
+      ? !nodeIds.has('shareholder-council') || !nodeIds.has('director') || !nodeIds.has('accountant')
+      : (page.data?.nodes || []).length === 0;
+    if (!requiresRefresh) return;
     next = next.map((item, index) => index === pageIndex ? { ...item, title: item.title || requiredPage.title, description: item.description || requiredPage.description, data: requiredPage.data } : item);
   });
   return next;
