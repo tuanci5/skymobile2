@@ -75,30 +75,78 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { title, description, assignees, status, due_date, result_handover, report_url, task_group, progress } = req.body;
-    
-    const rawAssignees = assignees || (req.body.assignee_email ? [req.body.assignee_email] : []);
-    const finalAssignees = rawAssignees.map((e: string) => e.toLowerCase().trim());
-    const assignee_email = finalAssignees.length > 0 ? finalAssignees[0] : null;
+    const updates = req.body || {};
 
-    await pool.query(
-      'UPDATE tasks SET title = $1, description = $2, assignee_email = COALESCE($3, assignee_email), status = $4, due_date = $5, result_handover = $6, report_url = $7, task_group = $8, progress = COALESCE($9, progress) WHERE id = $10',
-      [title, description, assignee_email, status, due_date, result_handover || null, report_url || null, task_group || null, progress !== undefined ? progress : null, id]
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    const addSet = (column: string, value: any) => {
+      values.push(value);
+      setClauses.push(`${column} = $${values.length}`);
+    };
+
+    // Only update fields that the client actually sends. The task detail UI often
+    // sends a partial payload like { status: 'Hoàn thành' }; the previous query
+    // wrote undefined/null into required columns (title/status/etc.), so clicking
+    // "Hoàn thành" could fail and appear to do nothing.
+    if (Object.prototype.hasOwnProperty.call(updates, 'title')) addSet('title', updates.title);
+    if (Object.prototype.hasOwnProperty.call(updates, 'description')) addSet('description', updates.description || '');
+    if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+      addSet('status', updates.status);
+      if (!Object.prototype.hasOwnProperty.call(updates, 'progress') && updates.status === 'Hoàn thành') {
+        addSet('progress', 100);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'due_date')) addSet('due_date', updates.due_date || null);
+    if (Object.prototype.hasOwnProperty.call(updates, 'result_handover')) addSet('result_handover', updates.result_handover || null);
+    if (Object.prototype.hasOwnProperty.call(updates, 'report_url')) addSet('report_url', updates.report_url || null);
+    if (Object.prototype.hasOwnProperty.call(updates, 'task_group')) addSet('task_group', updates.task_group || null);
+    if (Object.prototype.hasOwnProperty.call(updates, 'progress')) addSet('progress', updates.progress);
+
+    const hasAssignees = Object.prototype.hasOwnProperty.call(updates, 'assignees') || Object.prototype.hasOwnProperty.call(updates, 'assignee_email');
+    let finalAssignees: string[] = [];
+    if (hasAssignees) {
+      const rawAssignees = Array.isArray(updates.assignees)
+        ? updates.assignees
+        : (updates.assignee_email ? [updates.assignee_email] : []);
+      finalAssignees = rawAssignees
+        .map((e: string) => String(e).toLowerCase().trim())
+        .filter(Boolean);
+      addSet('assignee_email', finalAssignees[0] || null);
+    }
+
+    addSet('updated_at', new Date());
+
+    await client.query('BEGIN');
+    values.push(id);
+    const { rowCount } = await client.query(
+      `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = $${values.length}`,
+      values
     );
 
-    if (finalAssignees && finalAssignees.length > 0) {
-      await pool.query('DELETE FROM task_assignees WHERE task_id = $1', [id]);
+    if (!rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (hasAssignees) {
+      // Allow clearing all assignees as an intentional update.
+      await client.query('DELETE FROM task_assignees WHERE task_id = $1', [id]);
       for (const email of finalAssignees) {
-        await pool.query('INSERT INTO task_assignees (task_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, email]);
+        await client.query('INSERT INTO task_assignees (task_id, user_email) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, email]);
       }
     }
 
+    await client.query('COMMIT');
     res.json({ success: true, message: 'Task updated' });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     console.error('Error updating task:', error);
     res.status(500).json({ error: 'Failed to update task' });
+  } finally {
+    client.release();
   }
 });
 
